@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 
 from src.collectors import cisa, otx, mitre
@@ -121,15 +121,29 @@ async def get_report():
 # Página inicial
 @app.get("/")
 async def root():
-    return {
-        "message": "Aegis Threat Intelligence API",
-        "endpoints": {
-            "health": "/health",
-            "get_all_iocs": "/api/iocs",
-            "get_iocs_by_severity": "/api/iocs/severity/{severity}",
-            "get_stats": "/api/stats",
-            "run_pipeline": "POST /api/pipeline/run",
-            "get_report": "/report",
-            "docs": "/docs"
-        }
-    }
+    report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
+    if report_path.exists():
+        return FileResponse(report_path, media_type="text/html")
+    
+    html_content = """
+    <html>
+        <head>
+            <title>Aegis Threat Intelligence</title>
+            <style>
+                body { font-family: sans-serif; text-align: center; margin-top: 50px; background: #111; color: #fff; }
+                a { color: #00ffcc; text-decoration: none; font-weight: bold; padding: 10px 20px; border: 1px solid #00ffcc; border-radius: 5px; display: inline-block; margin-top: 20px;}
+                a:hover { background: #00ffcc; color: #111; }
+                .card { background: #222; padding: 40px; border-radius: 8px; display: inline-block; border: 1px solid #333; max-width: 500px; line-height: 1.6; }
+            </style>
+        </head>
+        <body>
+            <div class="card">
+                <h1>Aegis Threat Intelligence</h1>
+                <p>O painel visual ainda não possui dados porque o banco está vazio neste servidor.</p>
+                <p>Para gerar o relatório HTML, você precisa executar o <b>pipeline de coleta de ameaças</b> através do painel interativo da API.</p>
+                <a href="/docs">Acessar Painel da API (/docs)</a>
+            </div>
+        </body>
+    </html>
+    """
+    return HTMLResponse(content=html_content)
