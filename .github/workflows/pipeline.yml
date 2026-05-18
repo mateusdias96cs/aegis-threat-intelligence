@@ -29,7 +29,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run pipeline
-        run: python src/main.py
+        run: python -m src.main
+        env:
+          PYTHONPATH: .
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
