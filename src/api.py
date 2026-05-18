@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks
 from fastapi.responses import FileResponse, HTMLResponse
 from pathlib import Path
 
@@ -7,6 +7,7 @@ from src.collectors import abuseipdb
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
+from src.main import run as run_pipeline_task
 
 app = FastAPI(title="Aegis Threat Intelligence API", version="1.0.0")
 
@@ -47,68 +48,12 @@ async def get_stats():
 
 # Rota para executar o pipeline manualmente
 @app.post("/api/pipeline/run")
-async def run_pipeline():
-    try:
-        # Collect
-        print("[pipeline] collecting from CISA-KEV ...")
-        cisa_iocs = cisa.collect()
-        print(f"[pipeline] CISA-KEV: {len(cisa_iocs)} indicators")
-
-        print("[pipeline] collecting from AlienVault OTX ...")
-        otx_iocs = otx.collect()
-        print(f"[pipeline] OTX: {len(otx_iocs)} indicators")
-
-        raw_iocs = cisa_iocs + otx_iocs
-        print(f"[pipeline] total collected: {len(raw_iocs)}")
-
-        # Load MITRE ATT&CK technique index
-        print("[pipeline] loading MITRE ATT&CK techniques ...")
-        techniques = mitre.load_techniques()
-        print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
-
-        # Process
-        print("[pipeline] normalizing ...")
-        iocs = normalizer.normalize(raw_iocs)
-
-        print("[pipeline] enriching IPs via AbuseIPDB ...")
-        iocs = abuseipdb.enrich_batch(iocs)
-
-        print("[pipeline] classifying ...")
-        iocs = classifier.classify(iocs)
-
-        print("[pipeline] mapping to MITRE ATT&CK ...")
-        for ioc in iocs:
-            technique = mitre.map_ioc_to_technique(ioc, techniques)
-            if technique:
-                ioc["mitre_technique_id"] = technique["id"]
-                ioc["mitre_tactic"] = technique["tactic"]
-            else:
-                ioc["mitre_technique_id"] = None
-                ioc["mitre_tactic"] = None
-
-        print("[pipeline] deduplicating ...")
-        iocs = deduplicator.deduplicate(iocs)
-        print(f"[pipeline] after deduplication: {len(iocs)}")
-
-        # Persist
-        print("[pipeline] saving to database ...")
-        db = DatabaseManager()
-        try:
-            db.insert_many(iocs)
-            stats = db.get_stats()
-            all_iocs = db.get_all_iocs()
-            html_report.generate(all_iocs, stats, techniques)
-            
-            return {
-                "status": "success",
-                "total_collected": len(raw_iocs),
-                "after_deduplication": len(iocs),
-                "stats": stats
-            }
-        finally:
-            db.close()
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+async def run_pipeline(background_tasks: BackgroundTasks):
+    background_tasks.add_task(run_pipeline_task)
+    return {
+        "status": "processing",
+        "message": "O pipeline de inteligência foi iniciado em segundo plano! Demora alguns minutos. Aguarde e recarregue a página inicial daqui a pouco para ver o painel gerado."
+    }
 
 # Servir o relatório HTML
 @app.get("/report")
