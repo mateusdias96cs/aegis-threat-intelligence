@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
@@ -14,7 +14,7 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
         iocs=iocs,
         stats=stats,
         techniques=techniques or {},
-        generated_at=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        generated_at=datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d %H:%M:%S"),
         total=len(iocs),
     )
 
