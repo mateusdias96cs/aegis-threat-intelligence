@@ -94,6 +94,10 @@ class DatabaseManager:
         rows = self.conn.execute("SELECT * FROM iocs").fetchall()
         return [dict(row) for row in rows]
 
+    def get_existing_values(self) -> set[str]:
+        rows = self.conn.execute("SELECT value FROM iocs").fetchall()
+        return {row["value"] for row in rows}
+
     def get_iocs_by_severity(self, severity: str) -> list[dict]:
         rows = self.conn.execute(
             "SELECT * FROM iocs WHERE severity = ?", (severity,)

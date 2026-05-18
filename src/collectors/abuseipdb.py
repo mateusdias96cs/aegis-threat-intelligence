@@ -33,5 +33,6 @@ def enrich(ip: str) -> dict:
 def enrich_batch(iocs: list) -> list:
     for ioc in iocs:
         if ioc.get("type") == "ip" and ioc.get("value"):
-            ioc.update(enrich(ioc["value"]))
+            ip_val = ioc["value"].split(":")[0]
+            ioc.update(enrich(ip_val))
     return iocs

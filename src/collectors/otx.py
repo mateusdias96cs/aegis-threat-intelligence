@@ -24,8 +24,10 @@ def collect() -> list[dict]:
     today = date.today().isoformat()
     iocs = []
     url = BASE_URL
+    pages_fetched = 0
+    MAX_PAGES = 3
 
-    while url:
+    while url and pages_fetched < MAX_PAGES:
         try:
             response = requests.get(url, headers=headers, timeout=30)
             response.raise_for_status()
@@ -61,5 +63,6 @@ def collect() -> list[dict]:
                 })
 
         url = data.get("next")
+        pages_fetched += 1
 
     return iocs
