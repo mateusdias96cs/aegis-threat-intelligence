@@ -1,0 +1,1852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>IOC Intelligence Report</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0d1117;
+      color: #c9d1d9;
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    a { color: #58a6ff; }
+
+    /* ── Layout ── */
+    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+
+    /* ── Header ── */
+    header { padding-bottom: 0; margin-bottom: 0; }
+    header h1 { font-size: 22px; color: #f0f6fc; letter-spacing: 0.5px; }
+    header .meta { margin-top: 6px; color: #8b949e; font-size: 13px; }
+    header .meta span { margin-right: 24px; }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      display: flex;
+      border-bottom: 1px solid #21262d;
+      margin-top: 20px;
+      margin-bottom: 28px;
+    }
+    .tab-btn {
+      background: transparent;
+      color: #8b949e;
+      border: none;
+      border-bottom: 2px solid transparent;
+      padding: 12px 20px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: #c9d1d9; }
+    .tab-btn.active { color: #f0f6fc; border-bottom-color: #58a6ff; font-weight: 600; }
+
+    /* ── Stat cards ── */
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 14px;
+      margin-bottom: 28px;
+    }
+    .card {
+      background: #161b22;
+      border: 1px solid #21262d;
+      border-radius: 8px;
+      padding: 18px 20px;
+    }
+    .card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.8px; }
+    .card .count { font-size: 32px; font-weight: 700; margin-top: 4px; }
+    .card.critical .count { color: #f85149; }
+    .card.high     .count { color: #e3b341; }
+    .card.medium   .count { color: #d29922; }
+    .card.low      .count { color: #3fb950; }
+    .card.total    .count { color: #58a6ff; }
+
+    /* ── Filters ── */
+    .filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 16px;
+      align-items: center;
+    }
+    .filters label { color: #8b949e; font-size: 13px; }
+    .filters select {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .filters select:focus { outline: none; border-color: #58a6ff; }
+    .filters input[type="text"] {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 300px;
+    }
+    .filters input[type="text"]::placeholder { color: #484f58; }
+    .filters input[type="text"]:focus { outline: none; border-color: #58a6ff; }
+    .filters input[type="date"] {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      color-scheme: dark;
+    }
+    .filters input[type="date"]:focus { outline: none; border-color: #58a6ff; }
+    .filters input[type="number"] {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 10px;
+      font-size: 13px;
+      width: 70px;
+    }
+    .filters input[type="number"]::placeholder { color: #484f58; }
+    .filters input[type="number"]:focus { outline: none; border-color: #58a6ff; }
+    .btn-clear {
+      background: transparent;
+      color: #8b949e;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .btn-clear:hover { border-color: #58a6ff; color: #c9d1d9; }
+
+    /* ── Table ── */
+    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #21262d; }
+    table { width: 100%; border-collapse: collapse; background: #161b22; }
+    thead { background: #0d1117; }
+    th {
+      padding: 10px 14px;
+      text-align: left;
+      font-size: 12px;
+      color: #8b949e;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      white-space: nowrap;
+      border-bottom: 1px solid #21262d;
+    }
+    td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #21262d;
+      vertical-align: middle;
+      max-width: 320px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #1c2128; }
+    tbody tr.row-selected { background: rgba(88, 166, 255, 0.08) !important; }
+    tbody tr.row-selected:hover { background: rgba(88, 166, 255, 0.13) !important; }
+
+    /* ── Checkbox column ── */
+    .cb-col {
+      width: 36px;
+      min-width: 36px;
+      max-width: 36px;
+      padding: 10px 8px 10px 14px !important;
+      text-align: center;
+    }
+    .cb-col input[type="checkbox"] {
+      cursor: pointer;
+      width: 15px;
+      height: 15px;
+      accent-color: #58a6ff;
+    }
+
+    /* ── Relevance column ── */
+    .rel-col { width: 90px; min-width: 90px; text-align: center; padding: 10px 8px !important; display: none; }
+    #tab-ioc.profile-active-state .rel-col { display: table-cell; }
+
+    .value-cell { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; }
+
+    /* ── Badges ── */
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+    .badge-CRITICAL  { background: #3d0a09; color: #f85149; border: 1px solid #6d1a18; }
+    .badge-HIGH      { background: #2d1f00; color: #e3b341; border: 1px solid #5a3e00; }
+    .badge-MEDIUM    { background: #2b1d00; color: #d29922; border: 1px solid #553a00; }
+    .badge-LOW       { background: #0a2316; color: #3fb950; border: 1px solid #1a4a2e; }
+    .badge-RELEVANT  { background: #0a2316; color: #3fb950; border: 1px solid #1a4a2e; }
+    .badge-MONITOR   { background: #1f1a00; color: #e3b341; border: 1px solid #4a3800; }
+    .badge-new {
+      display: inline-block;
+      background: #00ff41;
+      color: #000000;
+      font-size: 0.65rem;
+      font-weight: bold;
+      padding: 1px 5px;
+      border-radius: 3px;
+      margin-left: 6px;
+      vertical-align: middle;
+    }
+
+    /* ── Type pill ── */
+    .type-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 500;
+      background: #21262d;
+      color: #c9d1d9;
+      text-transform: uppercase;
+    }
+
+    /* ── Results counter ── */
+    .ioc-counter { color: #8b949e; font-size: 13px; margin-bottom: 8px; }
+
+    /* ── Profile banner ── */
+    .profile-banner {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+      background: #0a1a0e;
+      border: 1px solid #1a4a2e;
+      border-left: 3px solid #3fb950;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 20px;
+      font-size: 13px;
+      color: #c9d1d9;
+    }
+    .profile-banner-text { flex: 1; min-width: 0; }
+    .profile-banner-assets { color: #3fb950; font-weight: 500; }
+    .btn-change-profile {
+      background: transparent;
+      color: #3fb950;
+      border: 1px solid #1a4a2e;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-change-profile:hover { background: #0d2316; }
+    .btn-clear-profile {
+      background: transparent;
+      color: #f85149;
+      border: 1px solid #6d1a18;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-clear-profile:hover { background: #3d0a09; }
+
+    /* ── Selection bar ── */
+    .selection-bar {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: #161b22;
+      border: 1px solid #1f6feb;
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin-bottom: 10px;
+    }
+    .sel-count { color: #58a6ff; font-weight: 600; font-size: 13px; margin-right: 4px; flex-shrink: 0; }
+    .sel-sep { color: #30363d; flex-shrink: 0; }
+    .btn-sel {
+      background: transparent;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-sel:hover { border-color: #58a6ff; color: #58a6ff; }
+    .btn-sel-primary {
+      background: #1f6feb;
+      color: #fff;
+      border: 1px solid #1f6feb;
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 13px;
+      cursor: pointer;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .btn-sel-primary:hover { background: #388bfd; border-color: #388bfd; }
+
+    /* ── Pagination ── */
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 14px;
+      margin-top: 14px;
+    }
+    .pagination button {
+      background: #161b22;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 6px 16px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .pagination button:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
+    .pagination button:disabled { opacity: 0.35; cursor: default; }
+    .pagination .page-info { color: #8b949e; font-size: 13px; min-width: 100px; text-align: center; }
+
+    /* ── Sortable headers ── */
+    th[data-sort] { cursor: pointer; user-select: none; }
+    th[data-sort]:hover { color: #c9d1d9; }
+    th.sort-active { color: #58a6ff; }
+    .sort-icon { color: #484f58; font-size: 10px; margin-left: 4px; }
+    th.sort-active .sort-icon { color: #58a6ff; }
+
+    /* ── MITRE tab ── */
+    .mitre-summary { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
+
+    /* ── IOC Lookup tab ── */
+    .lookup-search-wrap { display: flex; gap: 10px; margin-bottom: 8px; }
+    .lookup-search-wrap input[type="text"] {
+      flex: 1; background: #161b22; color: #c9d1d9;
+      border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; font-size: 15px;
+    }
+    .lookup-search-wrap input[type="text"]::placeholder { color: #484f58; }
+    .lookup-search-wrap input[type="text"]:focus { outline: none; border-color: #58a6ff; }
+    .lookup-btn { background: #1f6feb; color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .lookup-btn:hover { background: #388bfd; }
+    .lookup-hint { color: #484f58; font-size: 12px; margin-bottom: 28px; }
+    .lookup-empty-state { text-align: center; padding: 60px 20px; color: #8b949e; }
+    .lookup-empty-icon { font-size: 48px; margin-bottom: 16px; line-height: 1; }
+    .lookup-empty-state > p { font-size: 15px; margin-bottom: 6px; }
+    .lookup-empty-sub { font-size: 13px !important; color: #484f58; }
+    .lookup-no-result { text-align: center; padding: 40px; color: #8b949e; font-size: 14px; background: #161b22; border: 1px solid #21262d; border-radius: 10px; }
+    .lookup-card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; overflow: hidden; }
+    .lookup-card-header { padding: 20px 24px 16px; border-bottom: 1px solid #21262d; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+    .lookup-value { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 16px; color: #f0f6fc; word-break: break-all; flex: 1; }
+    .lookup-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+    .lookup-section { padding: 16px 24px; border-bottom: 1px solid #21262d; }
+    .lookup-section-title { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; font-weight: 600; }
+    .lookup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    .lookup-info-block { background: #0d1117; border-radius: 6px; padding: 10px 14px; }
+    .lookup-info-label { font-size: 11px; color: #8b949e; margin-bottom: 4px; }
+    .lookup-info-value { font-size: 14px; color: #c9d1d9; font-weight: 500; }
+    .lookup-score-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+    .lookup-score-val { font-size: 22px; font-weight: 700; }
+    .lookup-bar-wrap { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; }
+    .lookup-bar-fill { height: 100%; border-radius: 4px; }
+    .lookup-mitre-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
+    .lookup-tech-id { font-family: 'Cascadia Code','Fira Code',monospace; background: #21262d; color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .lookup-tech-name { font-size: 14px; color: #c9d1d9; font-weight: 500; }
+    .lookup-tactic { font-size: 13px; color: #8b949e; margin-bottom: 8px; }
+    .lookup-att-link { font-size: 13px; color: #58a6ff; text-decoration: none; }
+    .lookup-att-link:hover { text-decoration: underline; }
+    .lookup-source-pills { display: flex; gap: 8px; flex-wrap: wrap; }
+    .lookup-source-pill { padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; background: #21262d; color: #484f58; border: 1px solid #21262d; }
+    .lookup-source-pill.active { background: #0d2044; color: #58a6ff; border-color: #1f6feb; }
+    .lookup-description { font-size: 13px; color: #8b949e; line-height: 1.7; }
+    .lookup-actions { padding: 14px 24px; display: flex; gap: 8px; flex-wrap: wrap; }
+    .btn-action { background: transparent; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-block; white-space: nowrap; font-family: inherit; }
+    .btn-action:hover { border-color: #58a6ff; color: #58a6ff; }
+
+    /* ── Threat Profiling tab ── */
+    .profiling-header { margin-bottom: 28px; max-width: 780px; }
+    .profiling-header h2 { font-size: 20px; color: #f0f6fc; font-weight: 700; margin-bottom: 8px; }
+    .profiling-header p { color: #8b949e; font-size: 14px; line-height: 1.55; }
+    .profiling-form-body { max-width: 780px; }
+    .profiling-form-footer {
+      display: flex; align-items: center; justify-content: space-between; gap: 16px;
+      margin-top: 24px; padding-top: 20px; border-top: 1px solid #21262d; max-width: 780px;
+    }
+    .profiling-active-wrap {
+      background: #0a1a0e; border: 1px solid #1a4a2e; border-radius: 10px;
+      padding: 28px 32px; max-width: 780px;
+    }
+    .profiling-active-title { font-size: 17px; font-weight: 700; color: #3fb950; margin-bottom: 18px; }
+    .profiling-pills-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .profiling-pill { background: #0d2316; color: #3fb950; border: 1px solid #1a4a2e; border-radius: 20px; padding: 5px 14px; font-size: 13px; font-weight: 500; }
+    .profiling-active-actions { display: flex; gap: 10px; }
+    .btn-edit-profile {
+      background: transparent; color: #c9d1d9; border: 1px solid #30363d;
+      border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
+    }
+    .btn-edit-profile:hover { border-color: #58a6ff; color: #58a6ff; }
+    .btn-clear-profile-tab {
+      background: transparent; color: #f85149; border: 1px solid #6d1a18;
+      border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
+    }
+    .btn-clear-profile-tab:hover { background: #3d0a09; }
+    /* ── Asset form (used in Threat Profiling tab) ── */
+    .asset-group { margin-bottom: 24px; }
+    .asset-group:last-child { margin-bottom: 0; }
+    .asset-group-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      color: #58a6ff;
+      font-weight: 700;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #21262d;
+    }
+    .asset-checkboxes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
+    .asset-cb-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      color: #c9d1d9;
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      user-select: none;
+    }
+    .asset-cb-label:hover { background: #1c2128; }
+    .asset-cb-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: #58a6ff; cursor: pointer; flex-shrink: 0; }
+    .asset-custom-label { font-size: 13px; color: #8b949e; display: block; margin-bottom: 8px; }
+    .asset-custom-textarea { width: 100%; background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 64px; }
+    .asset-custom-textarea:focus { outline: none; border-color: #58a6ff; }
+    .asset-custom-hint { font-size: 11px; color: #484f58; margin-top: 4px; }
+    .profile-asset-counter { font-size: 13px; color: #8b949e; }
+    .profile-asset-counter strong { color: #c9d1d9; }
+    .btn-analyze { background: #1f6feb; color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
+    .btn-analyze:hover:not(:disabled) { background: #388bfd; }
+    .btn-analyze:disabled { opacity: 0.35; cursor: not-allowed; }
+
+    /* ── Empty state ── */
+    .empty { text-align: center; padding: 40px; color: #8b949e; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 32px;
+      padding-top: 16px;
+      border-top: 1px solid #21262d;
+      color: #8b949e;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container" id="main-container">
+
+  <header>
+    <h1>IOC Intelligence Report</h1>
+    <div class="meta">
+      <span>Generated: {{ generated_at }}</span>
+      <span>Total IOCs: {{ total }}</span>
+    </div>
+  </header>
+
+  <nav class="tab-nav">
+    <button id="btn-ioc"       class="tab-btn active" onclick="switchTab('ioc')">IOC Dashboard</button>
+    <button id="btn-lookup"    class="tab-btn"        onclick="switchTab('lookup')">IOC Lookup</button>
+    <button id="btn-profiling" class="tab-btn"        onclick="switchTab('profiling')">Threat Profiling</button>
+    <button id="btn-mitre"     class="tab-btn"        onclick="switchTab('mitre')">MITRE ATT&amp;CK Explorer</button>
+  </nav>
+
+  <!-- ══════════════════════════ TAB 1: IOC Dashboard ══════════════════════════ -->
+  <section id="tab-ioc">
+
+    <!-- Profile banner -->
+    <div class="profile-banner" id="profile-banner">
+      <div class="profile-banner-text">
+        Active profile: <span class="profile-banner-assets" id="banner-assets"></span>
+      </div>
+      <button class="btn-change-profile" onclick="switchTab('profiling')">Edit</button>
+      <button class="btn-clear-profile" onclick="clearProfile()">Clear</button>
+    </div>
+
+    <section class="cards">
+      <div class="card total">
+        <div class="label">Total</div>
+        <div class="count">{{ total }}</div>
+      </div>
+      <div class="card critical">
+        <div class="label">Critical</div>
+        <div class="count">{{ stats.by_severity.get('CRITICAL', 0) }}</div>
+      </div>
+      <div class="card high">
+        <div class="label">High</div>
+        <div class="count">{{ stats.by_severity.get('HIGH', 0) }}</div>
+      </div>
+      <div class="card medium">
+        <div class="label">Medium</div>
+        <div class="count">{{ stats.by_severity.get('MEDIUM', 0) }}</div>
+      </div>
+      <div class="card low">
+        <div class="label">Low</div>
+        <div class="count">{{ stats.by_severity.get('LOW', 0) }}</div>
+      </div>
+    </section>
+
+    <div class="filters">
+      <input type="text" id="searchInput" placeholder="Search by IP, domain, hash, CVE, description..." oninput="applyFilters()" />
+
+      <label for="filter-severity">Severity:</label>
+      <select id="filter-severity" onchange="applyFilters()">
+        <option value="">All</option>
+        <option value="CRITICAL">Critical</option>
+        <option value="HIGH">High</option>
+        <option value="MEDIUM">Medium</option>
+        <option value="LOW">Low</option>
+      </select>
+
+      <label for="filter-type">Type:</label>
+      <select id="filter-type" onchange="applyFilters()">
+        <option value="">All</option>
+        <option value="ip">IP</option>
+        <option value="domain">Domain</option>
+        <option value="hash">Hash</option>
+        <option value="url">URL</option>
+        <option value="cve">CVE</option>
+      </select>
+
+      <label for="countryFilter">Country:</label>
+      <select id="countryFilter" onchange="applyFilters()">
+        <option value="">All Countries</option>
+      </select>
+
+      <label for="abuseScoreMin">Min Abuse Score:</label>
+      <input type="number" id="abuseScoreMin" min="0" max="100" placeholder="0" oninput="applyFilters()" />
+
+      <label for="dateFrom">From:</label>
+      <input type="date" id="dateFrom" onchange="applyFilters()" />
+
+      <label for="dateTo">To:</label>
+      <input type="date" id="dateTo" onchange="applyFilters()" />
+
+      <!-- Relevance filter (shown after profile applied) -->
+      <label for="relevanceFilter" id="rel-filter-label" style="display:none">Relevance:</label>
+      <select id="relevanceFilter" onchange="applyFilters()" style="display:none">
+        <option value="">All IOCs</option>
+        <option value="relevant">Relevant only</option>
+        <option value="monitor">Monitor</option>
+        <option value="untagged">Untagged</option>
+      </select>
+
+      <label for="pageSizeSelect">Rows per page:</label>
+      <select id="pageSizeSelect" onchange="renderPage(1)">
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+        <option value="200">200</option>
+      </select>
+
+      <button class="btn-clear" onclick="clearFilters()">Clear Filters</button>
+    </div>
+
+    <!-- Selection bar — visible only when rows are selected -->
+    <div class="selection-bar" id="selection-bar">
+      <span class="sel-count" id="sel-count-label">0 IOCs selected</span>
+      <span class="sel-sep">|</span>
+      <button class="btn-sel" onclick="selectAllFiltered()">Select all filtered (<span id="sel-all-count">0</span>)</button>
+      <button class="btn-sel" onclick="clearSelection()">Clear selection</button>
+      <span class="sel-sep">|</span>
+      <button class="btn-sel-primary" onclick="exportSelectedSiemCsv()">&#11015; Export SIEM CSV</button>
+    </div>
+
+    <p class="ioc-counter" id="ioc-counter"></p>
+
+    <div class="table-wrap">
+      <table id="ioc-table">
+        <thead>
+          <tr>
+            <th class="cb-col"><input type="checkbox" id="header-checkbox" title="Select/deselect current page" /></th>
+            <th class="rel-col">Relevance</th>
+            <th data-sort="type"      onclick="clickSort('type')">Type <span class="sort-icon">↕</span></th>
+            <th data-sort="value"     onclick="clickSort('value')">Value <span class="sort-icon">↕</span></th>
+            <th data-sort="source"    onclick="clickSort('source')">Source <span class="sort-icon">↕</span></th>
+            <th data-sort="severity"  onclick="clickSort('severity')">Severity <span class="sort-icon">↕</span></th>
+            <th data-sort="country"   onclick="clickSort('country')">Country <span class="sort-icon">↕</span></th>
+            <th data-sort="score"     onclick="clickSort('score')">Abuse Score <span class="sort-icon">↕</span></th>
+            <th data-sort="firstseen" onclick="clickSort('firstseen')">First Seen <span class="sort-icon">↕</span></th>
+            <th>Description</th>
+            <th>MITRE Tactic</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ioc in iocs %}
+          <tr data-severity="{{ ioc.severity | upper }}"
+              data-type="{{ ioc.type | lower }}"
+              data-first-seen="{{ ioc.first_seen or '' }}"
+              data-last-seen="{{ ioc.last_seen or '' }}"
+              data-country="{{ ioc.country or '' }}"
+              data-mitre="{{ ioc.mitre_tactic or '' }}"
+              data-mitre-id="{{ ioc.mitre_technique_id or '' }}"
+              data-description="{{ ioc.description or '' }}">
+            <td class="cb-col"><input type="checkbox" class="row-cb" data-value="{{ ioc.value }}" /></td>
+            <td class="rel-col"></td>
+            <td><span class="type-pill">{{ ioc.type }}</span></td>
+            <td class="value-cell" title="{{ ioc.value }}">{{ ioc.value }}</td>
+            <td>{{ ioc.source }}</td>
+            <td><span class="badge badge-{{ ioc.severity | upper }}">{{ ioc.severity }}</span></td>
+            <td>{{ ioc.country if ioc.country else '—' }}</td>
+            <td>{{ ioc.abuse_score if ioc.abuse_score is not none else '—' }}</td>
+            <td>{{ ioc.first_seen if ioc.first_seen else '—' }}</td>
+            <td title="{{ ioc.description }}">{{ ioc.description if ioc.description else '—' }}</td>
+            <td>{% if ioc.mitre_technique_id %}<a href="https://attack.mitre.org/techniques/{{ ioc.mitre_technique_id }}/" target="_blank" style="color:#58a6ff;text-decoration:none;">{{ ioc.mitre_tactic }}</a>{% else %}—{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="11" class="empty">No IOCs found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button id="btn-prev" onclick="renderPage(currentPage - 1)" disabled>&#8592; Prev</button>
+      <span class="page-info" id="ioc-page-info">Page 1 of 1</span>
+      <button id="btn-next" onclick="renderPage(currentPage + 1)" disabled>Next &#8594;</button>
+    </div>
+
+  </section>
+
+  <!-- ══════════════════════════ TAB 2: IOC Lookup ══════════════════════════ -->
+  <section id="tab-lookup" style="display:none">
+
+    <div class="lookup-search-wrap">
+      <input type="text" id="lookupInput" placeholder="Search by IP, domain, hash or CVE..." />
+      <button class="lookup-btn" onclick="runLookup()">Lookup</button>
+    </div>
+    <p class="lookup-hint">Examples: 185.220.101.47 &middot; CVE-2026-42897 &middot; malware-c2.ru &middot; d41d8cd98f00b204</p>
+
+    <div id="lookup-result"></div>
+
+    <div id="lookup-empty" class="lookup-empty-state">
+      <div class="lookup-empty-icon">&#128269;</div>
+      <p>Enter an IP, domain, hash or CVE to look up</p>
+      <p class="lookup-empty-sub">Results are matched against the current intelligence database</p>
+    </div>
+
+  </section>
+
+  <!-- ══════════════════════ TAB 3: Threat Profiling ══════════════════════ -->
+  <section id="tab-profiling" style="display:none">
+
+    <!-- STATE 1: form (no profile / edit mode) -->
+    <div id="profiling-state-form">
+
+      <div class="profiling-header">
+        <h2>Threat Profiling</h2>
+        <p>Select the technologies in the environment you are defending to prioritize relevant IOCs</p>
+      </div>
+
+      <div class="profiling-form-body">
+
+        <div class="asset-group">
+          <div class="asset-group-title">Web &amp; Application</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="apache_nginx" />Apache / Nginx</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="iis" />IIS (Microsoft Web Server)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="nodejs" />Node.js / Express</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="frontend_spa" />React / Angular / Vue (Frontend SPA)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="cms" />WordPress / Drupal / Joomla (CMS)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="php" />PHP applications</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="api_rest" />REST API / GraphQL API</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="websockets" />WebSockets</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Database</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="mysql" />MySQL / MariaDB</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="postgresql" />PostgreSQL</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="mssql" />Microsoft SQL Server (MSSQL)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="oracle_db" />Oracle Database</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="mongodb" />MongoDB (NoSQL)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="redis" />Redis / Memcached</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="elasticsearch" />Elasticsearch / OpenSearch</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Cloud &amp; Infrastructure</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="aws" />AWS (Amazon Web Services)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="azure" />Azure (Microsoft)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="gcp" />GCP (Google Cloud)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="docker" />Docker / Containers</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="kubernetes" />Kubernetes / K8s</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="terraform" />Terraform / IaC</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="cicd" />CI/CD Pipelines (Jenkins, GitHub Actions, GitLab)</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Network &amp; Access</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="vpn" />VPN (Fortinet, Palo Alto, Cisco)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="firewall" />Firewall / WAF</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="active_directory" />Active Directory / LDAP</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="sso" />SSO / OAuth / SAML</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="rdp" />Remote Desktop (RDP)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="ssh" />SSH servers</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="zero_trust" />Zero Trust / ZTNA</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Email &amp; Collaboration</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="exchange" />Microsoft Exchange / Outlook 365</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="google_workspace" />Google Workspace / Gmail</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="slack_teams" />Slack / Teams</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="sharepoint" />SharePoint / OneDrive</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Security Tools</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="siem" />SIEM (Splunk, Sentinel, Elastic)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="edr" />EDR / XDR (CrowdStrike, SentinelOne)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="vuln_scanner" />Vulnerability Scanner (Nessus, Qualys)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="soar" />SOAR platforms</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Emerging Technologies</div>
+          <div class="asset-checkboxes">
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="llm" />LLM / AI integrated in applications</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="iot" />IoT / OT devices</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="blockchain" />Blockchain / Smart Contracts</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="mobile" />Mobile applications (iOS / Android)</label>
+            <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="serverless" />Serverless / Lambda functions</label>
+          </div>
+        </div>
+
+        <div class="asset-group">
+          <div class="asset-group-title">Custom Assets</div>
+          <label class="asset-custom-label" for="customAssetsInput">Other technologies in your environment:</label>
+          <textarea id="customAssetsInput" class="asset-custom-textarea"
+            placeholder="Ex: SAP, Oracle ERP, Zimbra, PaperCut, Citrix, JetBrains TeamCity..."></textarea>
+          <div class="asset-custom-hint">Separate multiple technologies with commas</div>
+        </div>
+
+      </div>
+
+      <div class="profiling-form-footer">
+        <div class="profile-asset-counter" id="asset-counter"><strong>0</strong> assets selected</div>
+        <button class="btn-analyze" id="btn-analyze" disabled onclick="applyProfile()">Apply profile &rarr;</button>
+      </div>
+
+    </div>
+
+    <!-- STATE 2: profile active -->
+    <div id="profiling-state-active" style="display:none">
+      <div class="profiling-active-wrap">
+        <div class="profiling-active-title">&#10003; Active profile &mdash; <span id="profiling-active-count">0</span> assets selected</div>
+        <div class="profiling-pills-wrap" id="profiling-active-pills"></div>
+        <div class="profiling-active-actions">
+          <button class="btn-edit-profile" onclick="editProfile()">Edit profile</button>
+          <button class="btn-clear-profile-tab" onclick="clearProfile()">Clear profile</button>
+        </div>
+      </div>
+    </div>
+
+  </section>
+
+  <!-- ══════════════════════ TAB 4: MITRE ATT&CK Explorer ══════════════════════ -->
+  <section id="tab-mitre" style="display:none">
+
+    <p class="mitre-summary" id="mitre-summary"></p>
+
+    <div class="filters">
+      <input type="text" id="mitreSearch" placeholder="Search by ID (T1190) or name..." oninput="applyMitreFilters()" />
+
+      <label for="mitreTacticFilter">Tactic:</label>
+      <select id="mitreTacticFilter" onchange="applyMitreFilters()">
+        <option value="">All Tactics</option>
+      </select>
+
+      <label for="mitrePageSizeSelect">Rows per page:</label>
+      <select id="mitrePageSizeSelect" onchange="renderMitrePage(1)">
+        <option value="25">25</option>
+        <option value="50" selected>50</option>
+        <option value="100">100</option>
+      </select>
+
+      <button class="btn-clear" onclick="clearMitreFilters()">Clear Filters</button>
+    </div>
+
+    <p class="ioc-counter" id="mitre-counter"></p>
+
+    <div class="table-wrap">
+      <table id="mitre-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Name</th>
+            <th>Tactic</th>
+            <th>Link</th>
+          </tr>
+        </thead>
+        <tbody id="mitre-tbody"></tbody>
+      </table>
+    </div>
+
+    <div class="pagination">
+      <button id="mitre-btn-prev" onclick="renderMitrePage(mitrePage - 1)" disabled>&#8592; Prev</button>
+      <span class="page-info" id="mitre-page-info">Page 1 of 1</span>
+      <button id="mitre-btn-next" onclick="renderMitrePage(mitrePage + 1)" disabled>Next &#8594;</button>
+    </div>
+
+  </section>
+
+  <footer>
+    IOC Intelligence Pipeline &mdash; {{ generated_at }}
+  </footer>
+
+</div>
+
+<script>
+  const MITRE_TECHNIQUES = {{ techniques | tojson }};
+
+  /* ══════════════ Threat Profiling ══════════════ */
+
+  var assetProfile = { selected: new Set(), custom: [] };
+
+  var ASSET_LABELS = {
+    apache_nginx: 'Apache/Nginx',   iis: 'IIS',             nodejs: 'Node.js',
+    frontend_spa: 'Frontend SPA',   cms: 'CMS',              php: 'PHP',
+    api_rest: 'REST API',           websockets: 'WebSockets',
+    mysql: 'MySQL',                 postgresql: 'PostgreSQL', mssql: 'MSSQL',
+    oracle_db: 'Oracle DB',         mongodb: 'MongoDB',       redis: 'Redis',
+    elasticsearch: 'Elasticsearch',
+    aws: 'AWS',                     azure: 'Azure',           gcp: 'GCP',
+    docker: 'Docker',               kubernetes: 'Kubernetes', terraform: 'Terraform',
+    cicd: 'CI/CD',
+    vpn: 'VPN',                     firewall: 'Firewall/WAF', active_directory: 'Active Directory',
+    sso: 'SSO/OAuth',               rdp: 'RDP',               ssh: 'SSH',
+    zero_trust: 'Zero Trust',
+    exchange: 'Exchange/M365',      google_workspace: 'Google Workspace',
+    slack_teams: 'Slack/Teams',     sharepoint: 'SharePoint',
+    siem: 'SIEM',                   edr: 'EDR/XDR',           vuln_scanner: 'Vuln Scanner',
+    soar: 'SOAR',
+    llm: 'LLM/AI',                  iot: 'IoT/OT',            blockchain: 'Blockchain',
+    mobile: 'Mobile',               serverless: 'Serverless'
+  };
+
+  /* keyword → array of asset IDs; '__ALL__' means any selected asset */
+  var RELEVANCE_RULES = [
+    { kw: ['apache','nginx'],                        assets: ['apache_nginx'] },
+    { kw: ['iis'],                                   assets: ['iis'] },
+    { kw: ['node.js','nodejs','express'],            assets: ['nodejs'] },
+    { kw: ['wordpress','drupal','joomla','cms'],     assets: ['cms'] },
+    { kw: ['php'],                                   assets: ['php'] },
+    { kw: ['graphql','rest api','api'],              assets: ['api_rest'] },
+    { kw: ['websocket'],                             assets: ['websockets'] },
+    { kw: ['mysql','mariadb'],                       assets: ['mysql'] },
+    { kw: ['postgresql','postgres'],                 assets: ['postgresql'] },
+    { kw: ['mssql','sql server'],                    assets: ['mssql'] },
+    { kw: ['oracle'],                                assets: ['oracle_db'] },
+    { kw: ['mongodb','nosql'],                       assets: ['mongodb'] },
+    { kw: ['redis','memcached'],                     assets: ['redis'] },
+    { kw: ['elasticsearch','opensearch'],            assets: ['elasticsearch'] },
+    { kw: ['aws','amazon','\\bs3\\b','\\bec2\\b'],   assets: ['aws'] },
+    { kw: ['azure','microsoft 365','office 365'],    assets: ['azure'] },
+    { kw: ['google cloud','gcp'],                    assets: ['gcp'] },
+    { kw: ['docker','container'],                    assets: ['docker'] },
+    { kw: ['kubernetes','k8s'],                      assets: ['kubernetes'] },
+    { kw: ['terraform','iac'],                       assets: ['terraform'] },
+    { kw: ['jenkins','github actions','gitlab','ci/cd','cicd','pipeline'], assets: ['cicd'] },
+    { kw: ['fortinet','palo alto','cisco','vpn'],    assets: ['vpn'] },
+    { kw: ['firewall','waf'],                        assets: ['firewall'] },
+    { kw: ['active directory','ldap','kerberos'],    assets: ['active_directory'] },
+    { kw: ['oauth','saml','sso'],                    assets: ['sso'] },
+    { kw: ['rdp','remote desktop'],                  assets: ['rdp'] },
+    { kw: ['\\bssh\\b','brute force','brute-force'], assets: ['ssh'] },
+    { kw: ['exchange','outlook','o365'],             assets: ['exchange'] },
+    { kw: ['google workspace','gmail'],              assets: ['google_workspace'] },
+    { kw: ['\\bslack\\b','\\bteams\\b'],             assets: ['slack_teams'] },
+    { kw: ['sharepoint','onedrive'],                 assets: ['sharepoint'] },
+    { kw: ['splunk','sentinel','elastic siem'],      assets: ['siem'] },
+    { kw: ['crowdstrike','sentinelone','\\bedr\\b','\\bxdr\\b'], assets: ['edr'] },
+    { kw: ['nessus','qualys'],                       assets: ['vuln_scanner'] },
+    { kw: ['\\bsoar\\b'],                            assets: ['soar'] },
+    { kw: ['\\bllm\\b','openai','\\bgpt\\b','chatgpt','generative ai'], assets: ['llm'] },
+    { kw: ['\\biot\\b','scada','\\bot\\b','industrial'], assets: ['iot'] },
+    { kw: ['blockchain','smart contract'],           assets: ['blockchain'] },
+    { kw: ['android','\\bios\\b','mobile app'],      assets: ['mobile'] },
+    { kw: ['lambda','serverless','function-as'],     assets: ['serverless'] },
+    { kw: ['xss','cross-site scripting'],            assets: ['apache_nginx','api_rest','cms'] },
+    { kw: ['idor','broken access control'],          assets: ['api_rest'] },
+    { kw: ['sql injection','sqli'],                  assets: ['mysql','postgresql','mssql','oracle_db'] },
+    { kw: ['ransomware'],                            assets: ['__ALL__'] }
+  ];
+
+  function updateProfilingCounter() {
+    var checked   = document.querySelectorAll('.asset-cb:checked').length;
+    var custom    = document.getElementById('customAssetsInput').value.trim();
+    var hasCustom = custom.length > 0;
+
+    var counter = document.getElementById('asset-counter');
+    counter.innerHTML = '<strong>' + checked + '</strong> asset' + (checked !== 1 ? 's' : '') + ' selected'
+      + (hasCustom ? ' + custom' : '');
+
+    document.getElementById('btn-analyze').disabled = (checked === 0 && !hasCustom);
+  }
+
+  function applyProfile() {
+    /* Collect selections */
+    assetProfile.selected = new Set();
+    document.querySelectorAll('.asset-cb:checked').forEach(function(cb) {
+      assetProfile.selected.add(cb.value);
+    });
+    var customRaw = document.getElementById('customAssetsInput').value;
+    assetProfile.custom = customRaw.split(',').map(function(s) {
+      return s.trim().toLowerCase();
+    }).filter(function(s) { return s.length > 0; });
+
+    /* Tag rows with relevance */
+    applyRelevanceTags();
+
+    /* Update dashboard profile banner */
+    var labels = [];
+    assetProfile.selected.forEach(function(id) { labels.push(ASSET_LABELS[id] || id); });
+    assetProfile.custom.forEach(function(k) { labels.push(k); });
+    var MAX_SHOW = 4;
+    var shown = labels.slice(0, MAX_SHOW).join(' · ');
+    if (labels.length > MAX_SHOW) shown += ' · +' + (labels.length - MAX_SHOW) + ' more';
+    document.getElementById('banner-assets').textContent = shown || '(none)';
+    document.getElementById('profile-banner').style.display = 'flex';
+
+    /* Show relevance column */
+    document.getElementById('tab-ioc').classList.add('profile-active-state');
+
+    /* Show relevance filter, default to "Relevant only" */
+    document.getElementById('rel-filter-label').style.display = '';
+    document.getElementById('relevanceFilter').style.display = '';
+    document.getElementById('relevanceFilter').value = 'relevant';
+
+    /* Update profiling tab to active state */
+    showProfilingActiveState();
+
+    /* Switch to Dashboard tab */
+    switchTab('ioc');
+
+    renderPage(1);
+  }
+
+  function showProfilingActiveState() {
+    var labels = [];
+    assetProfile.selected.forEach(function(id) { labels.push(ASSET_LABELS[id] || id); });
+    assetProfile.custom.forEach(function(k) { labels.push(k); });
+
+    document.getElementById('profiling-active-count').textContent = labels.length;
+
+    var pillsEl = document.getElementById('profiling-active-pills');
+    pillsEl.innerHTML = '';
+    labels.forEach(function(l) {
+      var span = document.createElement('span');
+      span.className = 'profiling-pill';
+      span.textContent = l;
+      pillsEl.appendChild(span);
+    });
+
+    document.getElementById('profiling-state-form').style.display   = 'none';
+    document.getElementById('profiling-state-active').style.display = '';
+  }
+
+  function editProfile() {
+    /* Restore previous selections in form */
+    document.querySelectorAll('.asset-cb').forEach(function(cb) {
+      cb.checked = assetProfile.selected.has(cb.value);
+    });
+    document.getElementById('customAssetsInput').value = assetProfile.custom.join(', ');
+    updateProfilingCounter();
+    document.getElementById('profiling-state-active').style.display = 'none';
+    document.getElementById('profiling-state-form').style.display   = '';
+    switchTab('profiling');
+  }
+
+  function clearProfile() {
+    assetProfile = { selected: new Set(), custom: [] };
+
+    /* Reset form */
+    document.querySelectorAll('.asset-cb').forEach(function(cb) { cb.checked = false; });
+    document.getElementById('customAssetsInput').value = '';
+    updateProfilingCounter();
+
+    /* Clear relevance tags on all rows and cache */
+    allIocRows.forEach(function(row, i) {
+      row.dataset.relevance = '';
+      rowData[i].relevance  = '';
+      row.cells[1].innerHTML = '';
+    });
+
+    /* Hide relevance column */
+    document.getElementById('tab-ioc').classList.remove('profile-active-state');
+
+    /* Hide dashboard banner */
+    document.getElementById('profile-banner').style.display = 'none';
+
+    /* Reset and hide relevance filter */
+    document.getElementById('rel-filter-label').style.display = 'none';
+    var relSel = document.getElementById('relevanceFilter');
+    relSel.style.display = 'none';
+    relSel.value = '';
+
+    /* Return profiling tab to form state */
+    document.getElementById('profiling-state-active').style.display = 'none';
+    document.getElementById('profiling-state-form').style.display   = '';
+
+    switchTab('profiling');
+    renderPage(1);
+  }
+
+  function computeRelevance(d) {
+    if (assetProfile.selected.size === 0 && assetProfile.custom.length === 0) return '';
+
+    var text = (d.description + ' ' + d.value + ' ' + d.type + ' ' + d.mitre + ' ' + d.mitreId).toLowerCase();
+
+    for (var c = 0; c < assetProfile.custom.length; c++) {
+      if (assetProfile.custom[c] && text.includes(assetProfile.custom[c])) return 'relevant';
+    }
+
+    var hasIndirectMatch = false;
+
+    for (var i = 0; i < RELEVANCE_RULES.length; i++) {
+      var rule = RELEVANCE_RULES[i];
+      var kwMatch = rule.kw.some(function(kw) {
+        try { return new RegExp(kw, 'i').test(text); } catch(e) { return text.includes(kw); }
+      });
+      if (!kwMatch) continue;
+
+      if (rule.assets[0] === '__ALL__') {
+        if (assetProfile.selected.size > 0 || assetProfile.custom.length > 0) return 'relevant';
+        continue;
+      }
+
+      var directMatch = rule.assets.some(function(a) { return assetProfile.selected.has(a); });
+      if (directMatch) return 'relevant';
+      hasIndirectMatch = true;
+    }
+
+    if (hasIndirectMatch) return 'monitor';
+
+    if (d.type === 'cve' && (assetProfile.selected.size > 0 || assetProfile.custom.length > 0)) {
+      return 'monitor';
+    }
+
+    return '';
+  }
+
+  function applyRelevanceTags() {
+    allIocRows.forEach(function(row, i) {
+      var rel = computeRelevance(rowData[i]);
+      rowData[i].relevance = rel;
+      row.dataset.relevance = rel;
+      var cell = row.cells[1];
+      if (rel === 'relevant') {
+        cell.innerHTML = '<span class="badge badge-RELEVANT">Relevant</span>';
+      } else if (rel === 'monitor') {
+        cell.innerHTML = '<span class="badge badge-MONITOR">Monitor</span>';
+      } else {
+        cell.innerHTML = '';
+      }
+    });
+  }
+
+  /* Attach live counter to profiling form controls */
+  document.querySelectorAll('.asset-cb').forEach(function(cb) {
+    cb.addEventListener('change', updateProfilingCounter);
+  });
+  document.getElementById('customAssetsInput').addEventListener('input', updateProfilingCounter);
+
+  /* ══════════════════════════════════════════════════ */
+
+  /* ── Tab switching ── */
+  function switchTab(tab) {
+    document.getElementById('tab-ioc').style.display       = tab === 'ioc'       ? '' : 'none';
+    document.getElementById('tab-lookup').style.display    = tab === 'lookup'    ? '' : 'none';
+    document.getElementById('tab-profiling').style.display = tab === 'profiling' ? '' : 'none';
+    document.getElementById('tab-mitre').style.display     = tab === 'mitre'     ? '' : 'none';
+    document.getElementById('btn-ioc').classList.toggle('active',       tab === 'ioc');
+    document.getElementById('btn-lookup').classList.toggle('active',    tab === 'lookup');
+    document.getElementById('btn-profiling').classList.toggle('active', tab === 'profiling');
+    document.getElementById('btn-mitre').classList.toggle('active',     tab === 'mitre');
+  }
+
+  /* ── Populate IOC country filter ── */
+  (function() {
+    var seen = {};
+    document.querySelectorAll('#ioc-table tbody tr[data-country]').forEach(function(row) {
+      var c = row.dataset.country;
+      if (c && c !== '—') seen[c] = true;
+    });
+    var sel = document.getElementById('countryFilter');
+    Object.keys(seen).sort().forEach(function(c) {
+      var o = document.createElement('option');
+      o.value = c; o.textContent = c;
+      sel.appendChild(o);
+    });
+  })();
+
+  /* ── Build MITRE table from embedded JSON ── */
+  var allMitreRows = [];
+  var mitrePage = 1;
+
+  (function() {
+    var entries = Object.values(MITRE_TECHNIQUES).sort(function(a, b) {
+      return (a.id || '').localeCompare(b.id || '');
+    });
+
+    var parseAttackId = function(id) {
+      var m = (id || '').match(/T(\d+)(?:\.(\d+))?/);
+      return m ? [parseInt(m[1], 10), parseInt(m[2] || '0', 10)] : [0, 0];
+    };
+    var newMitreIds = {};
+    entries.slice().sort(function(a, b) {
+      var aa = parseAttackId(a.id), bb = parseAttackId(b.id);
+      return bb[0] !== aa[0] ? bb[0] - aa[0] : bb[1] - aa[1];
+    }).slice(0, 20).forEach(function(t) { newMitreIds[t.id] = true; });
+
+    var tbody  = document.getElementById('mitre-tbody');
+    var tactics = {};
+
+    entries.forEach(function(t) {
+      var tr = document.createElement('tr');
+      tr.dataset.id     = (t.id   || '').toLowerCase();
+      tr.dataset.name   = (t.name || '').toLowerCase();
+      tr.dataset.tactic = t.tactic || '';
+
+      var tdId = document.createElement('td');
+      tdId.className   = 'value-cell';
+      tdId.textContent = t.id || '';
+      tr.appendChild(tdId);
+
+      var tdName = document.createElement('td');
+      tdName.textContent = t.name || '';
+      if (newMitreIds[t.id]) {
+        var mitreBadge = document.createElement('span');
+        mitreBadge.className = 'badge-new';
+        mitreBadge.textContent = 'NEW';
+        tdName.appendChild(mitreBadge);
+      }
+      tr.appendChild(tdName);
+
+      var tdTactic = document.createElement('td');
+      tdTactic.textContent = t.tactic || '—';
+      tr.appendChild(tdTactic);
+
+      var tdLink = document.createElement('td');
+      if (t.url) {
+        var a = document.createElement('a');
+        a.href    = t.url;
+        a.target  = '_blank';
+        a.textContent = 'View on ATT&CK ↗';
+        a.style.cssText = 'color:#58a6ff;text-decoration:none;white-space:nowrap;';
+        tdLink.appendChild(a);
+      } else {
+        tdLink.textContent = '—';
+      }
+      tr.appendChild(tdLink);
+
+      tbody.appendChild(tr);
+      if (t.tactic) tactics[t.tactic] = true;
+    });
+
+    document.getElementById('mitre-summary').textContent =
+      entries.length + ' techniques loaded';
+
+    var sel = document.getElementById('mitreTacticFilter');
+    Object.keys(tactics).sort().forEach(function(t) {
+      var o = document.createElement('option');
+      o.value = t; o.textContent = t;
+      sel.appendChild(o);
+    });
+
+    allMitreRows = Array.from(tbody.querySelectorAll('tr'));
+  })();
+
+  /* ── IOC tab: pagination + sort state ── */
+  var allIocRows = Array.from(document.querySelectorAll('#ioc-table tbody tr[data-severity]'));
+  var currentPage = 1;
+
+  /* ── Row data cache (built once; avoids DOM reads during filter/sort) ── */
+  var rowData = allIocRows.map(function(row) {
+    var cb       = row.querySelector('.row-cb');
+    var scoreRaw = row.cells[7].textContent.trim();
+    var fullVal  = row.cells[3].title || cb.dataset.value || '';
+    var src      = row.cells[4].textContent.trim();
+    var d = {
+      value:       fullVal,
+      type:        row.dataset.type        || '',
+      source:      src,
+      severity:    row.dataset.severity    || '',
+      country:     row.dataset.country     || '',
+      score:       (scoreRaw === '—' || scoreRaw === '') ? NaN : parseFloat(scoreRaw),
+      firstSeen:   row.dataset.firstSeen   || '',
+      lastSeen:    row.dataset.lastSeen    || '',
+      description: row.dataset.description || '',
+      mitre:       row.dataset.mitre       || '',
+      mitreId:     row.dataset.mitreId     || '',
+      relevance:   '',
+    };
+    d.searchText = [
+      d.value, d.type, d.source, d.severity, d.country,
+      isNaN(d.score) ? '' : String(d.score),
+      d.firstSeen, d.description, d.mitre, d.mitreId,
+    ].join(' ').toLowerCase();
+    return d;
+  });
+
+  /* O(1) row→index lookup for sort comparisons */
+  var rowIndex = new Map();
+  allIocRows.forEach(function(row, i) { rowIndex.set(row, i); });
+
+  /* ── Selection state ── */
+  var selectedIocs = new Set();
+
+  /* ── Wire up header checkbox ── */
+  document.getElementById('header-checkbox').addEventListener('change', function() {
+    togglePageAll(this.checked);
+  });
+
+  /* ── Wire up row checkboxes ── */
+  allIocRows.forEach(function(row) {
+    var cb = row.querySelector('.row-cb');
+    cb.addEventListener('change', function() {
+      var val = cb.dataset.value;
+      if (cb.checked) {
+        selectedIocs.add(val);
+        row.classList.add('row-selected');
+      } else {
+        selectedIocs.delete(val);
+        row.classList.remove('row-selected');
+      }
+      updateHeaderCheckbox();
+      updateSelectionBar();
+    });
+  });
+
+  function togglePageAll(checked) {
+    var pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
+    var filtered = sortRows(getFilteredRows());
+    var start = (currentPage - 1) * pageSize;
+    var end   = start + pageSize;
+    var pageRows = filtered.slice(start, end);
+
+    pageRows.forEach(function(row) {
+      var cb  = row.querySelector('.row-cb');
+      var val = cb.dataset.value;
+      cb.checked = checked;
+      if (checked) {
+        selectedIocs.add(val);
+        row.classList.add('row-selected');
+      } else {
+        selectedIocs.delete(val);
+        row.classList.remove('row-selected');
+      }
+    });
+    updateSelectionBar();
+  }
+
+  function updateHeaderCheckbox() {
+    var pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
+    var filtered = sortRows(getFilteredRows());
+    var start    = (currentPage - 1) * pageSize;
+    var end      = start + pageSize;
+    var pageRows = filtered.slice(start, end);
+    var hcb      = document.getElementById('header-checkbox');
+
+    if (pageRows.length === 0) {
+      hcb.checked = false;
+      hcb.indeterminate = false;
+      return;
+    }
+    var n = pageRows.filter(function(row) {
+      return selectedIocs.has(row.querySelector('.row-cb').dataset.value);
+    }).length;
+
+    if (n === pageRows.length) {
+      hcb.checked = true;
+      hcb.indeterminate = false;
+    } else if (n === 0) {
+      hcb.checked = false;
+      hcb.indeterminate = false;
+    } else {
+      hcb.checked = false;
+      hcb.indeterminate = true;
+    }
+  }
+
+  function updateSelectionBar() {
+    var bar = document.getElementById('selection-bar');
+    var n   = selectedIocs.size;
+    if (n === 0) {
+      bar.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'flex';
+    document.getElementById('sel-count-label').textContent =
+      n + ' IOC' + (n !== 1 ? 's' : '') + ' selected';
+    document.getElementById('sel-all-count').textContent = getFilteredRows().length;
+  }
+
+  function selectAllFiltered() {
+    var filtered = getFilteredRows();
+    filtered.forEach(function(row) {
+      var cb  = row.querySelector('.row-cb');
+      selectedIocs.add(cb.dataset.value);
+      cb.checked = true;
+      row.classList.add('row-selected');
+    });
+    updateHeaderCheckbox();
+    updateSelectionBar();
+  }
+
+  function clearSelection() {
+    selectedIocs.clear();
+    allIocRows.forEach(function(row) {
+      row.classList.remove('row-selected');
+      row.querySelector('.row-cb').checked = false;
+    });
+    var hcb = document.getElementById('header-checkbox');
+    hcb.checked = false;
+    hcb.indeterminate = false;
+    updateSelectionBar();
+  }
+
+  /* ── Truncate hash values in VALUE column
+     Column layout: 0=cb, 1=rel, 2=type, 3=value, 4=source, 5=severity,
+                    6=country, 7=score, 8=first_seen, 9=description, 10=mitre ── */
+  (function() {
+    allIocRows.forEach(function(row) {
+      if (row.dataset.type !== 'hash') return;
+      var cell = row.cells[3];
+      var full = cell.title;
+      if (!full || full.length <= 12) return;
+      cell.textContent = '';
+      cell.appendChild(document.createTextNode(full.substring(0, 12) + '…'));
+      var hidden = document.createElement('span');
+      hidden.style.cssText = 'display:none;';
+      hidden.textContent = full;
+      cell.appendChild(hidden);
+    });
+  })();
+
+  /* ── NEW badges: IOC tab ── */
+  (function() {
+    var today = new Date().toISOString().slice(0, 10);
+    var todayRows = allIocRows.filter(function(row) {
+      return (row.dataset.firstSeen || '').slice(0, 10) === today;
+    });
+
+    var candidates;
+    if (todayRows.length > 0) {
+      candidates = todayRows.slice().sort(function(a, b) {
+        return (b.dataset.firstSeen || '').localeCompare(a.dataset.firstSeen || '');
+      }).slice(0, 20);
+    } else {
+      candidates = allIocRows.slice().sort(function(a, b) {
+        return (b.dataset.firstSeen || '').localeCompare(a.dataset.firstSeen || '');
+      }).slice(0, 20);
+    }
+
+    candidates.forEach(function(row) {
+      var badge = document.createElement('span');
+      badge.className = 'badge-new';
+      badge.textContent = 'NEW';
+      row.cells[3].appendChild(badge);
+    });
+  })();
+
+  var sortCol = null;
+  var sortDir = 'asc';
+
+  var SEVERITY_RANK = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
+
+  function sortRows(rows) {
+    if (!sortCol) return rows;
+    return rows.slice().sort(function(a, b) {
+      var da  = rowData[rowIndex.get(a)];
+      var db  = rowData[rowIndex.get(b)];
+      var av, bv, cmp;
+
+      if (sortCol === 'severity') {
+        av = SEVERITY_RANK[da.severity] !== undefined ? SEVERITY_RANK[da.severity] : -1;
+        bv = SEVERITY_RANK[db.severity] !== undefined ? SEVERITY_RANK[db.severity] : -1;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+
+      if (sortCol === 'score') {
+        av = isNaN(da.score) ? -1 : da.score;
+        bv = isNaN(db.score) ? -1 : db.score;
+        return sortDir === 'asc' ? av - bv : bv - av;
+      }
+
+      if (sortCol === 'firstseen') {
+        cmp = da.firstSeen.localeCompare(db.firstSeen);
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+
+      if (sortCol === 'value') {
+        cmp = da.value.toLowerCase().localeCompare(db.value.toLowerCase());
+        return sortDir === 'asc' ? cmp : -cmp;
+      }
+
+      var field = { type: 'type', source: 'source', country: 'country' }[sortCol];
+      av = (da[field] || '').toLowerCase();
+      bv = (db[field] || '').toLowerCase();
+      cmp = av.localeCompare(bv);
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  function clickSort(col) {
+    if (sortCol === col) {
+      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      sortCol = col;
+      sortDir = 'asc';
+    }
+    updateSortHeaders();
+    renderPage(1);
+  }
+
+  function updateSortHeaders() {
+    document.querySelectorAll('#ioc-table th[data-sort]').forEach(function(th) {
+      th.classList.remove('sort-active');
+      th.querySelector('.sort-icon').textContent = '↕';
+    });
+    if (sortCol) {
+      var active = document.querySelector('#ioc-table th[data-sort="' + sortCol + '"]');
+      if (active) {
+        active.classList.add('sort-active');
+        active.querySelector('.sort-icon').textContent = sortDir === 'asc' ? '↑' : '↓';
+      }
+    }
+  }
+
+  function getFilteredRows() {
+    var severity    = document.getElementById('filter-severity').value;
+    var type        = document.getElementById('filter-type').value;
+    var term        = document.getElementById('searchInput').value.toLowerCase().trim();
+    var country     = document.getElementById('countryFilter').value;
+    var minScoreRaw = document.getElementById('abuseScoreMin').value;
+    var minScore    = minScoreRaw !== '' && Number(minScoreRaw) > 0 ? Number(minScoreRaw) : null;
+    var fromVal     = document.getElementById('dateFrom').value;
+    var toVal       = document.getElementById('dateTo').value;
+    var fromDate    = fromVal ? new Date(fromVal) : null;
+    var toDate      = toVal   ? new Date(toVal)   : null;
+    var relFilter   = document.getElementById('relevanceFilter').value;
+
+    var result = [];
+    for (var i = 0; i < rowData.length; i++) {
+      var d = rowData[i];
+
+      if (severity && d.severity !== severity) continue;
+      if (type     && d.type     !== type)     continue;
+      if (country  && d.country  !== country)  continue;
+
+      if (relFilter) {
+        var rel = d.relevance;
+        if (relFilter === 'untagged' ? rel : rel !== relFilter) continue;
+      }
+
+      if (minScore !== null && (isNaN(d.score) || d.score < minScore)) continue;
+
+      if (fromDate || toDate) {
+        if (!d.firstSeen) continue;
+        var dt = new Date(d.firstSeen.substring(0, 10));
+        if (fromDate && dt < fromDate) continue;
+        if (toDate   && dt > toDate)   continue;
+      }
+
+      if (term && !d.searchText.includes(term)) continue;
+
+      result.push(allIocRows[i]);
+    }
+    return result;
+  }
+
+  function renderPage(page) {
+    var pageSize   = parseInt(document.getElementById('pageSizeSelect').value, 10);
+    var filtered   = sortRows(getFilteredRows());
+    var total      = filtered.length;
+    var totalPages = Math.max(1, Math.ceil(total / pageSize));
+    page = Math.max(1, Math.min(page, totalPages));
+    currentPage = page;
+
+    var start = (page - 1) * pageSize;
+    var end   = start + pageSize;
+
+    allIocRows.forEach(function(row) { row.style.display = 'none'; });
+
+    filtered.slice(start, end).forEach(function(row) {
+      row.style.display = '';
+      var cb  = row.querySelector('.row-cb');
+      var val = cb.dataset.value;
+      if (selectedIocs.has(val)) {
+        cb.checked = true;
+        row.classList.add('row-selected');
+      } else {
+        cb.checked = false;
+        row.classList.remove('row-selected');
+      }
+    });
+
+    var from  = total === 0 ? 0 : start + 1;
+    var to    = Math.min(end, total);
+    var label = total === 0
+      ? 'No IOCs match the current filters'
+      : 'Showing ' + from + '–' + to + ' of ' + total
+        + (total < allIocRows.length ? ' filtered' : '') + ' IOCs';
+    document.getElementById('ioc-counter').textContent   = label;
+    document.getElementById('ioc-page-info').textContent = 'Page ' + page + ' of ' + totalPages;
+    document.getElementById('btn-prev').disabled         = page <= 1;
+    document.getElementById('btn-next').disabled         = page >= totalPages;
+
+    updateHeaderCheckbox();
+    updateSelectionBar();
+  }
+
+  function applyFilters() { renderPage(1); }
+
+  function clearFilters() {
+    ['filter-severity','filter-type','countryFilter'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    ['abuseScoreMin','searchInput','dateFrom','dateTo'].forEach(function(id) {
+      document.getElementById(id).value = '';
+    });
+    /* Keep relevance filter intact — it's profile-driven */
+    applyFilters();
+  }
+
+  renderPage(1);
+
+  /* ── MITRE tab: pagination ── */
+  function getMitreFilteredRows() {
+    var term   = document.getElementById('mitreSearch').value.toLowerCase().trim();
+    var tactic = document.getElementById('mitreTacticFilter').value;
+    return allMitreRows.filter(function(row) {
+      var matchSearch = !term   || row.dataset.id.includes(term) || row.dataset.name.includes(term);
+      var matchTactic = !tactic || row.dataset.tactic === tactic;
+      return matchSearch && matchTactic;
+    });
+  }
+
+  function renderMitrePage(page) {
+    var pageSize   = parseInt(document.getElementById('mitrePageSizeSelect').value, 10);
+    var filtered   = getMitreFilteredRows();
+    var total      = filtered.length;
+    var totalPages = Math.max(1, Math.ceil(total / pageSize));
+    page = Math.max(1, Math.min(page, totalPages));
+    mitrePage = page;
+
+    var start = (page - 1) * pageSize;
+    var end   = start + pageSize;
+
+    allMitreRows.forEach(function(row) { row.style.display = 'none'; });
+    filtered.slice(start, end).forEach(function(row) { row.style.display = ''; });
+
+    var from  = total === 0 ? 0 : start + 1;
+    var to    = Math.min(end, total);
+    var label = total === 0
+      ? 'No techniques match the current filters'
+      : 'Showing ' + from + '–' + to + ' of ' + total
+        + (total < allMitreRows.length ? ' filtered' : '') + ' techniques';
+    document.getElementById('mitre-counter').textContent     = label;
+    document.getElementById('mitre-page-info').textContent   = 'Page ' + page + ' of ' + totalPages;
+    document.getElementById('mitre-btn-prev').disabled       = page <= 1;
+    document.getElementById('mitre-btn-next').disabled       = page >= totalPages;
+  }
+
+  function applyMitreFilters() { renderMitrePage(1); }
+
+  function clearMitreFilters() {
+    document.getElementById('mitreSearch').value        = '';
+    document.getElementById('mitreTacticFilter').value = '';
+    applyMitreFilters();
+  }
+
+  /* ── IOC Lookup ── */
+  function escHtml(s) {
+    return String(s || '')
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+      .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function countryFlag(code) {
+    if (!code || code.length !== 2) return '';
+    return Array.from(code.toUpperCase()).map(function(c) {
+      return String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65);
+    }).join('');
+  }
+
+  document.getElementById('lookupInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') runLookup();
+  });
+
+  var _lookupValue = '';
+
+  function runLookup() {
+    var q        = document.getElementById('lookupInput').value.trim();
+    var resultEl = document.getElementById('lookup-result');
+    var emptyEl  = document.getElementById('lookup-empty');
+    resultEl.innerHTML = '';
+
+    if (!q) { emptyEl.style.display = ''; return; }
+    emptyEl.style.display = 'none';
+
+    var ql = q.toLowerCase();
+    var exactMatch   = null;
+    var partialMatch = null;
+
+    for (var i = 0; i < allIocRows.length; i++) {
+      var row = allIocRows[i];
+      /* cells[3] = value cell (title = full untruncated value) */
+      var fullVal = (row.cells[3].title || row.querySelector('.row-cb').dataset.value || '').toLowerCase();
+      if (fullVal === ql)       { exactMatch = row; break; }
+      if (!partialMatch && fullVal.includes(ql)) partialMatch = row;
+    }
+
+    var match = exactMatch || partialMatch;
+    if (!match) {
+      resultEl.innerHTML =
+        '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
+      return;
+    }
+    renderLookupCard(match, resultEl);
+  }
+
+  function renderLookupCard(row, container) {
+    /* cells[3] = value, cells[4] = source, cells[7] = abuse_score */
+    var fullValue = row.cells[3].title || row.querySelector('.row-cb').dataset.value || '';
+    var type      = row.dataset.type      || '';
+    var severity  = row.dataset.severity  || '';
+    var country   = row.dataset.country   || '';
+    var firstSeen = (row.dataset.firstSeen || '').substring(0, 10) || '—';
+    var lastSeen  = (row.dataset.lastSeen  || '').substring(0, 10) || firstSeen;
+    var mitre     = row.dataset.mitre     || '';
+    var mitreId   = row.dataset.mitreId   || '';
+    var descr     = row.dataset.description || '';
+    var source    = row.cells[4].textContent.trim();
+    var scoreRaw  = row.cells[7].textContent.trim();
+    var score     = (scoreRaw === '—' || scoreRaw === '') ? null : parseFloat(scoreRaw);
+    var isNew     = !!row.cells[3].querySelector('.badge-new');
+
+    var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
+    var techName  = techData ? (techData.name || '') : '';
+    var mitreUrl  = techData ? (techData.url  || '') : (mitreId ? 'https://attack.mitre.org/techniques/' + mitreId + '/' : '');
+
+    var barColor = score !== null
+      ? (score >= 80 ? '#f85149' : score >= 50 ? '#e3b341' : '#3fb950')
+      : '';
+
+    var flag = (type === 'ip' && country && country !== '—') ? countryFlag(country) + ' ' : '';
+    var countryDisplay = (country && country !== '—') ? flag + escHtml(country) : '—';
+
+    var srcNorm = source.replace(/[\s_-]+/g, '').toLowerCase();
+    var ALL_SOURCES = ['CISA-KEV', 'AlienVault-OTX', 'AbuseIPDB'];
+
+    _lookupValue = fullValue;
+
+    var h = '';
+    h += '<div class="lookup-card">';
+
+    h += '<div class="lookup-card-header">';
+    h += '<div class="lookup-value">' + escHtml(fullValue) + '</div>';
+    h += '<div class="lookup-badges">';
+    h += '<span class="type-pill">' + escHtml(type) + '</span> ';
+    h += '<span class="badge badge-' + escHtml(severity) + '">' + escHtml(severity) + '</span>';
+    if (isNew) h += ' <span class="badge-new">NEW</span>';
+    h += '</div>';
+    h += '</div>';
+
+    h += '<div class="lookup-section">';
+    h += '<div class="lookup-section-title">Identification</div>';
+    h += '<div class="lookup-grid">';
+    h += '<div class="lookup-info-block"><div class="lookup-info-label">Country</div>';
+    h += '<div class="lookup-info-value">' + countryDisplay + '</div></div>';
+    h += '<div class="lookup-info-block"><div class="lookup-info-label">First Seen</div>';
+    h += '<div class="lookup-info-value">' + escHtml(firstSeen) + '</div></div>';
+    h += '<div class="lookup-info-block"><div class="lookup-info-label">Last Seen</div>';
+    h += '<div class="lookup-info-value">' + escHtml(lastSeen) + '</div></div>';
+    h += '</div></div>';
+
+    if (score !== null) {
+      var pct = Math.min(100, Math.max(0, score));
+      h += '<div class="lookup-section">';
+      h += '<div class="lookup-section-title">AbuseIPDB Confidence Score</div>';
+      h += '<div class="lookup-score-row">';
+      h += '<span class="lookup-score-val" style="color:' + barColor + '">' + score + '</span>';
+      h += '<span style="color:#8b949e;font-size:14px;">/ 100</span>';
+      h += '</div>';
+      h += '<div class="lookup-bar-wrap">';
+      h += '<div class="lookup-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div>';
+      h += '</div>';
+      h += '</div>';
+    }
+
+    if (mitre || mitreId) {
+      h += '<div class="lookup-section">';
+      h += '<div class="lookup-section-title">MITRE ATT&amp;CK Mapping</div>';
+      h += '<div class="lookup-mitre-row">';
+      if (mitreId) h += '<span class="lookup-tech-id">' + escHtml(mitreId) + '</span>';
+      if (techName) h += '<span class="lookup-tech-name">' + escHtml(techName) + '</span>';
+      h += '</div>';
+      if (mitre) h += '<div class="lookup-tactic">' + escHtml(mitre) + '</div>';
+      if (mitreUrl) {
+        h += '<a href="' + escHtml(mitreUrl) + '" target="_blank" class="lookup-att-link">View on ATT&amp;CK ↗</a>';
+      }
+      h += '</div>';
+    }
+
+    h += '<div class="lookup-section">';
+    h += '<div class="lookup-section-title">Intelligence Sources</div>';
+    h += '<div class="lookup-source-pills">';
+    ALL_SOURCES.forEach(function(s) {
+      var pillNorm = s.replace(/[\s_-]+/g, '').toLowerCase();
+      var isActive = srcNorm === pillNorm;
+      h += '<span class="lookup-source-pill' + (isActive ? ' active' : '') + '">' + escHtml(s) + '</span>';
+    });
+    h += '</div></div>';
+
+    if (descr && descr !== '—') {
+      h += '<div class="lookup-section">';
+      h += '<div class="lookup-section-title">Description</div>';
+      h += '<div class="lookup-description">' + escHtml(descr) + '</div>';
+      h += '</div>';
+    }
+
+    var vtUrl     = 'https://www.virustotal.com/gui/search/' + encodeURIComponent(fullValue);
+    var shodanUrl = 'https://www.shodan.io/search?query='    + encodeURIComponent(fullValue);
+    var abuseUrl  = 'https://www.abuseipdb.com/check/'       + encodeURIComponent(fullValue);
+
+    h += '<div class="lookup-actions">';
+    h += '<button class="btn-action" id="btn-copy-ioc" onclick="copyLookupIoc()">Copy IOC</button>';
+    h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-action">VirusTotal ↗</a>';
+    if (type === 'ip') {
+      h += '<a href="' + escHtml(shodanUrl) + '" target="_blank" class="btn-action">Shodan ↗</a>';
+      h += '<a href="' + escHtml(abuseUrl)  + '" target="_blank" class="btn-action">AbuseIPDB ↗</a>';
+    }
+    h += '</div>';
+
+    h += '</div>';
+    container.innerHTML = h;
+  }
+
+  function copyLookupIoc() {
+    if (!_lookupValue) return;
+    navigator.clipboard.writeText(_lookupValue).then(function() {
+      var btn = document.getElementById('btn-copy-ioc');
+      if (!btn) return;
+      btn.textContent = 'Copied!';
+      setTimeout(function() { if (btn) btn.textContent = 'Copy IOC'; }, 2000);
+    });
+  }
+
+  /* ── SIEM CSV export (selected rows only, STIX 2.1 field naming) ── */
+  function exportSelectedSiemCsv() {
+    if (!selectedIocs.size) { alert('No rows selected.'); return; }
+
+    var rows = allIocRows.filter(function(row) {
+      return selectedIocs.has(row.querySelector('.row-cb').dataset.value);
+    });
+
+    function csvCell(v) {
+      var s = String(v === null || v === undefined ? '' : v).trim();
+      if (s === '—') s = '';
+      if (s.indexOf(',') !== -1 || s.indexOf('"') !== -1 || s.indexOf('\n') !== -1)
+        return '"' + s.replace(/"/g, '""') + '"';
+      return s;
+    }
+
+    var headers = [
+      'indicator_type', 'indicator_value', 'severity', 'confidence_score',
+      'source', 'country_code', 'mitre_tactic', 'mitre_technique',
+      'first_seen', 'last_seen'
+    ];
+
+    var lines = [headers.join(',')];
+
+    rows.forEach(function(row) {
+      /* cells[3] = value (full hash in title), cells[7] = score, cells[4] = source */
+      var fullValue = row.cells[3].title || row.cells[3].textContent.trim();
+      var scoreRaw  = row.cells[7].textContent.trim();
+      var confidence = (scoreRaw === '—' || scoreRaw === '') ? '' : scoreRaw;
+
+      var mitreId  = row.dataset.mitreId || '';
+      var techData = mitreId
+        ? (MITRE_TECHNIQUES[mitreId] || MITRE_TECHNIQUES[mitreId.toUpperCase()] || null)
+        : null;
+      var techName  = techData ? (techData.name || '') : '';
+      var mitreTech = mitreId ? (mitreId + (techName ? ' — ' + techName : '')) : '';
+
+      var country = row.dataset.country || '';
+      if (country === '—') country = '';
+
+      var firstSeen  = (row.dataset.firstSeen || '').substring(0, 10);
+      var lastSeen   = (row.dataset.lastSeen  || '').substring(0, 10);
+
+      var mitreTactic = row.dataset.mitre || '';
+      if (mitreTactic === '—') mitreTactic = '';
+
+      lines.push([
+        csvCell(row.dataset.type),
+        csvCell(fullValue),
+        csvCell(row.dataset.severity),
+        csvCell(confidence),
+        csvCell(row.cells[4].textContent.trim()),
+        csvCell(country),
+        csvCell(mitreTactic),
+        csvCell(mitreTech),
+        csvCell(firstSeen),
+        csvCell(lastSeen)
+      ].join(','));
+    });
+
+    var today = new Date().toISOString().slice(0, 10);
+    var blob  = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    var url   = URL.createObjectURL(blob);
+    var a     = document.createElement('a');
+    a.href     = url;
+    a.download = 'ioc-siem-' + today + '.csv';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  renderMitrePage(1);
+</script>
+</body>
+</html>
