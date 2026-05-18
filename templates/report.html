@@ -1255,14 +1255,11 @@
     });
   });
 
-  function togglePageAll(checked) {
-    var pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
-    var filtered = sortRows(getFilteredRows());
-    var start = (currentPage - 1) * pageSize;
-    var end   = start + pageSize;
-    var pageRows = filtered.slice(start, end);
+  /* Current visible page rows — updated by renderPage */
+  var currentPageRows = [];
 
-    pageRows.forEach(function(row) {
+  function togglePageAll(checked) {
+    currentPageRows.forEach(function(row) {
       var cb  = row.querySelector('.row-cb');
       var val = cb.dataset.value;
       cb.checked = checked;
@@ -1278,23 +1275,18 @@
   }
 
   function updateHeaderCheckbox() {
-    var pageSize = parseInt(document.getElementById('pageSizeSelect').value, 10);
-    var filtered = sortRows(getFilteredRows());
-    var start    = (currentPage - 1) * pageSize;
-    var end      = start + pageSize;
-    var pageRows = filtered.slice(start, end);
-    var hcb      = document.getElementById('header-checkbox');
+    var hcb = document.getElementById('header-checkbox');
 
-    if (pageRows.length === 0) {
+    if (currentPageRows.length === 0) {
       hcb.checked = false;
       hcb.indeterminate = false;
       return;
     }
-    var n = pageRows.filter(function(row) {
+    var n = currentPageRows.filter(function(row) {
       return selectedIocs.has(row.querySelector('.row-cb').dataset.value);
     }).length;
 
-    if (n === pageRows.length) {
+    if (n === currentPageRows.length) {
       hcb.checked = true;
       hcb.indeterminate = false;
     } else if (n === 0) {
@@ -1509,7 +1501,8 @@
 
     allIocRows.forEach(function(row) { row.style.display = 'none'; });
 
-    filtered.slice(start, end).forEach(function(row) {
+    currentPageRows = filtered.slice(start, end);
+    currentPageRows.forEach(function(row) {
       row.style.display = '';
       var cb  = row.querySelector('.row-cb');
       var val = cb.dataset.value;
@@ -1627,40 +1620,36 @@
     emptyEl.style.display = 'none';
 
     var ql = q.toLowerCase();
-    var exactMatch   = null;
-    var partialMatch = null;
-
-    for (var i = 0; i < allIocRows.length; i++) {
-      var row = allIocRows[i];
-      /* cells[3] = value cell (title = full untruncated value) */
-      var fullVal = (row.cells[3].title || row.querySelector('.row-cb').dataset.value || '').toLowerCase();
-      if (fullVal === ql)       { exactMatch = row; break; }
-      if (!partialMatch && fullVal.includes(ql)) partialMatch = row;
+    var matchIdx = -1;
+    var partialIdx = -1;
+    for (var i = 0; i < rowData.length; i++) {
+      var val = rowData[i].value.toLowerCase();
+      if (val === ql)                             { matchIdx = i; break; }
+      if (partialIdx === -1 && val.includes(ql))  { partialIdx = i; }
     }
 
-    var match = exactMatch || partialMatch;
-    if (!match) {
+    var idx = matchIdx !== -1 ? matchIdx : partialIdx;
+    if (idx === -1) {
       resultEl.innerHTML =
         '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
       return;
     }
-    renderLookupCard(match, resultEl);
+    renderLookupCard(allIocRows[idx], rowData[idx], resultEl);
   }
 
-  function renderLookupCard(row, container) {
-    /* cells[3] = value, cells[4] = source, cells[7] = abuse_score */
-    var fullValue = row.cells[3].title || row.querySelector('.row-cb').dataset.value || '';
-    var type      = row.dataset.type      || '';
-    var severity  = row.dataset.severity  || '';
-    var country   = row.dataset.country   || '';
-    var firstSeen = (row.dataset.firstSeen || '').substring(0, 10) || '—';
-    var lastSeen  = (row.dataset.lastSeen  || '').substring(0, 10) || firstSeen;
-    var mitre     = row.dataset.mitre     || '';
-    var mitreId   = row.dataset.mitreId   || '';
-    var descr     = row.dataset.description || '';
-    var source    = row.cells[4].textContent.trim();
-    var scoreRaw  = row.cells[7].textContent.trim();
-    var score     = (scoreRaw === '—' || scoreRaw === '') ? null : parseFloat(scoreRaw);
+  function renderLookupCard(row, d, container) {
+    /* Use the rowData cache (d) for all data reads — avoids DOM dependency */
+    var fullValue = d.value;
+    var type      = d.type;
+    var severity  = d.severity;
+    var country   = d.country;
+    var firstSeen = d.firstSeen.substring(0, 10) || '—';
+    var lastSeen  = d.lastSeen  ? d.lastSeen.substring(0, 10) : firstSeen;
+    var mitre     = d.mitre;
+    var mitreId   = d.mitreId;
+    var descr     = d.description;
+    var source    = d.source;
+    var score     = isNaN(d.score) ? null : d.score;
     var isNew     = !!row.cells[3].querySelector('.badge-new');
 
     var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
@@ -1799,33 +1788,29 @@
     var lines = [headers.join(',')];
 
     rows.forEach(function(row) {
-      /* cells[3] = value (full hash in title), cells[7] = score, cells[4] = source */
-      var fullValue = row.cells[3].title || row.cells[3].textContent.trim();
-      var scoreRaw  = row.cells[7].textContent.trim();
-      var confidence = (scoreRaw === '—' || scoreRaw === '') ? '' : scoreRaw;
+      /* Use rowData cache — avoids DOM reads in loop and handles truncated hash cells */
+      var idx = rowIndex.get(row);
+      var d   = rowData[idx];
 
-      var mitreId  = row.dataset.mitreId || '';
-      var techData = mitreId
-        ? (MITRE_TECHNIQUES[mitreId] || MITRE_TECHNIQUES[mitreId.toUpperCase()] || null)
+      var confidence = isNaN(d.score) ? '' : String(d.score);
+
+      var techData = d.mitreId
+        ? (MITRE_TECHNIQUES[d.mitreId] || null)
         : null;
       var techName  = techData ? (techData.name || '') : '';
-      var mitreTech = mitreId ? (mitreId + (techName ? ' — ' + techName : '')) : '';
+      var mitreTech = d.mitreId ? (d.mitreId + (techName ? ' — ' + techName : '')) : '';
 
-      var country = row.dataset.country || '';
-      if (country === '—') country = '';
-
-      var firstSeen  = (row.dataset.firstSeen || '').substring(0, 10);
-      var lastSeen   = (row.dataset.lastSeen  || '').substring(0, 10);
-
-      var mitreTactic = row.dataset.mitre || '';
-      if (mitreTactic === '—') mitreTactic = '';
+      var country    = d.country === '—' ? '' : d.country;
+      var firstSeen  = d.firstSeen.substring(0, 10);
+      var lastSeen   = d.lastSeen ? d.lastSeen.substring(0, 10) : firstSeen;
+      var mitreTactic = d.mitre === '—' ? '' : d.mitre;
 
       lines.push([
-        csvCell(row.dataset.type),
-        csvCell(fullValue),
-        csvCell(row.dataset.severity),
+        csvCell(d.type),
+        csvCell(d.value),
+        csvCell(d.severity),
         csvCell(confidence),
-        csvCell(row.cells[4].textContent.trim()),
+        csvCell(d.source),
         csvCell(country),
         csvCell(mitreTactic),
         csvCell(mitreTech),

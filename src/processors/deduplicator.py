@@ -14,6 +14,9 @@ def deduplicate(iocs: list) -> list:
 
     for ioc in iocs:
         value = ioc.get("value")
+        # Skip entries with no value to avoid None as dict key
+        if value is None:
+            continue
         if value not in seen or _severity_rank(ioc) > _severity_rank(seen[value]):
             seen[value] = ioc
 

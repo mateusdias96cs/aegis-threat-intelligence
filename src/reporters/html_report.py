@@ -19,4 +19,8 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
     )
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(html, encoding="utf-8")
+    try:
+        output_path.write_text(html, encoding="utf-8")
+    except OSError as e:
+        print(f"[html_report] failed to write report: {e}")
+        raise

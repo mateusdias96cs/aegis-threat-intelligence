@@ -66,19 +66,20 @@ def run():
         stats = db.get_stats()
         all_iocs = db.get_all_iocs()
         html_report.generate(all_iocs, stats, techniques)
+
+        # Summary — inside try so stats is always defined
+        by_severity = stats.get("by_severity", {})
+        print("\n── Pipeline complete ──────────────────────────")
+        print(f"  Total collected:      {len(raw_iocs)}")
+        print(f"  After deduplication:  {len(iocs)}")
+        print("  Breakdown by severity:")
+        for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
+            count = by_severity.get(level, 0)
+            print(f"    {level:<10} {count}")
+        print("───────────────────────────────────────────────")
+        print("[pipeline] report written to output/index.html")
     finally:
         db.close()
-
-    # Summary
-    print("\n── Pipeline complete ──────────────────────────")
-    print(f"  Total collected:      {len(raw_iocs)}")
-    print(f"  After deduplication:  {len(iocs)}")
-    print("  Breakdown by severity:")
-    for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
-        count = stats["by_severity"].get(level, 0)
-        print(f"    {level:<10} {count}")
-    print("───────────────────────────────────────────────")
-    print("[pipeline] report written to output/index.html")
 
 
 if __name__ == "__main__":
