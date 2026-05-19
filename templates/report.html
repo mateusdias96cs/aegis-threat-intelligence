@@ -466,6 +466,9 @@
     <div class="meta">
       <span>Generated: {{ generated_at }}</span>
       <span>Total IOCs: {{ total }}</span>
+      {% if total_in_db > total_displayed %}
+      <span>Showing {{ total_displayed_fmt }} most critical IOCs of {{ total_in_db_fmt }} total in database</span>
+      {% endif %}
     </div>
   </header>
 

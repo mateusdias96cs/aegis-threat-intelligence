@@ -116,5 +116,21 @@ class DatabaseManager:
             "by_severity": {row["severity"]: row["count"] for row in by_severity},
         }
 
+    def cleanup_old_iocs(self, days: int = 30) -> int:
+        try:
+            cursor = self.conn.execute(
+                """
+                DELETE FROM iocs
+                WHERE first_seen < date('now', '-' || ? || ' days')
+                AND NOT (source = 'CISA-KEV' AND severity = 'CRITICAL')
+                """,
+                (days,),
+            )
+            self.conn.commit()
+            return cursor.rowcount
+        except sqlite3.OperationalError as e:
+            print(f"[database] cleanup_old_iocs failed: {e}")
+            return 0
+
     def close(self):
         self.conn.close()

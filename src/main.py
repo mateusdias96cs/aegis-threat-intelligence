@@ -16,6 +16,10 @@ from src.reporters import html_report
 def run():
     db = DatabaseManager()
     try:
+        print("[pipeline] cleaning up IOCs older than 30 days ...")
+        deleted = db.cleanup_old_iocs(days=30)
+        print(f"[pipeline] removed {deleted} expired IOCs")
+
         # Collect
         print("[pipeline] collecting from CISA-KEV ...")
         cisa_iocs = cisa.collect()
