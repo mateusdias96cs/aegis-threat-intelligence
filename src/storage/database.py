@@ -1,4 +1,5 @@
 import sqlite3
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -115,6 +116,27 @@ class DatabaseManager:
             "by_type": {row["type"]: row["count"] for row in by_type},
             "by_severity": {row["severity"]: row["count"] for row in by_severity},
         }
+
+    def get_ioc_by_value(self, value: str) -> dict | None:
+        """Case-insensitive exact lookup; returns a single IOC dict or None."""
+        row = self.conn.execute(
+            "SELECT * FROM iocs WHERE LOWER(value) = LOWER(?)", (value,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def get_critical_since(self, hours: int, limit: int = 100) -> list[dict]:
+        """Returns CRITICAL IOCs with first_seen within the last N hours, newest first."""
+        cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d")
+        rows = self.conn.execute(
+            """
+            SELECT * FROM iocs
+            WHERE severity = 'CRITICAL' AND first_seen >= ?
+            ORDER BY first_seen DESC
+            LIMIT ?
+            """,
+            (cutoff, limit),
+        ).fetchall()
+        return [dict(row) for row in rows]
 
     def cleanup_old_iocs(self, days: int = 30) -> int:
         try:
