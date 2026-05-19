@@ -3,481 +3,415 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AEGIS Threat Intelligence</title>
+  <title>AEGIS · Threat Intelligence</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
+    :root {
+      --bg-base:        #080808;
+      --bg-surface:     #0f0f0f;
+      --bg-elevated:    #141414;
+      --bg-row-a:       #0a0a0a;
+      --bg-row-b:       #0d0d0d;
+      --border:         #1e1e1e;
+      --border-subtle:  #161616;
+      --border-strong:  #2a2a2a;
+      --red-primary:    #c0392b;
+      --red-bright:     #e0493a;
+      --red-muted:      #7a1f1f;
+      --accent-gold:    #c8a96e;
+      --text-primary:   #f0f0f0;
+      --text-secondary: #666666;
+      --text-tertiary:  #444444;
+      --critical: #c0392b;
+      --high:     #c06010;
+      --medium:   #8a7000;
+      --low:      #1e6b1e;
+      --sidebar-w: 200px;
+      --topbar-h:  48px;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+      --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace;
+    }
+
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background: #0d1117;
-      color: #c9d1d9;
-      font-family: 'Segoe UI', system-ui, sans-serif;
-      font-size: 14px;
+    html, body {
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font-family: var(--font-sans);
+      font-size: 13px;
       line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      font-variant-numeric: tabular-nums;
     }
 
-    a { color: #58a6ff; }
+    body { min-height: 100vh; overflow: hidden; }
+    a { color: #7fb1ff; text-decoration: none; }
+    button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; padding: 0; }
+    input, select, textarea { font: inherit; color: inherit; }
+    ::selection { background: rgba(192,57,43,.45); color: #fff; }
 
-    /* ── Layout ── */
-    .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+    /* Scrollbars */
+    *::-webkit-scrollbar { width: 4px; height: 4px; }
+    *::-webkit-scrollbar-track { background: #0a0a0a; }
+    *::-webkit-scrollbar-thumb { background: #2a2a2a; border-radius: 4px; }
+    *::-webkit-scrollbar-thumb:hover { background: #3a3a3a; }
+    * { scrollbar-width: thin; scrollbar-color: #2a2a2a #0a0a0a; }
 
-    /* ── Header ── */
-    header { padding-bottom: 0; margin-bottom: 0; }
-    header h1 { font-size: 22px; color: #f0f6fc; letter-spacing: 0.5px; }
-    header .meta { margin-top: 6px; color: #8b949e; font-size: 13px; }
-    header .meta span { margin-right: 24px; }
+    /* ── App shell */
+    .app { display: grid; grid-template-columns: var(--sidebar-w) 1fr; height: 100vh; overflow: hidden; }
 
-    /* ── Tab nav ── */
-    .tab-nav {
-      display: flex;
-      border-bottom: 1px solid #21262d;
-      margin-top: 20px;
-      margin-bottom: 28px;
-    }
-    .tab-btn {
-      background: transparent;
-      color: #8b949e;
-      border: none;
-      border-bottom: 2px solid transparent;
-      padding: 12px 20px;
-      font-size: 14px;
-      cursor: pointer;
-      margin-bottom: -1px;
-    }
-    .tab-btn:hover { color: #c9d1d9; }
-    .tab-btn.active { color: #f0f6fc; border-bottom-color: #58a6ff; font-weight: 600; }
+    /* ── Sidebar */
+    .sidebar { background: var(--bg-base); border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    .sb-brand { padding: 22px 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .shield-wrap { position: relative; width: 70px; height: 70px; display: grid; place-items: center; }
+    .shield-glow { position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, rgba(200,169,110,.07) 0%, transparent 65%); pointer-events: none; animation: glowpulse 8s linear infinite; }
+    @keyframes glowpulse { 0%,100%{opacity:.85} 50%{opacity:.4} }
+    .shield { width: 60px; height: 60px; border-radius: 50%; border: 1px solid #333; background: #fff; overflow: hidden; display: grid; place-items: center; animation: spin3d 10s linear infinite; }
+    .shield img { width: 60px; height: 60px; display: block; object-fit: cover; border-radius: 50%; }
+    @keyframes spin3d { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+    .sb-title { font-size: 16px; font-weight: 700; letter-spacing: 5px; color: #fff; line-height: 1; padding-left: 5px; }
+    .sb-sub { font-size: 9px; font-weight: 600; letter-spacing: 2.5px; color: var(--red-primary); text-transform: uppercase; }
+    .sb-rule { height: 1px; background: var(--border); margin: 2px 0; flex-shrink: 0; }
+    .sb-nav { padding: 10px 0 4px; flex: 1; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+    .sb-item { display: flex; align-items: center; gap: 10px; padding: 11px 16px 11px 14px; font-size: 11px; font-weight: 500; letter-spacing: 1.2px; text-transform: uppercase; color: var(--text-secondary); border-left: 2px solid transparent; border-top: none; border-right: none; border-bottom: none; cursor: pointer; transition: all 160ms ease; width: 100%; text-align: left; background: transparent; }
+    .sb-item:hover { color: #cfcfcf; background: rgba(255,255,255,.02); }
+    .sb-item.active { color: #fff; background: linear-gradient(to right, rgba(192,57,43,.10), rgba(192,57,43,0) 70%); border-left-color: var(--red-primary); }
+    .sb-item.active .sb-ico { color: var(--red-primary); }
+    .sb-ico { width: 14px; height: 14px; display: inline-grid; place-items: center; color: var(--text-tertiary); flex-shrink: 0; }
+    .sb-ico svg { width: 14px; height: 14px; display: block; }
+    .sb-item:hover .sb-ico { color: #888; }
+    .sb-foot { padding: 10px 14px 16px; display: flex; flex-direction: column; gap: 8px; flex-shrink: 0; }
+    .sb-status { display: flex; align-items: center; gap: 6px; font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-secondary); }
+    .sb-status .dot { width: 6px; height: 6px; border-radius: 50%; background: #1e6b1e; box-shadow: 0 0 6px rgba(30,107,30,.7); animation: pulse 2.2s ease-in-out infinite; flex-shrink: 0; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+    .sb-meta { font-size: 9.5px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--text-tertiary); line-height: 1.6; }
+    .sb-meta b { display: block; color: var(--text-secondary); font-weight: 500; font-family: var(--font-mono); font-size: 10px; letter-spacing: .5px; text-transform: none; }
 
-    /* ── Stat cards ── */
-    .cards {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      gap: 14px;
-      margin-bottom: 28px;
-    }
-    .card {
-      background: #161b22;
-      border: 1px solid #21262d;
-      border-radius: 8px;
-      padding: 18px 20px;
-    }
-    .card .label { font-size: 12px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.8px; }
-    .card .count { font-size: 32px; font-weight: 700; margin-top: 4px; }
-    .card.critical .count { color: #f85149; }
-    .card.high     .count { color: #e3b341; }
-    .card.medium   .count { color: #d29922; }
-    .card.low      .count { color: #3fb950; }
-    .card.total    .count { color: #58a6ff; }
+    /* ── Main */
+    .main { display: flex; flex-direction: column; height: 100vh; min-width: 0; overflow: hidden; }
 
-    /* ── Filters ── */
-    .filters {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 10px;
-      margin-bottom: 16px;
-      align-items: center;
-    }
-    .filters label { color: #8b949e; font-size: 13px; }
-    .filters select {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .filters select:focus { outline: none; border-color: #58a6ff; }
-    .filters input[type="text"] {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 13px;
-      width: 300px;
-    }
-    .filters input[type="text"]::placeholder { color: #484f58; }
-    .filters input[type="text"]:focus { outline: none; border-color: #58a6ff; }
-    .filters input[type="date"] {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 13px;
-      cursor: pointer;
-      color-scheme: dark;
-    }
-    .filters input[type="date"]:focus { outline: none; border-color: #58a6ff; }
-    .filters input[type="number"] {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 10px;
-      font-size: 13px;
-      width: 70px;
-    }
-    .filters input[type="number"]::placeholder { color: #484f58; }
-    .filters input[type="number"]:focus { outline: none; border-color: #58a6ff; }
-    .btn-clear {
-      background: transparent;
-      color: #8b949e;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      margin-left: 4px;
-    }
-    .btn-clear:hover { border-color: #58a6ff; color: #c9d1d9; }
+    /* ── Topbar */
+    .topbar { display: grid; grid-template-columns: 1fr auto; align-items: stretch; height: var(--topbar-h); border-bottom: 1px solid #1a1a1a; background: var(--bg-base); flex-shrink: 0; }
+    .ticker { overflow: hidden; position: relative; display: flex; align-items: center; }
+    .ticker::before { content:""; position:absolute; left:0; top:0; bottom:0; width:90px; background:linear-gradient(to right, var(--bg-base) 30%, transparent); z-index:2; pointer-events:none; }
+    .ticker::after  { content:""; position:absolute; right:0; top:0; bottom:0; width:90px; background:linear-gradient(to left,  var(--bg-base) 30%, transparent); z-index:2; pointer-events:none; }
+    .ticker-tag { position:absolute; left:14px; top:50%; transform:translateY(-50%); z-index:3; display:flex; align-items:center; gap:7px; font-size:9.5px; font-weight:600; letter-spacing:2px; color:var(--red-primary); text-transform:uppercase; }
+    .live-dot { width:5px; height:5px; border-radius:50%; background:var(--red-primary); box-shadow:0 0 7px var(--red-primary); animation:pulse 1.2s ease-in-out infinite; }
+    .ticker-track { display:inline-flex; gap:48px; padding-left:140px; white-space:nowrap; animation:ticker-anim 90s linear infinite; font-family:var(--font-mono); font-size:11px; color:#cfcfcf; letter-spacing:.2px; }
+    .ticker-track span b { color:var(--red-bright); font-weight:600; margin-right:8px; }
+    @keyframes ticker-anim { from{transform:translateX(0)} to{transform:translateX(-50%)} }
+    .topbar-right { display:flex; align-items:center; gap:14px; padding:0 14px; border-left:1px solid var(--border); }
+    .pipeline-meta { font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-tertiary); text-align:right; line-height:1.4; }
+    .pipeline-meta b { display:block; color:var(--text-secondary); font-family:var(--font-mono); font-size:10px; letter-spacing:.5px; text-transform:none; font-weight:500; }
+    .btn-run { display:inline-flex; align-items:center; gap:8px; padding:0 14px; height:30px; background:rgba(192,57,43,.10); color:var(--red-bright); border:1px solid var(--red-muted); font-size:10px; font-weight:600; letter-spacing:2px; text-transform:uppercase; transition:all 160ms ease; border-radius:2px; cursor:pointer; font-family:var(--font-sans); }
+    .btn-run:hover { background:rgba(192,57,43,.18); border-color:var(--red-primary); color:#fff; }
 
-    /* ── Table ── */
-    .table-wrap { overflow-x: auto; border-radius: 8px; border: 1px solid #21262d; }
-    table { width: 100%; border-collapse: collapse; background: #161b22; }
-    thead { background: #0d1117; }
-    th {
-      padding: 10px 14px;
-      text-align: left;
-      font-size: 12px;
-      color: #8b949e;
-      text-transform: uppercase;
-      letter-spacing: 0.6px;
-      white-space: nowrap;
-      border-bottom: 1px solid #21262d;
-    }
-    td {
-      padding: 10px 14px;
-      border-bottom: 1px solid #21262d;
-      vertical-align: middle;
-      max-width: 320px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    tbody tr:last-child td { border-bottom: none; }
-    tbody tr:hover { background: #1c2128; }
-    tbody tr.row-selected { background: rgba(88, 166, 255, 0.08) !important; }
-    tbody tr.row-selected:hover { background: rgba(88, 166, 255, 0.13) !important; }
+    /* ── Page header */
+    .page-head { padding:16px 28px 12px; border-bottom:1px solid var(--border); background:var(--bg-base); flex-shrink:0; }
+    .crumbs { display:flex; gap:8px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:6px; }
+    .crumbs em { font-style:normal; color:var(--red-primary); font-weight:600; }
+    .page-head h1 { margin:0; font-size:19px; font-weight:600; letter-spacing:-.2px; color:var(--text-primary); }
+    .page-sub { margin-top:7px; font-size:11px; color:var(--text-secondary); display:flex; gap:12px; flex-wrap:wrap; }
+    .page-sub b { color:var(--text-primary); font-weight:500; font-family:var(--font-mono); font-size:10.5px; }
 
-    /* ── Checkbox column ── */
-    .cb-col {
-      width: 36px;
-      min-width: 36px;
-      max-width: 36px;
-      padding: 10px 8px 10px 14px !important;
-      text-align: center;
-    }
-    .cb-col input[type="checkbox"] {
-      cursor: pointer;
-      width: 15px;
-      height: 15px;
-      accent-color: #58a6ff;
-    }
+    /* ── Scroller */
+    .scroller { flex:1; overflow:auto; padding:18px 28px 48px; min-height:0; }
 
-    /* ── Relevance column ── */
-    .rel-col { width: 90px; min-width: 90px; text-align: center; padding: 10px 8px !important; display: none; }
-    #tab-ioc.profile-active-state .rel-col { display: table-cell; }
+    /* ── Stat cards */
+    .stats { display:grid; grid-template-columns:repeat(5,1fr); gap:11px; margin-bottom:16px; }
+    .stat { position:relative; background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; padding:13px 16px; overflow:hidden; transition:border-color 200ms ease,transform 200ms ease; min-height:82px; display:flex; flex-direction:column; justify-content:space-between; }
+    .stat::before { content:""; position:absolute; left:0; right:0; top:0; height:2px; background:currentColor; opacity:.9; }
+    .stat:hover { border-color:var(--border-strong); transform:translateY(-1px); }
+    .stat .label { font-size:10px; font-weight:500; letter-spacing:2px; text-transform:uppercase; color:var(--text-secondary); }
+    .stat .num { font-size:32px; font-weight:700; letter-spacing:-1px; font-variant-numeric:tabular-nums; line-height:1; color:#fff; margin-top:4px; }
+    .stat.s-total    { color:#ffffff; }
+    .stat.s-critical { color:var(--critical); }
+    .stat.s-high     { color:var(--high); }
+    .stat.s-medium   { color:#d4a017; }
+    .stat.s-low      { color:#2e9b3e; }
+    .stat.s-critical .num { color:var(--critical); }
+    .stat.s-high     .num { color:var(--high); }
+    .stat.s-medium   .num { color:#d4a017; }
+    .stat.s-low      .num { color:#2e9b3e; }
 
-    .value-cell { font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 13px; }
+    /* ── Filter bar */
+    .filterbar { display:flex; align-items:center; gap:9px; background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; padding:8px 12px; flex-wrap:wrap; margin-bottom:11px; }
+    .search { position:relative; flex:1; min-width:200px; }
+    .search input { width:100%; background:transparent; border:1px solid var(--border-strong); color:var(--text-primary); padding:7px 12px 7px 30px; border-radius:2px; font-size:12px; outline:none; transition:border-color 160ms ease,box-shadow 160ms ease; font-family:var(--font-sans); }
+    .search input::placeholder { color:var(--text-tertiary); }
+    .search input:focus { border-color:var(--red-muted); box-shadow:0 0 0 3px rgba(192,57,43,.12); }
+    .search-icon { position:absolute; left:9px; top:50%; transform:translateY(-50%); width:13px; height:13px; color:var(--text-tertiary); pointer-events:none; }
+    .filter { display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:1.3px; text-transform:uppercase; color:var(--text-secondary); }
+    .filter select { appearance:none; -webkit-appearance:none; background-color:#111; border:1px solid #2a2a2a; color:#fff; border-radius:4px; padding:5px 24px 5px 9px; font-size:11.5px; font-family:var(--font-sans); cursor:pointer; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 7L8 3.5' fill='none' stroke='%23888' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat:no-repeat; background-position:right 8px center; transition:border-color 160ms ease; }
+    .filter select:hover { border-color:#3a3a3a; }
+    .filter select:focus { outline:none; border-color:var(--red-muted); }
+    .filter select option { background:#0d0d0d; color:#eee; }
+    .filter input[type="number"] { width:60px; background:transparent; border:1px solid var(--border-strong); color:var(--text-primary); padding:6px 8px; border-radius:2px; font-size:11px; font-family:var(--font-mono); outline:none; -moz-appearance:textfield; }
+    .filter input[type="number"]::-webkit-outer-spin-button,.filter input[type="number"]::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .filter input[type="number"]:focus { border-color:var(--red-muted); box-shadow:0 0 0 3px rgba(192,57,43,.12); outline:none; }
+    .filter input[type="number"]::placeholder { color:var(--text-tertiary); }
+    .filter input[type="date"] { background:transparent; border:1px solid var(--border-strong); color:var(--text-secondary); padding:5px 7px; border-radius:2px; font-size:11px; font-family:var(--font-mono); color-scheme:dark; outline:none; }
+    .filter input[type="date"]:focus { border-color:var(--red-muted); }
+    .btn-clear-filters { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#a04030; cursor:pointer; padding:0 4px; background:transparent; border:none; font-family:var(--font-sans); }
+    .btn-clear-filters:hover { color:var(--red-bright); }
 
-    /* ── Badges ── */
-    .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.5px;
-      text-transform: uppercase;
-    }
-    .badge-CRITICAL  { background: #3d0a09; color: #f85149; border: 1px solid #6d1a18; }
-    .badge-HIGH      { background: #2d1f00; color: #e3b341; border: 1px solid #5a3e00; }
-    .badge-MEDIUM    { background: #2b1d00; color: #d29922; border: 1px solid #553a00; }
-    .badge-LOW       { background: #0a2316; color: #3fb950; border: 1px solid #1a4a2e; }
-    .badge-RELEVANT  { background: #0a2316; color: #3fb950; border: 1px solid #1a4a2e; }
-    .badge-MONITOR   { background: #1f1a00; color: #e3b341; border: 1px solid #4a3800; }
-    .badge-new {
-      display: inline-block;
-      background: #00ff41;
-      color: #000000;
-      font-size: 0.65rem;
-      font-weight: bold;
-      padding: 1px 5px;
-      border-radius: 3px;
-      margin-left: 6px;
-      vertical-align: middle;
-    }
+    /* ── Profile banner */
+    .profile-banner { display:none; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; background:rgba(30,107,30,.07); border:1px solid #1a4a2e; border-left:2px solid #2e9b3e; border-radius:4px; padding:9px 15px; margin-bottom:12px; font-size:12px; color:var(--text-primary); }
+    .profile-banner-text { flex:1; min-width:0; font-size:11px; color:var(--text-secondary); }
+    .profile-banner-assets { color:#2e9b3e; font-weight:500; }
+    .btn-change-profile { background:transparent; color:#2e9b3e; border:1px solid #1a4a2e; border-radius:2px; padding:3px 9px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; font-family:var(--font-sans); }
+    .btn-change-profile:hover { background:rgba(30,107,30,.12); }
+    .btn-clear-profile { background:transparent; color:var(--red-bright); border:1px solid var(--red-muted); border-radius:2px; padding:3px 9px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; cursor:pointer; font-family:var(--font-sans); }
+    .btn-clear-profile:hover { background:rgba(192,57,43,.12); }
 
-    /* ── Type pill ── */
-    .type-pill {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 12px;
-      font-size: 11px;
-      font-weight: 500;
-      background: #21262d;
-      color: #c9d1d9;
-      text-transform: uppercase;
-    }
+    /* ── Selection bar */
+    .selection-bar { display:none; align-items:center; justify-content:space-between; margin-bottom:9px; padding:8px 14px; background:rgba(192,57,43,.06); border:1px solid var(--red-muted); border-radius:4px; gap:8px; flex-wrap:wrap; }
+    .sel-count { color:var(--red-bright); font-family:var(--font-mono); font-weight:600; font-size:12px; }
+    .sel-sep { color:var(--text-tertiary); }
+    .sel-left { display:flex; align-items:center; gap:10px; }
+    .sel-actions { display:flex; gap:8px; }
+    .btn-sel { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#ccc; padding:4px 10px; border:1px solid var(--border-strong); border-radius:2px; cursor:pointer; background:transparent; display:inline-flex; align-items:center; gap:6px; font-family:var(--font-sans); }
+    .btn-sel:hover { border-color:var(--red-muted); color:#fff; background:rgba(192,57,43,.10); }
+    .btn-sel-primary { font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:#fff; padding:4px 10px; border:1px solid var(--red-muted); border-radius:2px; cursor:pointer; background:rgba(192,57,43,.18); display:inline-flex; align-items:center; gap:6px; font-family:var(--font-sans); }
+    .btn-sel-primary:hover { background:rgba(192,57,43,.30); border-color:var(--red-primary); }
 
-    /* ── Results counter ── */
-    .ioc-counter { color: #8b949e; font-size: 13px; margin-bottom: 8px; }
+    /* ── IOC counter */
+    .ioc-counter { font-size:10.5px; color:var(--text-secondary); letter-spacing:.3px; margin-bottom:7px; }
 
-    /* ── Profile banner ── */
-    .profile-banner {
-      display: none;
-      align-items: center;
-      justify-content: space-between;
-      gap: 12px;
-      flex-wrap: wrap;
-      background: #0a1a0e;
-      border: 1px solid #1a4a2e;
-      border-left: 3px solid #3fb950;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 20px;
-      font-size: 13px;
-      color: #c9d1d9;
-    }
-    .profile-banner-text { flex: 1; min-width: 0; }
-    .profile-banner-assets { color: #3fb950; font-weight: 500; }
-    .btn-change-profile {
-      background: transparent;
-      color: #3fb950;
-      border: 1px solid #1a4a2e;
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .btn-change-profile:hover { background: #0d2316; }
-    .btn-clear-profile {
-      background: transparent;
-      color: #f85149;
-      border: 1px solid #6d1a18;
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 12px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .btn-clear-profile:hover { background: #3d0a09; }
+    /* ── Table */
+    .tablewrap { background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; overflow:hidden; overflow-x:auto; }
+    table.ioc { width:100%; border-collapse:separate; border-spacing:0; font-size:12px; }
+    table.ioc thead th { position:sticky; top:0; background:var(--bg-elevated); padding:10px 14px; text-align:left; font-size:9.5px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; color:var(--text-secondary); border-bottom:1px solid var(--border); user-select:none; white-space:nowrap; }
+    table.ioc thead th[data-sort] { cursor:pointer; }
+    table.ioc thead th[data-sort]:hover { color:#cfcfcf; }
+    table.ioc thead th.sort-active { color:var(--red-bright); }
+    .sort-icon { display:inline-block; margin-left:5px; color:var(--text-tertiary); font-size:9px; vertical-align:1px; }
+    table.ioc thead th.sort-active .sort-icon { color:var(--red-bright); }
+    table.ioc tbody tr { transition:background 180ms ease,box-shadow 180ms ease; }
+    table.ioc tbody tr:nth-child(odd)  { background:var(--bg-row-a); }
+    table.ioc tbody tr:nth-child(even) { background:var(--bg-row-b); }
+    table.ioc tbody tr:hover { background:#111; box-shadow:inset 2px 0 0 var(--red-primary); }
+    table.ioc tbody tr.row-selected { background:rgba(192,57,43,.07) !important; box-shadow:inset 2px 0 0 var(--red-primary) !important; }
+    table.ioc td { padding:10px 14px; border-bottom:1px solid var(--border-subtle); color:var(--text-primary); vertical-align:middle; }
+    table.ioc tbody tr:last-child td { border-bottom:none; }
 
-    /* ── Selection bar ── */
-    .selection-bar {
-      display: none;
-      align-items: center;
-      gap: 10px;
-      flex-wrap: wrap;
-      background: #161b22;
-      border: 1px solid #1f6feb;
-      border-radius: 8px;
-      padding: 10px 16px;
-      margin-bottom: 10px;
-    }
-    .sel-count { color: #58a6ff; font-weight: 600; font-size: 13px; margin-right: 4px; flex-shrink: 0; }
-    .sel-sep { color: #30363d; flex-shrink: 0; }
-    .btn-sel {
-      background: transparent;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .btn-sel:hover { border-color: #58a6ff; color: #58a6ff; }
-    .btn-sel-primary {
-      background: #1f6feb;
-      color: #fff;
-      border: 1px solid #1f6feb;
-      border-radius: 6px;
-      padding: 5px 12px;
-      font-size: 13px;
-      cursor: pointer;
-      white-space: nowrap;
-      flex-shrink: 0;
-    }
-    .btn-sel-primary:hover { background: #388bfd; border-color: #388bfd; }
+    /* ── Checkbox column */
+    .cb-col { width:38px; min-width:38px; max-width:38px; padding:10px 8px 10px 14px !important; text-align:center; }
+    .cb-col input[type="checkbox"] { cursor:pointer; width:14px; height:14px; accent-color:var(--red-primary); vertical-align:middle; }
 
-    /* ── Pagination ── */
-    .pagination {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 14px;
-      margin-top: 14px;
-    }
-    .pagination button {
-      background: #161b22;
-      color: #c9d1d9;
-      border: 1px solid #30363d;
-      border-radius: 6px;
-      padding: 6px 16px;
-      font-size: 13px;
-      cursor: pointer;
-    }
-    .pagination button:hover:not(:disabled) { border-color: #58a6ff; color: #58a6ff; }
-    .pagination button:disabled { opacity: 0.35; cursor: default; }
-    .pagination .page-info { color: #8b949e; font-size: 13px; min-width: 100px; text-align: center; }
+    /* ── Relevance column */
+    .rel-col { width:90px; min-width:90px; text-align:center; padding:10px 8px !important; display:none; }
+    #tab-ioc.profile-active-state .rel-col { display:table-cell; }
 
-    /* ── Sortable headers ── */
-    th[data-sort] { cursor: pointer; user-select: none; }
-    th[data-sort]:hover { color: #c9d1d9; }
-    th.sort-active { color: #58a6ff; }
-    .sort-icon { color: #484f58; font-size: 10px; margin-left: 4px; }
-    th.sort-active .sort-icon { color: #58a6ff; }
+    /* ── Value / mono cell */
+    .value-cell { font-family:var(--font-mono); font-size:11.5px; color:#dcdcdc; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-    /* ── MITRE tab ── */
-    .mitre-summary { color: #8b949e; font-size: 13px; margin-bottom: 16px; }
+    /* ── Dim cell */
+    .dim-cell { color:var(--text-secondary); font-size:11px; max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 
-    /* ── IOC Lookup tab ── */
-    .lookup-search-wrap { display: flex; gap: 10px; margin-bottom: 8px; }
-    .lookup-search-wrap input[type="text"] {
-      flex: 1; background: #161b22; color: #c9d1d9;
-      border: 1px solid #30363d; border-radius: 8px; padding: 10px 16px; font-size: 15px;
-    }
-    .lookup-search-wrap input[type="text"]::placeholder { color: #484f58; }
-    .lookup-search-wrap input[type="text"]:focus { outline: none; border-color: #58a6ff; }
-    .lookup-btn { background: #1f6feb; color: #fff; border: none; border-radius: 8px; padding: 10px 24px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .lookup-btn:hover { background: #388bfd; }
-    .lookup-hint { color: #484f58; font-size: 12px; margin-bottom: 28px; }
-    .lookup-empty-state { text-align: center; padding: 60px 20px; color: #8b949e; }
-    .lookup-empty-icon { font-size: 48px; margin-bottom: 16px; line-height: 1; }
-    .lookup-empty-state > p { font-size: 15px; margin-bottom: 6px; }
-    .lookup-empty-sub { font-size: 13px !important; color: #484f58; }
-    .lookup-no-result { text-align: center; padding: 40px; color: #8b949e; font-size: 14px; background: #161b22; border: 1px solid #21262d; border-radius: 10px; }
-    .lookup-card { background: #161b22; border: 1px solid #21262d; border-radius: 10px; overflow: hidden; }
-    .lookup-card-header { padding: 20px 24px 16px; border-bottom: 1px solid #21262d; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-    .lookup-value { font-family: 'Cascadia Code','Fira Code',monospace; font-size: 16px; color: #f0f6fc; word-break: break-all; flex: 1; }
-    .lookup-badges { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
-    .lookup-section { padding: 16px 24px; border-bottom: 1px solid #21262d; }
-    .lookup-section-title { font-size: 11px; color: #8b949e; text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 12px; font-weight: 600; }
-    .lookup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-    .lookup-info-block { background: #0d1117; border-radius: 6px; padding: 10px 14px; }
-    .lookup-info-label { font-size: 11px; color: #8b949e; margin-bottom: 4px; }
-    .lookup-info-value { font-size: 14px; color: #c9d1d9; font-weight: 500; }
-    .lookup-score-row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-    .lookup-score-val { font-size: 22px; font-weight: 700; }
-    .lookup-bar-wrap { height: 8px; background: #21262d; border-radius: 4px; overflow: hidden; }
-    .lookup-bar-fill { height: 100%; border-radius: 4px; }
-    .lookup-mitre-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; flex-wrap: wrap; }
-    .lookup-tech-id { font-family: 'Cascadia Code','Fira Code',monospace; background: #21262d; color: #58a6ff; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
-    .lookup-tech-name { font-size: 14px; color: #c9d1d9; font-weight: 500; }
-    .lookup-tactic { font-size: 13px; color: #8b949e; margin-bottom: 8px; }
-    .lookup-att-link { font-size: 13px; color: #58a6ff; text-decoration: none; }
-    .lookup-att-link:hover { text-decoration: underline; }
-    .lookup-source-pills { display: flex; gap: 8px; flex-wrap: wrap; }
-    .lookup-source-pill { padding: 4px 14px; border-radius: 20px; font-size: 12px; font-weight: 500; background: #21262d; color: #484f58; border: 1px solid #21262d; }
-    .lookup-source-pill.active { background: #0d2044; color: #58a6ff; border-color: #1f6feb; }
-    .lookup-description { font-size: 13px; color: #8b949e; line-height: 1.7; }
-    .lookup-actions { padding: 14px 24px; display: flex; gap: 8px; flex-wrap: wrap; }
-    .btn-action { background: transparent; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 6px 14px; font-size: 13px; cursor: pointer; text-decoration: none; display: inline-block; white-space: nowrap; font-family: inherit; }
-    .btn-action:hover { border-color: #58a6ff; color: #58a6ff; }
+    /* ── Type pills */
+    .type-pill { display:inline-block; font-family:var(--font-mono); font-size:9.5px; letter-spacing:1px; text-transform:uppercase; padding:2px 7px; border-radius:2px; font-weight:600; color:#cfcfcf; border:1px solid var(--border-strong); background:rgba(255,255,255,.05); }
+    .type-pill-ip     { color:#7fb1ff; border-color:#1d3a66; background:rgba(31,90,160,.12); }
+    .type-pill-domain { color:#a5d6a7; border-color:#2c5a30; background:rgba(46,90,52,.12); }
+    .type-pill-url    { color:#ffd081; border-color:#6a4d12; background:rgba(120,86,18,.12); }
+    .type-pill-hash   { color:#d9b8ff; border-color:#4a2f6e; background:rgba(76,50,114,.12); }
+    .type-pill-cve    { color:#ff9e8a; border-color:#6a2418; background:rgba(120,40,28,.14); }
 
-    /* ── Threat Profiling tab ── */
-    .profiling-header { margin-bottom: 28px; max-width: 780px; }
-    .profiling-header h2 { font-size: 20px; color: #f0f6fc; font-weight: 700; margin-bottom: 8px; }
-    .profiling-header p { color: #8b949e; font-size: 14px; line-height: 1.55; }
-    .profiling-form-body { max-width: 780px; }
-    .profiling-form-footer {
-      display: flex; align-items: center; justify-content: space-between; gap: 16px;
-      margin-top: 24px; padding-top: 20px; border-top: 1px solid #21262d; max-width: 780px;
-    }
-    .profiling-active-wrap {
-      background: #0a1a0e; border: 1px solid #1a4a2e; border-radius: 10px;
-      padding: 28px 32px; max-width: 780px;
-    }
-    .profiling-active-title { font-size: 17px; font-weight: 700; color: #3fb950; margin-bottom: 18px; }
-    .profiling-pills-wrap { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
-    .profiling-pill { background: #0d2316; color: #3fb950; border: 1px solid #1a4a2e; border-radius: 20px; padding: 5px 14px; font-size: 13px; font-weight: 500; }
-    .profiling-active-actions { display: flex; gap: 10px; }
-    .btn-edit-profile {
-      background: transparent; color: #c9d1d9; border: 1px solid #30363d;
-      border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
-    }
-    .btn-edit-profile:hover { border-color: #58a6ff; color: #58a6ff; }
-    .btn-clear-profile-tab {
-      background: transparent; color: #f85149; border: 1px solid #6d1a18;
-      border-radius: 6px; padding: 7px 18px; font-size: 13px; cursor: pointer; font-family: inherit;
-    }
-    .btn-clear-profile-tab:hover { background: #3d0a09; }
-    /* ── Asset form (used in Threat Profiling tab) ── */
-    .asset-group { margin-bottom: 24px; }
-    .asset-group:last-child { margin-bottom: 0; }
-    .asset-group-title {
-      font-size: 11px;
-      text-transform: uppercase;
-      letter-spacing: 0.8px;
-      color: #58a6ff;
-      font-weight: 700;
-      margin-bottom: 12px;
-      padding-bottom: 6px;
-      border-bottom: 1px solid #21262d;
-    }
-    .asset-checkboxes { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
-    .asset-cb-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      cursor: pointer;
-      color: #c9d1d9;
-      font-size: 13px;
-      padding: 6px 10px;
-      border-radius: 6px;
-      user-select: none;
-    }
-    .asset-cb-label:hover { background: #1c2128; }
-    .asset-cb-label input[type="checkbox"] { width: 15px; height: 15px; accent-color: #58a6ff; cursor: pointer; flex-shrink: 0; }
-    .asset-custom-label { font-size: 13px; color: #8b949e; display: block; margin-bottom: 8px; }
-    .asset-custom-textarea { width: 100%; background: #0d1117; color: #c9d1d9; border: 1px solid #30363d; border-radius: 6px; padding: 10px 12px; font-size: 13px; font-family: inherit; resize: vertical; min-height: 64px; }
-    .asset-custom-textarea:focus { outline: none; border-color: #58a6ff; }
-    .asset-custom-hint { font-size: 11px; color: #484f58; margin-top: 4px; }
-    .profile-asset-counter { font-size: 13px; color: #8b949e; }
-    .profile-asset-counter strong { color: #c9d1d9; }
-    .btn-analyze { background: #1f6feb; color: #fff; border: none; border-radius: 8px; padding: 10px 28px; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; }
-    .btn-analyze:hover:not(:disabled) { background: #388bfd; }
-    .btn-analyze:disabled { opacity: 0.35; cursor: not-allowed; }
+    /* ── Severity badges */
+    .badge { display:inline-block; font-size:9.5px; letter-spacing:1.5px; text-transform:uppercase; padding:2px 9px; border-radius:999px; font-weight:600; line-height:1.2; font-family:var(--font-sans); }
+    .badge-CRITICAL { color:#c0392b; background:rgba(192,57,43,.12); border:1px solid #c0392b; }
+    .badge-HIGH     { color:#c06010; background:rgba(192,96,16,.12); border:1px solid #c06010; }
+    .badge-MEDIUM   { color:#8a7000; background:rgba(138,112,0,.12);  border:1px solid #8a7000; }
+    .badge-LOW      { color:#1e6b1e; background:rgba(30,107,30,.12);  border:1px solid #1e6b1e; }
+    .badge-RELEVANT { color:#2e9b3e; background:rgba(46,155,62,.12);  border:1px solid #1e6b1e; }
+    .badge-MONITOR  { color:#d4a017; background:rgba(212,160,23,.12); border:1px solid #8a7000; }
 
-    /* ── Empty state ── */
-    .empty { text-align: center; padding: 40px; color: #8b949e; }
+    /* ── NEW badge */
+    .badge-new { display:inline-block; background:#00ff41; color:#000; font-size:8px; font-weight:700; font-family:var(--font-mono); padding:1px 5px; border-radius:2px; margin-left:6px; vertical-align:middle; letter-spacing:1px; }
 
-    /* ── Footer ── */
-    footer {
-      margin-top: 32px;
-      padding-top: 16px;
-      border-top: 1px solid #21262d;
-      color: #8b949e;
-      font-size: 12px;
-    }
+    /* ── Tactic link */
+    .tactic-link { font-size:11px; color:#888; display:inline-flex; align-items:center; gap:4px; transition:color 160ms ease; }
+    .tactic-link:hover { color:var(--red-primary); }
+
+    /* ── Pagination */
+    .pag { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; margin-top:11px; padding:10px 16px; font-size:11.5px; color:var(--text-secondary); background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; }
+    .pag-left  { justify-self:start; }
+    .pag-center { justify-self:center; display:flex; align-items:center; gap:10px; }
+    .pag-right { justify-self:end; display:flex; align-items:center; gap:10px; }
+    .pbtn { padding:5px 12px; border:1px solid var(--border-strong); border-radius:2px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-secondary); cursor:pointer; transition:all 160ms ease; font-family:var(--font-sans); background:transparent; display:inline-flex; align-items:center; gap:5px; }
+    .pbtn:hover:not(:disabled) { border-color:var(--red-muted); color:#fff; background:rgba(192,57,43,.08); }
+    .pbtn:disabled { opacity:.3; cursor:not-allowed; }
+    .page-info { font-family:var(--font-mono); color:#cfcfcf; font-size:11.5px; letter-spacing:.3px; }
+    .rpp { display:inline-flex; align-items:center; gap:8px; font-size:10px; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-tertiary); }
+    .rpp select { appearance:none; -webkit-appearance:none; background-color:#111; border:1px solid #2a2a2a; color:#fff; padding:4px 22px 4px 8px; border-radius:4px; font-size:11px; font-family:var(--font-mono); cursor:pointer; background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'><path d='M2 3.5L5 7L8 3.5' fill='none' stroke='%23888' stroke-width='1.3' stroke-linecap='round' stroke-linejoin='round'/></svg>"); background-repeat:no-repeat; background-position:right 7px center; }
+
+    /* ── Empty state */
+    .empty { text-align:center; padding:36px 20px; color:var(--text-tertiary); font-size:12px; }
+
+    /* ── IOC Lookup */
+    .lookup-hero { background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; padding:20px 22px 16px; margin-bottom:14px; position:relative; overflow:hidden; }
+    .lookup-hero::before { content:""; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(to right, var(--red-primary), transparent 60%); }
+    .lookup-search-wrap { display:flex; gap:10px; margin-bottom:11px; }
+    .lookup-input-wrap { flex:1; position:relative; }
+    .lookup-input-wrap input { width:100%; background:#080808; border:1px solid var(--border-strong); color:var(--text-primary); padding:11px 14px 11px 40px; border-radius:3px; font-size:13px; font-family:var(--font-mono); outline:none; transition:border-color 160ms ease,box-shadow 160ms ease; }
+    .lookup-input-wrap input::placeholder { color:var(--text-tertiary); }
+    .lookup-input-wrap input:focus { border-color:var(--red-muted); box-shadow:0 0 0 3px rgba(192,57,43,.12); }
+    .lookup-search-icon { position:absolute; left:13px; top:50%; transform:translateY(-50%); width:15px; height:15px; color:var(--text-secondary); pointer-events:none; }
+    .lookup-btn { padding:0 18px; background:var(--red-primary); color:#fff; border:1px solid var(--red-primary); border-radius:3px; font-size:10px; letter-spacing:2px; text-transform:uppercase; font-weight:600; cursor:pointer; transition:all 160ms ease; font-family:var(--font-sans); }
+    .lookup-btn:hover { background:var(--red-bright); border-color:var(--red-bright); }
+    .lookup-hint { font-size:10.5px; color:var(--text-tertiary); }
+    .lookup-empty-state { text-align:center; padding:60px 20px; color:var(--text-tertiary); }
+    .lookup-empty-icon { font-size:36px; margin-bottom:10px; line-height:1; }
+    .lookup-empty-state > p { font-size:13px; color:var(--text-secondary); margin-bottom:4px; }
+    .lookup-empty-sub { font-size:12px !important; color:var(--text-tertiary) !important; }
+    .lookup-no-result { text-align:center; padding:30px; color:var(--text-secondary); font-size:13px; background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; }
+    .lookup-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+    .lookup-card-header { padding:15px 20px 13px; border-bottom:1px solid var(--border); display:flex; align-items:flex-start; justify-content:space-between; gap:16px; flex-wrap:wrap; position:relative; }
+    .lookup-card-header::before { content:""; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(to right, var(--red-primary), transparent 60%); }
+    .lookup-value { font-family:var(--font-mono); font-size:14px; color:#fff; word-break:break-all; flex:1; }
+    .lookup-badges { display:flex; align-items:center; gap:8px; flex-shrink:0; }
+    .lookup-section { padding:13px 20px; border-bottom:1px solid var(--border); }
+    .lookup-section-title { font-size:9.5px; color:var(--text-tertiary); text-transform:uppercase; letter-spacing:1.8px; margin-bottom:10px; font-weight:600; }
+    .lookup-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:10px; }
+    .lookup-info-block { background:var(--bg-elevated); border-radius:3px; padding:10px 13px; }
+    .lookup-info-label { font-size:10px; color:var(--text-secondary); margin-bottom:4px; }
+    .lookup-info-value { font-size:13px; color:var(--text-primary); font-weight:500; }
+    .lookup-score-row { display:flex; align-items:baseline; gap:8px; margin-bottom:7px; }
+    .lookup-score-val { font-size:22px; font-weight:700; font-family:var(--font-mono); }
+    .lookup-bar-wrap { height:6px; background:#1a1a1a; border-radius:2px; overflow:hidden; }
+    .lookup-bar-fill { height:100%; border-radius:2px; }
+    .lookup-mitre-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+    .lookup-tech-id { font-family:var(--font-mono); background:var(--bg-elevated); color:#7fb1ff; padding:2px 7px; border-radius:2px; font-size:11px; font-weight:600; }
+    .lookup-tech-name { font-size:13px; color:var(--text-primary); font-weight:500; }
+    .lookup-tactic { font-size:12px; color:var(--text-secondary); margin-bottom:7px; }
+    .lookup-att-link { font-size:12px; color:#7fb1ff; }
+    .lookup-att-link:hover { text-decoration:underline; }
+    .lookup-source-pills { display:flex; gap:7px; flex-wrap:wrap; }
+    .lookup-source-pill { padding:3px 12px; border-radius:999px; font-size:11px; font-weight:500; background:var(--bg-elevated); color:var(--text-tertiary); border:1px solid var(--border); }
+    .lookup-source-pill.active { background:rgba(31,90,160,.14); color:#7fb1ff; border-color:#1d3a66; }
+    .lookup-description { font-size:12px; color:var(--text-secondary); line-height:1.7; }
+    .lookup-actions { padding:11px 20px; display:flex; gap:8px; flex-wrap:wrap; }
+    .btn-action { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:2px; padding:5px 12px; font-size:11px; cursor:pointer; text-decoration:none; display:inline-block; white-space:nowrap; font-family:var(--font-sans); transition:all 160ms ease; }
+    .btn-action:hover { border-color:var(--red-muted); color:#fff; background:rgba(192,57,43,.08); }
+
+    /* ── Threat Profiling */
+    .profiling-header { margin-bottom:18px; max-width:720px; }
+    .profiling-header h2 { font-size:17px; color:var(--text-primary); font-weight:600; margin-bottom:6px; }
+    .profiling-header p { color:var(--text-secondary); font-size:12.5px; line-height:1.6; }
+    .profiling-form-body { max-width:760px; }
+    .profiling-form-footer { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:18px; padding-top:14px; border-top:1px solid var(--border); max-width:760px; }
+    .profile-asset-counter { font-size:12px; color:var(--text-secondary); }
+    .profile-asset-counter strong { color:var(--text-primary); }
+    .btn-analyze { background:var(--red-primary); color:#fff; border:1px solid var(--red-primary); border-radius:3px; padding:8px 22px; font-size:10.5px; letter-spacing:2px; text-transform:uppercase; font-weight:600; cursor:pointer; transition:all 160ms ease; font-family:var(--font-sans); white-space:nowrap; }
+    .btn-analyze:hover:not(:disabled) { background:var(--red-bright); border-color:var(--red-bright); }
+    .btn-analyze:disabled { opacity:.35; cursor:not-allowed; }
+    .asset-group { margin-bottom:16px; }
+    .asset-group:last-child { margin-bottom:0; }
+    .asset-group-title { font-size:10px; text-transform:uppercase; letter-spacing:2px; color:var(--red-primary); font-weight:600; margin-bottom:9px; padding-bottom:5px; border-bottom:1px solid var(--border); }
+    .asset-checkboxes { display:grid; grid-template-columns:repeat(2,1fr); gap:1px; }
+    .asset-cb-label { display:flex; align-items:center; gap:8px; cursor:pointer; color:var(--text-primary); font-size:12px; padding:6px 10px; border-radius:3px; user-select:none; transition:background 160ms ease; }
+    .asset-cb-label:hover { background:rgba(255,255,255,.03); }
+    .asset-cb-label input[type="checkbox"] { width:14px; height:14px; accent-color:var(--red-primary); cursor:pointer; flex-shrink:0; }
+    .asset-custom-label { font-size:11px; color:var(--text-secondary); display:block; margin-bottom:6px; }
+    .asset-custom-textarea { width:100%; background:#080808; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:3px; padding:9px 12px; font-size:12px; font-family:var(--font-sans); resize:vertical; min-height:56px; outline:none; transition:border-color 160ms ease; }
+    .asset-custom-textarea:focus { border-color:var(--red-muted); }
+    .asset-custom-hint { font-size:10px; color:var(--text-tertiary); margin-top:4px; }
+    .profiling-active-wrap { background:rgba(30,107,30,.06); border:1px solid #1a4a2e; border-radius:4px; padding:20px 24px; max-width:760px; }
+    .profiling-active-title { font-size:15px; font-weight:600; color:#2e9b3e; margin-bottom:13px; }
+    .profiling-pills-wrap { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+    .profiling-pill { background:rgba(30,107,30,.12); color:#2e9b3e; border:1px solid #1a4a2e; border-radius:999px; padding:3px 12px; font-size:12px; font-weight:500; }
+    .profiling-active-actions { display:flex; gap:10px; }
+    .btn-edit-profile { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:2px; padding:6px 14px; font-size:10.5px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; font-family:var(--font-sans); transition:all 160ms ease; }
+    .btn-edit-profile:hover { border-color:var(--red-muted); color:#fff; }
+    .btn-clear-profile-tab { background:transparent; color:var(--red-bright); border:1px solid var(--red-muted); border-radius:2px; padding:6px 14px; font-size:10.5px; letter-spacing:1px; text-transform:uppercase; cursor:pointer; font-family:var(--font-sans); transition:all 160ms ease; }
+    .btn-clear-profile-tab:hover { background:rgba(192,57,43,.12); }
+
+    /* ── MITRE tab */
+    .mitre-summary { color:var(--text-secondary); font-size:11px; margin-bottom:11px; }
+
+    /* ── Footer */
+    footer { padding:11px 28px; border-top:1px solid var(--border); color:var(--text-tertiary); font-size:10px; letter-spacing:1px; text-transform:uppercase; flex-shrink:0; }
   </style>
 </head>
 <body>
 
-<div class="container" id="main-container">
+<div class="app">
 
-  <header>
-    <h1>AEGIS Threat Intelligence</h1>
-    <div class="meta">
-      <span>Generated: {{ generated_at }}</span>
-      <span>Total IOCs: {{ total }}</span>
-      {% if total_in_db > total_displayed %}
-      <span>Showing {{ total_displayed_fmt }} most critical IOCs of {{ total_in_db_fmt }} total in database</span>
-      {% endif %}
+  <!-- ═══ SIDEBAR ═══ -->
+  <aside class="sidebar">
+    <div class="sb-brand">
+      <div class="shield-wrap">
+        <div class="shield-glow"></div>
+        <div class="shield">
+          <img src="../assets/aegis-logo.svg" alt="AEGIS" />
+        </div>
+      </div>
+      <div class="sb-title">AEGIS</div>
+      <div class="sb-sub">Threat Intelligence</div>
     </div>
-  </header>
+    <div class="sb-rule"></div>
+    <nav class="sb-nav">
+      <button id="btn-ioc" class="sb-item active" onclick="switchTab('ioc')">
+        <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span>
+        <span>IOC Dashboard</span>
+      </button>
+      <button id="btn-lookup" class="sb-item" onclick="switchTab('lookup')">
+        <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
+        <span>IOC Lookup</span>
+      </button>
+      <button id="btn-profiling" class="sb-item" onclick="switchTab('profiling')">
+        <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.2" fill="currentColor"/></svg></span>
+        <span>Threat Profiling</span>
+      </button>
+      <button id="btn-mitre" class="sb-item" onclick="switchTab('mitre')">
+        <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg></span>
+        <span>MITRE Explorer</span>
+      </button>
+    </nav>
+    <div class="sb-rule"></div>
+    <div class="sb-foot">
+      <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
+      <div class="sb-meta">Generated<br /><b>{{ generated_at }}</b></div>
+    </div>
+  </aside>
 
-  <nav class="tab-nav">
-    <button id="btn-ioc"       class="tab-btn active" onclick="switchTab('ioc')">IOC Dashboard</button>
-    <button id="btn-lookup"    class="tab-btn"        onclick="switchTab('lookup')">IOC Lookup</button>
-    <button id="btn-profiling" class="tab-btn"        onclick="switchTab('profiling')">Threat Profiling</button>
-    <button id="btn-mitre"     class="tab-btn"        onclick="switchTab('mitre')">MITRE ATT&amp;CK Explorer</button>
-  </nav>
+  <!-- ═══ MAIN ═══ -->
+  <main class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="ticker">
+        <div class="ticker-tag"><span class="live-dot"></span>Live</div>
+        <div class="ticker-track">
+          {% for ioc in iocs[:10] %}<span><b>{{ ioc.severity }}</b>{{ ioc.value }}</span>{% endfor %}
+          {% for ioc in iocs[:10] %}<span><b>{{ ioc.severity }}</b>{{ ioc.value }}</span>{% endfor %}
+        </div>
+      </div>
+      <div class="topbar-right">
+        <div class="pipeline-meta">Total IOCs<b>{{ total }}</b></div>
+        <button class="btn-run">&#9654; Run Pipeline</button>
+      </div>
+    </div>
+
+    <!-- Page header -->
+    <div class="page-head">
+      <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
+      <h1>AEGIS Threat Intelligence</h1>
+      <div class="page-sub">
+        <span>Generated <b>{{ generated_at }}</b></span>
+        <span style="color:var(--text-tertiary)">·</span>
+        <span>Total IOCs <b>{{ total }}</b></span>
+        {% if total_in_db > total_displayed %}
+        <span style="color:var(--text-tertiary)">·</span>
+        <span>Showing {{ total_displayed_fmt }} most critical of <b>{{ total_in_db_fmt }}</b> in database</span>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Scrollable content -->
+    <div class="scroller">
 
   <!-- ══════════════════════════ TAB 1: IOC Dashboard ══════════════════════════ -->
   <section id="tab-ioc">
@@ -491,100 +425,114 @@
       <button class="btn-clear-profile" onclick="clearProfile()">Clear</button>
     </div>
 
-    <section class="cards">
-      <div class="card total">
+    <!-- Stat cards -->
+    <div class="stats">
+      <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="count">{{ total }}</div>
+        <div class="num">{{ total }}</div>
       </div>
-      <div class="card critical">
+      <div class="stat s-critical">
         <div class="label">Critical</div>
-        <div class="count">{{ stats.by_severity.get('CRITICAL', 0) }}</div>
+        <div class="num">{{ stats.by_severity.get('CRITICAL', 0) }}</div>
       </div>
-      <div class="card high">
+      <div class="stat s-high">
         <div class="label">High</div>
-        <div class="count">{{ stats.by_severity.get('HIGH', 0) }}</div>
+        <div class="num">{{ stats.by_severity.get('HIGH', 0) }}</div>
       </div>
-      <div class="card medium">
+      <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="count">{{ stats.by_severity.get('MEDIUM', 0) }}</div>
+        <div class="num">{{ stats.by_severity.get('MEDIUM', 0) }}</div>
       </div>
-      <div class="card low">
+      <div class="stat s-low">
         <div class="label">Low</div>
-        <div class="count">{{ stats.by_severity.get('LOW', 0) }}</div>
+        <div class="num">{{ stats.by_severity.get('LOW', 0) }}</div>
       </div>
-    </section>
-
-    <div class="filters">
-      <input type="text" id="searchInput" placeholder="Search by IP, domain, hash, CVE, description..." oninput="applyFilters()" />
-
-      <label for="filter-severity">Severity:</label>
-      <select id="filter-severity" onchange="applyFilters()">
-        <option value="">All</option>
-        <option value="CRITICAL">Critical</option>
-        <option value="HIGH">High</option>
-        <option value="MEDIUM">Medium</option>
-        <option value="LOW">Low</option>
-      </select>
-
-      <label for="filter-type">Type:</label>
-      <select id="filter-type" onchange="applyFilters()">
-        <option value="">All</option>
-        <option value="ip">IP</option>
-        <option value="domain">Domain</option>
-        <option value="hash">Hash</option>
-        <option value="url">URL</option>
-        <option value="cve">CVE</option>
-      </select>
-
-      <label for="countryFilter">Country:</label>
-      <select id="countryFilter" onchange="applyFilters()">
-        <option value="">All Countries</option>
-      </select>
-
-      <label for="abuseScoreMin">Min Abuse Score:</label>
-      <input type="number" id="abuseScoreMin" min="0" max="100" placeholder="0" oninput="applyFilters()" />
-
-      <label for="dateFrom">From:</label>
-      <input type="date" id="dateFrom" onchange="applyFilters()" />
-
-      <label for="dateTo">To:</label>
-      <input type="date" id="dateTo" onchange="applyFilters()" />
-
-      <!-- Relevance filter (shown after profile applied) -->
-      <label for="relevanceFilter" id="rel-filter-label" style="display:none">Relevance:</label>
-      <select id="relevanceFilter" onchange="applyFilters()" style="display:none">
-        <option value="">All IOCs</option>
-        <option value="relevant">Relevant only</option>
-        <option value="monitor">Monitor</option>
-        <option value="untagged">Untagged</option>
-      </select>
-
-      <label for="pageSizeSelect">Rows per page:</label>
-      <select id="pageSizeSelect" onchange="renderPage(1)">
-        <option value="15" selected>15</option>
-        <option value="25">25</option>
-        <option value="50">50</option>
-        <option value="100">100</option>
-        <option value="200">200</option>
-      </select>
-
-      <button class="btn-clear" onclick="clearFilters()">Clear Filters</button>
     </div>
 
-    <!-- Selection bar — visible only when rows are selected -->
+    <!-- Filter bar -->
+    <div class="filterbar">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" id="searchInput" placeholder="Search by IP, domain, hash, CVE, description…" oninput="applyFilters()" />
+      </div>
+      <div class="filter">
+        <span>Severity</span>
+        <select id="filter-severity" onchange="applyFilters()">
+          <option value="">All</option>
+          <option value="CRITICAL">Critical</option>
+          <option value="HIGH">High</option>
+          <option value="MEDIUM">Medium</option>
+          <option value="LOW">Low</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Type</span>
+        <select id="filter-type" onchange="applyFilters()">
+          <option value="">All</option>
+          <option value="ip">IP</option>
+          <option value="domain">Domain</option>
+          <option value="hash">Hash</option>
+          <option value="url">URL</option>
+          <option value="cve">CVE</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Country</span>
+        <select id="countryFilter" onchange="applyFilters()">
+          <option value="">All Countries</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Min Score</span>
+        <input type="number" id="abuseScoreMin" min="0" max="100" placeholder="0" oninput="applyFilters()" />
+      </div>
+      <div class="filter">
+        <span>From</span>
+        <input type="date" id="dateFrom" onchange="applyFilters()" />
+      </div>
+      <div class="filter">
+        <span>To</span>
+        <input type="date" id="dateTo" onchange="applyFilters()" />
+      </div>
+      <div id="rel-filter-label" class="filter" style="display:none">
+        <span>Relevance</span>
+        <select id="relevanceFilter" onchange="applyFilters()" style="display:none">
+          <option value="">All IOCs</option>
+          <option value="relevant">Relevant only</option>
+          <option value="monitor">Monitor</option>
+          <option value="untagged">Untagged</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Rows</span>
+        <select id="pageSizeSelect" onchange="renderPage(1)">
+          <option value="15" selected>15</option>
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="200">200</option>
+        </select>
+      </div>
+      <button class="btn-clear-filters" onclick="clearFilters()">Clear</button>
+    </div>
+
+    <!-- Selection bar -->
     <div class="selection-bar" id="selection-bar">
-      <span class="sel-count" id="sel-count-label">0 IOCs selected</span>
-      <span class="sel-sep">|</span>
-      <button class="btn-sel" onclick="selectAllFiltered()">Select all filtered (<span id="sel-all-count">0</span>)</button>
-      <button class="btn-sel" onclick="clearSelection()">Clear selection</button>
-      <span class="sel-sep">|</span>
-      <button class="btn-sel-primary" onclick="exportSelectedSiemCsv()">&#11015; Export SIEM CSV</button>
+      <div class="sel-left">
+        <span id="sel-count-label" class="sel-count">0 IOCs selected</span>
+        <span class="sel-sep">·</span>
+        <button class="btn-sel" onclick="selectAllFiltered()">Select all filtered (<span id="sel-all-count">0</span>)</button>
+        <button class="btn-sel" onclick="clearSelection()">Clear selection</button>
+      </div>
+      <div class="sel-actions">
+        <button class="btn-sel-primary" onclick="exportSelectedSiemCsv()">&#11015; Export SIEM CSV</button>
+      </div>
     </div>
 
     <p class="ioc-counter" id="ioc-counter"></p>
 
-    <div class="table-wrap">
-      <table id="ioc-table">
+    <div class="tablewrap">
+      <table class="ioc" id="ioc-table">
         <thead>
           <tr>
             <th class="cb-col"><input type="checkbox" id="header-checkbox" title="Select/deselect current page" /></th>
@@ -612,15 +560,15 @@
               data-description="{{ ioc.description or '' }}">
             <td class="cb-col"><input type="checkbox" class="row-cb" data-value="{{ ioc.value }}" /></td>
             <td class="rel-col"></td>
-            <td><span class="type-pill">{{ ioc.type }}</span></td>
+            <td><span class="type-pill type-pill-{{ ioc.type | lower }}">{{ ioc.type }}</span></td>
             <td class="value-cell" title="{{ ioc.value }}">{{ ioc.value }}</td>
-            <td>{{ ioc.source }}</td>
+            <td class="dim-cell">{{ ioc.source }}</td>
             <td><span class="badge badge-{{ ioc.severity | upper }}">{{ ioc.severity }}</span></td>
-            <td>{{ ioc.country if ioc.country else '—' }}</td>
-            <td>{{ ioc.abuse_score if ioc.abuse_score is not none else '—' }}</td>
-            <td>{{ ioc.first_seen if ioc.first_seen else '—' }}</td>
-            <td title="{{ ioc.description }}">{{ ioc.description if ioc.description else '—' }}</td>
-            <td>{% if ioc.mitre_technique_id %}<a href="https://attack.mitre.org/techniques/{{ ioc.mitre_technique_id }}/" target="_blank" style="color:#58a6ff;text-decoration:none;">{{ ioc.mitre_tactic }}</a>{% else %}—{% endif %}</td>
+            <td class="dim-cell">{{ ioc.country if ioc.country else '—' }}</td>
+            <td class="dim-cell">{{ ioc.abuse_score if ioc.abuse_score is not none else '—' }}</td>
+            <td class="value-cell" style="font-size:11px">{{ ioc.first_seen if ioc.first_seen else '—' }}</td>
+            <td class="dim-cell" title="{{ ioc.description }}">{{ ioc.description if ioc.description else '—' }}</td>
+            <td>{% if ioc.mitre_technique_id %}<a href="https://attack.mitre.org/techniques/{{ ioc.mitre_technique_id }}/" target="_blank" class="tactic-link">{{ ioc.mitre_tactic }}</a>{% else %}<span style="color:var(--text-tertiary)">—</span>{% endif %}</td>
           </tr>
           {% else %}
           <tr><td colspan="11" class="empty">No IOCs found.</td></tr>
@@ -629,10 +577,19 @@
       </table>
     </div>
 
-    <div class="pagination">
-      <button id="btn-prev" onclick="renderPage(currentPage - 1)" disabled>&#8592; Prev</button>
-      <span class="page-info" id="ioc-page-info">Page 1 of 1</span>
-      <button id="btn-next" onclick="renderPage(currentPage + 1)" disabled>Next &#8594;</button>
+    <div class="pag">
+      <div class="pag-left"></div>
+      <div class="pag-center">
+        <button id="btn-prev" class="pbtn" onclick="renderPage(currentPage - 1)" disabled>&#8592; Prev</button>
+        <span class="page-info" id="ioc-page-info">Page 1 of 1</span>
+        <button id="btn-next" class="pbtn" onclick="renderPage(currentPage + 1)" disabled>Next &#8594;</button>
+      </div>
+      <div class="pag-right">
+        <div class="rpp">
+          Rows
+          <select id="pageSizeSelect2" style="display:none"></select>
+        </div>
+      </div>
     </div>
 
   </section>
@@ -640,11 +597,16 @@
   <!-- ══════════════════════════ TAB 2: IOC Lookup ══════════════════════════ -->
   <section id="tab-lookup" style="display:none">
 
-    <div class="lookup-search-wrap">
-      <input type="text" id="lookupInput" placeholder="Search by IP, domain, hash or CVE..." />
-      <button class="lookup-btn" onclick="runLookup()">Lookup</button>
+    <div class="lookup-hero">
+      <div class="lookup-search-wrap">
+        <div class="lookup-input-wrap">
+          <svg class="lookup-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+          <input type="text" id="lookupInput" placeholder="Search by IP, domain, hash or CVE…" />
+        </div>
+        <button class="lookup-btn" onclick="runLookup()">Lookup</button>
+      </div>
+      <div class="lookup-hint">Examples: 185.220.101.47 &middot; CVE-2026-42897 &middot; malware-c2.ru &middot; d41d8cd98f00b204</div>
     </div>
-    <p class="lookup-hint">Examples: 185.220.101.47 &middot; CVE-2026-42897 &middot; malware-c2.ru &middot; d41d8cd98f00b204</p>
 
     <div id="lookup-result"></div>
 
@@ -659,16 +621,13 @@
   <!-- ══════════════════════ TAB 3: Threat Profiling ══════════════════════ -->
   <section id="tab-profiling" style="display:none">
 
-    <!-- STATE 1: form (no profile / edit mode) -->
     <div id="profiling-state-form">
-
       <div class="profiling-header">
         <h2>Threat Profiling</h2>
         <p>Select the technologies in the environment you are defending to prioritize relevant IOCs</p>
       </div>
 
       <div class="profiling-form-body">
-
         <div class="asset-group">
           <div class="asset-group-title">Web &amp; Application</div>
           <div class="asset-checkboxes">
@@ -682,7 +641,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="websockets" />WebSockets</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Database</div>
           <div class="asset-checkboxes">
@@ -695,7 +653,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="elasticsearch" />Elasticsearch / OpenSearch</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Cloud &amp; Infrastructure</div>
           <div class="asset-checkboxes">
@@ -708,7 +665,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="cicd" />CI/CD Pipelines (Jenkins, GitHub Actions, GitLab)</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Network &amp; Access</div>
           <div class="asset-checkboxes">
@@ -721,7 +677,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="zero_trust" />Zero Trust / ZTNA</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Email &amp; Collaboration</div>
           <div class="asset-checkboxes">
@@ -731,7 +686,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="sharepoint" />SharePoint / OneDrive</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Security Tools</div>
           <div class="asset-checkboxes">
@@ -741,7 +695,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="soar" />SOAR platforms</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Emerging Technologies</div>
           <div class="asset-checkboxes">
@@ -752,7 +705,6 @@
             <label class="asset-cb-label"><input type="checkbox" class="asset-cb" value="serverless" />Serverless / Lambda functions</label>
           </div>
         </div>
-
         <div class="asset-group">
           <div class="asset-group-title">Custom Assets</div>
           <label class="asset-custom-label" for="customAssetsInput">Other technologies in your environment:</label>
@@ -760,17 +712,14 @@
             placeholder="Ex: SAP, Oracle ERP, Zimbra, PaperCut, Citrix, JetBrains TeamCity..."></textarea>
           <div class="asset-custom-hint">Separate multiple technologies with commas</div>
         </div>
-
       </div>
 
       <div class="profiling-form-footer">
         <div class="profile-asset-counter" id="asset-counter"><strong>0</strong> assets selected</div>
         <button class="btn-analyze" id="btn-analyze" disabled onclick="applyProfile()">Apply profile &rarr;</button>
       </div>
-
     </div>
 
-    <!-- STATE 2: profile active -->
     <div id="profiling-state-active" style="display:none">
       <div class="profiling-active-wrap">
         <div class="profiling-active-title">&#10003; Active profile &mdash; <span id="profiling-active-count">0</span> assets selected</div>
@@ -789,53 +738,63 @@
 
     <p class="mitre-summary" id="mitre-summary"></p>
 
-    <div class="filters">
-      <input type="text" id="mitreSearch" placeholder="Search by ID (T1190) or name..." oninput="applyMitreFilters()" />
-
-      <label for="mitreTacticFilter">Tactic:</label>
-      <select id="mitreTacticFilter" onchange="applyMitreFilters()">
-        <option value="">All Tactics</option>
-      </select>
-
-      <label for="mitrePageSizeSelect">Rows per page:</label>
-      <select id="mitrePageSizeSelect" onchange="renderMitrePage(1)">
-        <option value="25">25</option>
-        <option value="50" selected>50</option>
-        <option value="100">100</option>
-      </select>
-
-      <button class="btn-clear" onclick="clearMitreFilters()">Clear Filters</button>
+    <div class="filterbar" style="margin-bottom:11px">
+      <div class="search">
+        <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="text" id="mitreSearch" placeholder="Search by ID (T1190) or name…" oninput="applyMitreFilters()" />
+      </div>
+      <div class="filter">
+        <span>Tactic</span>
+        <select id="mitreTacticFilter" onchange="applyMitreFilters()">
+          <option value="">All Tactics</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Rows</span>
+        <select id="mitrePageSizeSelect" onchange="renderMitrePage(1)">
+          <option value="25">25</option>
+          <option value="50" selected>50</option>
+          <option value="100">100</option>
+        </select>
+      </div>
+      <button class="btn-clear-filters" onclick="clearMitreFilters()">Clear</button>
     </div>
 
     <p class="ioc-counter" id="mitre-counter"></p>
 
-    <div class="table-wrap">
-      <table id="mitre-table">
+    <div class="tablewrap">
+      <table class="ioc" id="mitre-table">
         <thead>
           <tr>
-            <th>ID</th>
+            <th style="width:120px">ID</th>
             <th>Name</th>
             <th>Tactic</th>
-            <th>Link</th>
+            <th style="width:140px">Link</th>
           </tr>
         </thead>
         <tbody id="mitre-tbody"></tbody>
       </table>
     </div>
 
-    <div class="pagination">
-      <button id="mitre-btn-prev" onclick="renderMitrePage(mitrePage - 1)" disabled>&#8592; Prev</button>
-      <span class="page-info" id="mitre-page-info">Page 1 of 1</span>
-      <button id="mitre-btn-next" onclick="renderMitrePage(mitrePage + 1)" disabled>Next &#8594;</button>
+    <div class="pag">
+      <div class="pag-left"></div>
+      <div class="pag-center">
+        <button id="mitre-btn-prev" class="pbtn" onclick="renderMitrePage(mitrePage - 1)" disabled>&#8592; Prev</button>
+        <span class="page-info" id="mitre-page-info">Page 1 of 1</span>
+        <button id="mitre-btn-next" class="pbtn" onclick="renderMitrePage(mitrePage + 1)" disabled>Next &#8594;</button>
+      </div>
+      <div class="pag-right"></div>
     </div>
 
   </section>
 
-  <footer>
-    AEGIS Threat Intelligence &mdash; {{ generated_at }}
-  </footer>
+    </div><!-- /.scroller -->
 
-</div>
+    <footer>AEGIS Threat Intelligence &mdash; {{ generated_at }}</footer>
+
+  </main>
+
+</div><!-- /.app -->
 
 <script>
   const MITRE_TECHNIQUES = {{ techniques | tojson }};
