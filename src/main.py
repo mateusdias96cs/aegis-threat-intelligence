@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
 from src.collectors import abuseipdb
+from src.collectors import urlhaus, feodo
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
@@ -33,7 +34,15 @@ def run():
         tf_iocs = threatfox.collect()
         print(f"[pipeline] ThreatFox: {len(tf_iocs)} indicators")
 
-        raw_iocs = cisa_iocs + otx_iocs + tf_iocs
+        print("[pipeline] collecting from URLhaus ...")
+        urlhaus_iocs = urlhaus.collect()
+        print(f"[pipeline] URLhaus: {len(urlhaus_iocs)} indicators")
+
+        print("[pipeline] collecting from Feodo Tracker ...")
+        feodo_iocs = feodo.collect()
+        print(f"[pipeline] FeodoTracker: {len(feodo_iocs)} indicators")
+
+        raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs
         print(f"[pipeline] total collected: {len(raw_iocs)}")
 
         # Deduplicate internally first
