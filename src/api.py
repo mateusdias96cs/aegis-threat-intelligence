@@ -1,5 +1,6 @@
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from datetime import datetime
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from src.reporters import html_report
 from src.main import run as run_pipeline_task
 
 app = FastAPI(title="Aegis Threat Intelligence API", version="1.0.0")
+app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # ── Rate limit helpers ────────────────────────────────────────────────────────
 
