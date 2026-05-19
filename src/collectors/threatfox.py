@@ -43,13 +43,17 @@ def collect() -> list[dict]:
         if internal_type == "unknown":
             continue
 
+        raw_value = entry.get("ioc_value")
+        if raw_value and internal_type == "ip":
+            raw_value = raw_value.split(":")[0]
+
         raw_first_seen = entry.get("first_seen", today)
         raw_str = str(raw_first_seen) if raw_first_seen else today
         first_seen = raw_str.split("T")[0] if "T" in raw_str else raw_str
 
         iocs.append({
             "type": internal_type,
-            "value": entry.get("ioc_value"),
+            "value": raw_value,
             "source": "ThreatFox",
             "severity": "HIGH",
             "description": f"Malware: {entry.get('malware_printable', 'Unknown')} - {entry.get('threat_type', '')}",

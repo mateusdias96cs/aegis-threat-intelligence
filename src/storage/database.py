@@ -29,7 +29,7 @@ class DatabaseManager:
         self.conn.commit()
 
     def _migrate(self):
-        for col_def in ("mitre_technique_id TEXT", "mitre_tactic TEXT"):
+        for col_def in ("mitre_technique_id TEXT", "mitre_tactic TEXT", "confidence_score INTEGER"):
             try:
                 self.conn.execute(f"ALTER TABLE iocs ADD COLUMN {col_def}")
                 self.conn.commit()
@@ -78,14 +78,16 @@ class DatabaseManager:
                 ioc.get("severity"), ioc.get("country"), ioc.get("abuse_score"),
                 ioc.get("description"), ioc.get("first_seen"), ioc.get("last_seen"),
                 ioc.get("mitre_technique_id"), ioc.get("mitre_tactic"),
+                ioc.get("confidence_score"),
             ))
         if rows:
             self.conn.executemany(
                 """
                 INSERT INTO iocs
                     (type, value, source, severity, country, abuse_score, description,
-                     first_seen, last_seen, mitre_technique_id, mitre_tactic)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     first_seen, last_seen, mitre_technique_id, mitre_tactic,
+                     confidence_score)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 rows,
             )

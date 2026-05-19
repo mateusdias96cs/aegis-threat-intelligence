@@ -65,6 +65,8 @@ def run():
 
             print("[pipeline] classifying ...")
             new_iocs = classifier.classify(new_iocs)
+            new_iocs = classifier.apply_confidence(new_iocs)
+            print("[pipeline] confidence scores calculated")
 
             # Load MITRE ATT&CK technique index once before processing
             print("[pipeline] loading MITRE ATT&CK techniques ...")
