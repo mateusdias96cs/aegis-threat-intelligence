@@ -1,71 +1,93 @@
-import sqlite3
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
+
+from sqlalchemy import Column, Integer, String, create_engine, text
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
+
+_raw_url = os.getenv("DATABASE_URL")
+
+if _raw_url:
+    # Railway/Heroku sometimes return postgres:// — SQLAlchemy 2.x requires postgresql://
+    if _raw_url.startswith("postgres://"):
+        _raw_url = _raw_url.replace("postgres://", "postgresql://", 1)
+    engine = create_engine(
+        _raw_url,
+        pool_size=5,
+        max_overflow=10,
+        pool_pre_ping=True,
+    )
+else:
+    _db_path = "data/iocs.db"
+    Path(_db_path).parent.mkdir(parents=True, exist_ok=True)
+    engine = create_engine(
+        f"sqlite:///{_db_path}",
+        connect_args={"check_same_thread": False},
+    )
+
+Base = declarative_base()
+
+
+class IOC(Base):
+    __tablename__ = "iocs"
+
+    id                 = Column(Integer, primary_key=True, autoincrement=True)
+    type               = Column(String)
+    value              = Column(String)
+    source             = Column(String)
+    severity           = Column(String)
+    country            = Column(String)
+    abuse_score        = Column(Integer)
+    description        = Column(String)
+    first_seen         = Column(String)
+    last_seen          = Column(String)
+    mitre_technique_id = Column(String)
+    mitre_tactic       = Column(String)
+    confidence_score   = Column(Integer)
+
+
+Base.metadata.create_all(engine)
+SessionLocal = sessionmaker(bind=engine)
 
 
 class DatabaseManager:
     def __init__(self, db_path: str = "data/iocs.db"):
-        Path(db_path).parent.mkdir(parents=True, exist_ok=True)
-        self.conn = sqlite3.connect(db_path)
-        self.conn.row_factory = sqlite3.Row
-        self._create_table()
-        self._migrate()
+        self._session: Session = SessionLocal()
 
-    def _create_table(self):
-        self.conn.execute("""
-            CREATE TABLE IF NOT EXISTS iocs (
-                id           INTEGER PRIMARY KEY AUTOINCREMENT,
-                type         TEXT,
-                value        TEXT,
-                source       TEXT,
-                severity     TEXT,
-                country      TEXT,
-                abuse_score  INTEGER,
-                description  TEXT,
-                first_seen   TEXT,
-                last_seen    TEXT
-            )
-        """)
-        self.conn.commit()
-
-    def _migrate(self):
-        for col_def in ("mitre_technique_id TEXT", "mitre_tactic TEXT", "confidence_score INTEGER"):
-            try:
-                self.conn.execute(f"ALTER TABLE iocs ADD COLUMN {col_def}")
-                self.conn.commit()
-            except sqlite3.OperationalError:
-                pass
+    # ── writes ────────────────────────────────────────────────────────────────
 
     def insert_ioc(self, ioc: dict):
-        existing = self.conn.execute(
-            "SELECT id FROM iocs WHERE value = ?", (ioc.get("value"),)
+        existing = self._session.execute(
+            text("SELECT id FROM iocs WHERE value = :value"),
+            {"value": ioc.get("value")},
         ).fetchone()
         if existing:
             return
-        self.conn.execute(
-            """
-            INSERT INTO iocs
-                (type, value, source, severity, country, abuse_score, description,
-                 first_seen, last_seen, mitre_technique_id, mitre_tactic)
-            VALUES
-                (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                ioc.get("type"), ioc.get("value"), ioc.get("source"),
-                ioc.get("severity"), ioc.get("country"), ioc.get("abuse_score"),
-                ioc.get("description"), ioc.get("first_seen"), ioc.get("last_seen"),
-                ioc.get("mitre_technique_id"), ioc.get("mitre_tactic"),
-            ),
+        self._session.execute(
+            text("""
+                INSERT INTO iocs
+                    (type, value, source, severity, country, abuse_score, description,
+                     first_seen, last_seen, mitre_technique_id, mitre_tactic)
+                VALUES
+                    (:type, :value, :source, :severity, :country, :abuse_score,
+                     :description, :first_seen, :last_seen, :mitre_technique_id, :mitre_tactic)
+            """),
+            {
+                "type": ioc.get("type"), "value": ioc.get("value"),
+                "source": ioc.get("source"), "severity": ioc.get("severity"),
+                "country": ioc.get("country"), "abuse_score": ioc.get("abuse_score"),
+                "description": ioc.get("description"), "first_seen": ioc.get("first_seen"),
+                "last_seen": ioc.get("last_seen"),
+                "mitre_technique_id": ioc.get("mitre_technique_id"),
+                "mitre_tactic": ioc.get("mitre_tactic"),
+            },
         )
-        self.conn.commit()
+        self._session.commit()
 
     def insert_many(self, iocs: list[dict]):
         if not iocs:
             return
-        existing = {
-            row[0]
-            for row in self.conn.execute("SELECT value FROM iocs").fetchall()
-        }
+        existing = self.get_existing_values()
         seen: set = set()
         rows = []
         for ioc in iocs:
@@ -73,90 +95,95 @@ class DatabaseManager:
             if val in existing or val in seen:
                 continue
             seen.add(val)
-            rows.append((
-                ioc.get("type"), val, ioc.get("source"),
-                ioc.get("severity"), ioc.get("country"), ioc.get("abuse_score"),
-                ioc.get("description"), ioc.get("first_seen"), ioc.get("last_seen"),
-                ioc.get("mitre_technique_id"), ioc.get("mitre_tactic"),
-                ioc.get("confidence_score"),
-            ))
+            rows.append({
+                "type": ioc.get("type"),
+                "value": val,
+                "source": ioc.get("source"),
+                "severity": ioc.get("severity"),
+                "country": ioc.get("country"),
+                "abuse_score": ioc.get("abuse_score"),
+                "description": ioc.get("description"),
+                "first_seen": ioc.get("first_seen"),
+                "last_seen": ioc.get("last_seen"),
+                "mitre_technique_id": ioc.get("mitre_technique_id"),
+                "mitre_tactic": ioc.get("mitre_tactic"),
+                "confidence_score": ioc.get("confidence_score"),
+            })
         if rows:
-            self.conn.executemany(
-                """
-                INSERT INTO iocs
-                    (type, value, source, severity, country, abuse_score, description,
-                     first_seen, last_seen, mitre_technique_id, mitre_tactic,
-                     confidence_score)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                rows,
-            )
-            self.conn.commit()
+            self._session.execute(IOC.__table__.insert(), rows)
+            self._session.commit()
+
+    # ── reads ─────────────────────────────────────────────────────────────────
 
     def get_all_iocs(self) -> list[dict]:
-        rows = self.conn.execute("SELECT * FROM iocs").fetchall()
+        rows = self._session.execute(text("SELECT * FROM iocs")).mappings().all()
         return [dict(row) for row in rows]
 
     def get_existing_values(self) -> set[str]:
-        rows = self.conn.execute("SELECT value FROM iocs").fetchall()
-        return {row["value"] for row in rows}
+        rows = self._session.execute(text("SELECT value FROM iocs")).all()
+        return {row[0] for row in rows}
 
     def get_iocs_by_severity(self, severity: str) -> list[dict]:
-        rows = self.conn.execute(
-            "SELECT * FROM iocs WHERE severity = ?", (severity,)
-        ).fetchall()
+        rows = self._session.execute(
+            text("SELECT * FROM iocs WHERE severity = :severity"),
+            {"severity": severity},
+        ).mappings().all()
         return [dict(row) for row in rows]
 
     def get_stats(self) -> dict:
-        by_type = self.conn.execute(
-            "SELECT type, COUNT(*) AS count FROM iocs GROUP BY type"
-        ).fetchall()
-        by_severity = self.conn.execute(
-            "SELECT severity, COUNT(*) AS count FROM iocs GROUP BY severity"
-        ).fetchall()
+        by_type = self._session.execute(
+            text("SELECT type, COUNT(*) AS count FROM iocs GROUP BY type")
+        ).all()
+        by_severity = self._session.execute(
+            text("SELECT severity, COUNT(*) AS count FROM iocs GROUP BY severity")
+        ).all()
         return {
-            "by_type": {row["type"]: row["count"] for row in by_type},
-            "by_severity": {row["severity"]: row["count"] for row in by_severity},
+            "by_type":     {row[0]: row[1] for row in by_type},
+            "by_severity": {row[0]: row[1] for row in by_severity},
         }
 
     def get_ioc_by_value(self, value: str) -> dict | None:
         """Case-insensitive exact lookup; returns a single IOC dict or None."""
-        row = self.conn.execute(
-            "SELECT * FROM iocs WHERE LOWER(value) = LOWER(?)", (value,)
-        ).fetchone()
+        row = self._session.execute(
+            text("SELECT * FROM iocs WHERE LOWER(value) = LOWER(:value)"),
+            {"value": value},
+        ).mappings().fetchone()
         return dict(row) if row else None
 
     def get_critical_since(self, hours: int, limit: int = 100) -> list[dict]:
         """Returns CRITICAL IOCs with first_seen within the last N hours, newest first."""
         cutoff = (datetime.utcnow() - timedelta(hours=hours)).strftime("%Y-%m-%d")
-        rows = self.conn.execute(
-            """
-            SELECT * FROM iocs
-            WHERE severity = 'CRITICAL' AND first_seen >= ?
-            ORDER BY first_seen DESC
-            LIMIT ?
-            """,
-            (cutoff, limit),
-        ).fetchall()
+        rows = self._session.execute(
+            text("""
+                SELECT * FROM iocs
+                WHERE severity = 'CRITICAL' AND first_seen >= :cutoff
+                ORDER BY first_seen DESC
+                LIMIT :limit
+            """),
+            {"cutoff": cutoff, "limit": limit},
+        ).mappings().all()
         return [dict(row) for row in rows]
 
     def get_trends(self, days: int = 30) -> list:
         try:
-            rows = self.conn.execute(
-                """
-                SELECT DATE(first_seen) as date,
-                       COUNT(*) as total,
-                       SUM(CASE WHEN severity='CRITICAL' THEN 1 ELSE 0 END) as critical,
-                       SUM(CASE WHEN severity='HIGH' THEN 1 ELSE 0 END) as high,
-                       SUM(CASE WHEN severity='MEDIUM' THEN 1 ELSE 0 END) as medium,
-                       SUM(CASE WHEN severity='LOW' THEN 1 ELSE 0 END) as low
-                FROM iocs
-                WHERE DATE(first_seen) >= DATE('now', '-' || ? || ' days')
-                GROUP BY DATE(first_seen)
-                ORDER BY date ASC
-                """,
-                (days,),
-            ).fetchall()
+            cutoff = (datetime.utcnow() - timedelta(days=days)).strftime("%Y-%m-%d")
+            # SUBSTR(first_seen, 1, 10) extracts YYYY-MM-DD from both date and datetime
+            # strings and is valid in both SQLite and PostgreSQL.
+            rows = self._session.execute(
+                text("""
+                    SELECT SUBSTR(first_seen, 1, 10) AS date,
+                           COUNT(*) AS total,
+                           SUM(CASE WHEN severity='CRITICAL' THEN 1 ELSE 0 END) AS critical,
+                           SUM(CASE WHEN severity='HIGH'     THEN 1 ELSE 0 END) AS high,
+                           SUM(CASE WHEN severity='MEDIUM'   THEN 1 ELSE 0 END) AS medium,
+                           SUM(CASE WHEN severity='LOW'      THEN 1 ELSE 0 END) AS low
+                    FROM iocs
+                    WHERE SUBSTR(first_seen, 1, 10) >= :cutoff
+                    GROUP BY SUBSTR(first_seen, 1, 10)
+                    ORDER BY date ASC
+                """),
+                {"cutoff": cutoff},
+            ).mappings().all()
             return [dict(row) for row in rows]
         except Exception as e:
             print(f"[database] get_trends failed: {e}")
@@ -164,55 +191,61 @@ class DatabaseManager:
 
     def cleanup_old_iocs(self) -> int:
         try:
-            d1 = self.conn.execute(
+            today = datetime.utcnow().date()
+
+            def _cutoff(days: int) -> str:
+                return (today - timedelta(days=days)).strftime("%Y-%m-%d")
+
+            # Python-computed date strings make DELETE dialect-agnostic.
+            d1 = self._session.execute(text(
                 "DELETE FROM iocs WHERE source = 'AbuseIPDB-Blacklist'"
-                " AND DATE(first_seen) < DATE('now', '-7 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(7)}).rowcount
+            self._session.commit()
 
-            d2 = self.conn.execute(
+            d2 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'ip' AND source = 'ThreatFox'"
-                " AND DATE(first_seen) < DATE('now', '-7 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(7)}).rowcount
+            self._session.commit()
 
-            d3 = self.conn.execute(
+            d3 = self._session.execute(text(
                 "DELETE FROM iocs WHERE source = 'FeodoTracker'"
-                " AND DATE(first_seen) < DATE('now', '-14 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(14)}).rowcount
+            self._session.commit()
 
-            d4 = self.conn.execute(
+            d4 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'url' AND description LIKE '%online%'"
-                " AND DATE(first_seen) < DATE('now', '-14 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(14)}).rowcount
+            self._session.commit()
 
-            d5 = self.conn.execute(
+            d5 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'url' AND description NOT LIKE '%online%'"
-                " AND DATE(first_seen) < DATE('now', '-30 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(30)}).rowcount
+            self._session.commit()
 
-            d6 = self.conn.execute(
+            d6 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'domain'"
-                " AND DATE(first_seen) < DATE('now', '-30 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(30)}).rowcount
+            self._session.commit()
 
-            d7 = self.conn.execute(
+            d7 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'ip'"
                 " AND source NOT IN ('AbuseIPDB-Blacklist', 'ThreatFox', 'FeodoTracker')"
-                " AND DATE(first_seen) < DATE('now', '-30 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(30)}).rowcount
+            self._session.commit()
 
-            d8 = self.conn.execute(
+            d8 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type NOT IN ('hash', 'cve', 'ip', 'url', 'domain')"
                 " AND source != 'CISA-KEV'"
-                " AND DATE(first_seen) < DATE('now', '-90 days')"
-            ).rowcount
-            self.conn.commit()
+                " AND SUBSTR(first_seen, 1, 10) < :c"
+            ), {"c": _cutoff(90)}).rowcount
+            self._session.commit()
 
             total_deleted = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8
             print(f"[cleanup] AbuseIPDB-BL: {d1} removed")
@@ -231,8 +264,8 @@ class DatabaseManager:
 
     def get_last_updated(self) -> str | None:
         try:
-            result = self.conn.execute(
-                "SELECT MAX(first_seen) FROM iocs"
+            result = self._session.execute(
+                text("SELECT MAX(first_seen) FROM iocs")
             ).fetchone()
             return result[0] if result and result[0] else None
         except Exception as e:
@@ -240,4 +273,4 @@ class DatabaseManager:
             return None
 
     def close(self):
-        self.conn.close()
+        self._session.close()
