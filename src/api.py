@@ -20,7 +20,7 @@ if sentry_dsn:
     try:
         sentry_sdk.init(
             dsn=sentry_dsn,
-            traces_sample_rate=0.1,
+            traces_sample_rate=1.0,
             profiles_sample_rate=0.1,
             environment=os.getenv("DOPPLER_ENVIRONMENT", "production"),
         )

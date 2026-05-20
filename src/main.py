@@ -122,6 +122,9 @@ def run():
                 print(f"    {level:<10} {count}")
             print("───────────────────────────────────────────────")
             print("[pipeline] report written to output/index.html")
+            except Exception as e:
+            sentry_sdk.capture_exception(e)
+            raise
         finally:
             db.close()
 
