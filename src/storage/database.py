@@ -1,8 +1,9 @@
+import math
 import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, text
+from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 _raw_url = os.getenv("DATABASE_URL")
@@ -44,6 +45,11 @@ class IOC(Base):
     mitre_technique_id = Column(String)
     mitre_tactic       = Column(String)
     confidence_score   = Column(Integer)
+    # BioSec decay fields
+    score_original     = Column(Float)
+    score_atual        = Column(Float)
+    ioc_status         = Column(String(20), default="ACTIVE")
+    reactivation_count = Column(Integer, default=0)
 
 
 class Report(Base):
@@ -56,6 +62,28 @@ class Report(Base):
 
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
+
+# ── BioSec decay migration (safe — adds columns only if absent) ───────────────
+_DECAY_COLUMNS = [
+    ("score_original",     "FLOAT"),
+    ("score_atual",        "FLOAT"),
+    ("ioc_status",         "VARCHAR(20) DEFAULT 'ACTIVE'"),
+    ("reactivation_count", "INTEGER DEFAULT 0"),
+]
+_dialect = engine.dialect.name
+
+for _col_name, _col_def in _DECAY_COLUMNS:
+    try:
+        _sql = (
+            f"ALTER TABLE iocs ADD COLUMN IF NOT EXISTS {_col_name} {_col_def}"
+            if _dialect == "postgresql"
+            else f"ALTER TABLE iocs ADD COLUMN {_col_name} {_col_def}"
+        )
+        with engine.connect() as _conn:
+            _conn.execute(text(_sql))
+            _conn.commit()
+    except Exception:
+        pass
 
 
 class DatabaseManager:
@@ -103,6 +131,7 @@ class DatabaseManager:
             if val in existing or val in seen:
                 continue
             seen.add(val)
+            cs = ioc.get("confidence_score")
             rows.append({
                 "type": ioc.get("type"),
                 "value": val,
@@ -115,7 +144,11 @@ class DatabaseManager:
                 "last_seen": ioc.get("last_seen"),
                 "mitre_technique_id": ioc.get("mitre_technique_id"),
                 "mitre_tactic": ioc.get("mitre_tactic"),
-                "confidence_score": ioc.get("confidence_score"),
+                "confidence_score": cs,
+                "score_original":     float(cs) if cs is not None else None,
+                "score_atual":        float(cs) if cs is not None else None,
+                "ioc_status":         ioc.get("ioc_status", "ACTIVE"),
+                "reactivation_count": ioc.get("reactivation_count", 0),
             })
         if rows:
             self._session.execute(IOC.__table__.insert(), rows)
@@ -134,8 +167,8 @@ class DatabaseManager:
         severity: str | None = None,
         ioc_type: str | None = None,
         search: str | None = None,
+        status: str | None = None,
     ) -> dict:
-        import math
         page   = max(1, page)
         limit  = min(limit, 500)
         offset = (page - 1) * limit
@@ -153,6 +186,17 @@ class DatabaseManager:
             # LOWER(x) LIKE :term works on both SQLite and PostgreSQL
             conditions.append("(LOWER(value) LIKE :search OR LOWER(description) LIKE :search)")
             params["search"] = f"%{search.lower()}%"
+
+        # Status filter — default returns ACTIVE + REACTIVATED + legacy NULLs
+        status_upper = (status or "").upper()
+        if status_upper == "ALL":
+            pass  # no status filter
+        elif status_upper in ("ACTIVE", "DECAYED", "HISTORICAL", "REACTIVATED"):
+            conditions.append("ioc_status = :ioc_status")
+            params["ioc_status"] = status_upper
+        else:
+            # default: ACTIVE + REACTIVATED + NULLs (backward compat with pre-decay IOCs)
+            conditions.append("(ioc_status IS NULL OR ioc_status IN ('ACTIVE', 'REACTIVATED'))")
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
@@ -206,9 +250,13 @@ class DatabaseManager:
         by_severity = self._session.execute(
             text("SELECT severity, COUNT(*) AS count FROM iocs GROUP BY severity")
         ).all()
+        by_status = self._session.execute(
+            text("SELECT ioc_status, COUNT(*) AS count FROM iocs GROUP BY ioc_status")
+        ).all()
         return {
             "by_type":     {row[0]: row[1] for row in by_type},
             "by_severity": {row[0]: row[1] for row in by_severity},
+            "by_status":   {(row[0] or "UNKNOWN"): row[1] for row in by_status},
         }
 
     def get_ioc_by_value(self, value: str) -> dict | None:
@@ -257,6 +305,116 @@ class DatabaseManager:
         except Exception as e:
             print(f"[database] get_trends failed: {e}")
             return []
+
+    # ── BioSec decay ──────────────────────────────────────────────────────────
+
+    _HALF_LIVES: dict = {
+        "ip": 15, "url": 7, "domain": 30, "hash": 180, "cve": 365,
+    }
+
+    def apply_decay(self) -> int:
+        """Recalculates score_atual and ioc_status for every IOC using exponential decay.
+
+        Half-lives (days): ip=15, url=7, domain=30, hash=180, cve=365, default=30.
+        Score thresholds: >=20% ACTIVE, 5-20% DECAYED, <5% HISTORICAL.
+        IOCs seen today with reactivation_count>0 keep REACTIVATED status.
+        """
+        today = datetime.utcnow().date()
+        rows = self._session.execute(
+            text("""
+                SELECT id, type, score_original, last_seen, ioc_status, reactivation_count
+                FROM iocs
+                WHERE score_original IS NOT NULL
+            """)
+        ).mappings().all()
+
+        updates = []
+        for row in rows:
+            half_life = self._HALF_LIVES.get(row["type"] or "", 30)
+            last_seen_raw = str(row["last_seen"] or "")[:10]
+            try:
+                last_seen = datetime.strptime(last_seen_raw, "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                last_seen = today
+
+            dias = max(0, (today - last_seen).days)
+            score_orig = float(row["score_original"])
+            score_atual = score_orig * math.exp(-0.693 * dias / half_life)
+
+            reactivation_count = row["reactivation_count"] or 0
+            if last_seen == today and reactivation_count > 0:
+                ioc_status = "REACTIVATED"
+            elif score_atual >= 0.20 * score_orig:
+                ioc_status = "ACTIVE"
+            elif score_atual >= 0.05 * score_orig:
+                ioc_status = "DECAYED"
+            else:
+                ioc_status = "HISTORICAL"
+
+            updates.append({"id": row["id"], "score_atual": score_atual, "ioc_status": ioc_status})
+
+        if updates:
+            self._session.execute(
+                text("UPDATE iocs SET score_atual = :score_atual, ioc_status = :ioc_status WHERE id = :id"),
+                updates,
+            )
+            self._session.commit()
+
+        print(f"[decay] applied decay to {len(updates)} IOCs")
+        return len(updates)
+
+    def reactivate_ioc(self, value: str) -> None:
+        """Updates last_seen, reactivation_count, score_atual, and ioc_status for a known IOC.
+
+        Called when an existing IOC reappears in a new collection.
+        Only sets REACTIVATED status if the IOC was previously DECAYED or HISTORICAL.
+        """
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        row = self._session.execute(
+            text("SELECT id, score_original, ioc_status, reactivation_count FROM iocs WHERE value = :value"),
+            {"value": value},
+        ).fetchone()
+        if not row:
+            return
+
+        ioc_id, score_original, current_status, reactivation_count = row
+        reactivation_count = (reactivation_count or 0) + 1
+
+        score_atual = (
+            float(score_original) * (1.0 + 0.2 * reactivation_count)
+            if score_original is not None
+            else None
+        )
+
+        new_status = (
+            "REACTIVATED" if current_status in ("DECAYED", "HISTORICAL") else (current_status or "ACTIVE")
+        )
+
+        self._session.execute(
+            text("""
+                UPDATE iocs
+                SET last_seen = :last_seen,
+                    reactivation_count = :count,
+                    score_atual = :score_atual,
+                    ioc_status = :status
+                WHERE id = :id
+            """),
+            {
+                "last_seen": today,
+                "count": reactivation_count,
+                "score_atual": score_atual,
+                "status": new_status,
+                "id": ioc_id,
+            },
+        )
+        self._session.commit()
+
+    def get_decay_stats(self) -> dict:
+        """Returns IOC count grouped by ioc_status for health checks."""
+        rows = self._session.execute(
+            text("SELECT ioc_status, COUNT(*) AS count FROM iocs GROUP BY ioc_status")
+        ).all()
+        return {(row[0] or "UNKNOWN"): row[1] for row in rows}
 
     def cleanup_old_iocs(self) -> int:
         try:

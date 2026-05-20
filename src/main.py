@@ -67,10 +67,16 @@ def run():
             raw_iocs = deduplicator.deduplicate(raw_iocs)
             print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
 
-            # Filter out existing IOCs
+            # Separate new from existing; reactivate those already in DB
             existing_values = db.get_existing_values()
-            new_iocs = [ioc for ioc in raw_iocs if ioc.get("value") not in existing_values]
+            new_iocs      = [ioc for ioc in raw_iocs if ioc.get("value") not in existing_values]
+            seen_again    = [ioc for ioc in raw_iocs if ioc.get("value") in existing_values]
             print(f"[pipeline] new indicators to process: {len(new_iocs)}")
+            print(f"[pipeline] existing IOCs to reactivate: {len(seen_again)}")
+            for _ioc in seen_again:
+                _val = _ioc.get("value")
+                if _val:
+                    db.reactivate_ioc(_val)
 
             # Process new IOCs
             if new_iocs:
@@ -104,6 +110,9 @@ def run():
             else:
                 print("[pipeline] loading MITRE ATT&CK techniques for report ...")
                 techniques = mitre.load_techniques()
+
+            print("[pipeline] applying BioSec decay ...")
+            db.apply_decay()
 
             # Report
             print("[pipeline] generating report ...")

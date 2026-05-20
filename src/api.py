@@ -177,6 +177,8 @@ async def health_check():
         if last_ioc:
             health["database"]["last_updated"] = last_ioc
 
+        health["decay_stats"] = db.get_decay_stats()
+
     except Exception as e:
         health["status"] = "degraded"
         health["database"]["status"] = "error"
@@ -194,11 +196,13 @@ async def get_all_iocs(
     severity: str | None = None,
     type: str | None = None,
     search: str | None = None,
+    status: str | None = None,
 ):
     db = DatabaseManager()
     try:
         return db.get_iocs_paginated(
-            page=page, limit=limit, severity=severity, ioc_type=type, search=search
+            page=page, limit=limit, severity=severity, ioc_type=type,
+            search=search, status=status,
         )
     finally:
         db.close()

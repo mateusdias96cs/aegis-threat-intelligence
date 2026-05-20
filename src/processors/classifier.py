@@ -1,3 +1,5 @@
+from datetime import datetime
+
 SEVERITY_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 _SOURCE_SCORES = {
@@ -48,8 +50,16 @@ def calculate_confidence(ioc: dict, all_iocs: list) -> int:
 
 
 def apply_confidence(iocs: list) -> list:
+    today = datetime.utcnow().strftime("%Y-%m-%d")
     for ioc in iocs:
-        ioc["confidence_score"] = calculate_confidence(ioc, iocs)
+        score = calculate_confidence(ioc, iocs)
+        ioc["confidence_score"]   = score
+        ioc["score_original"]     = float(score)
+        ioc["score_atual"]        = float(score)
+        ioc["ioc_status"]         = "ACTIVE"
+        ioc["reactivation_count"] = 0
+        if not ioc.get("last_seen"):
+            ioc["last_seen"] = today
     return iocs
 
 

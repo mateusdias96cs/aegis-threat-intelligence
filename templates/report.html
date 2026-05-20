@@ -337,6 +337,11 @@
     /* ── Trend chart */
     .chart-container { height:200px; margin-bottom:20px; background:#0f0f0f; border:1px solid #1e1e1e; border-radius:8px; padding:16px; }
     .chart-container.hidden { display:none; }
+
+    /* ── BioSec decay status styles */
+    .badge-reactivated { display:inline-block; background:rgba(74,144,226,.15); color:#4a90e2; border:1px solid #1d3a66; border-radius:2px; font-size:8.5px; font-weight:700; font-family:var(--font-mono); padding:1px 5px; margin-left:6px; vertical-align:middle; letter-spacing:.5px; white-space:nowrap; }
+    .tr-decayed  { opacity:0.45; }
+    .tr-historical td { font-style:italic; color:var(--text-tertiary) !important; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -481,6 +486,14 @@
           <option value="hash">Hash</option>
           <option value="url">URL</option>
           <option value="cve">CVE</option>
+        </select>
+      </div>
+      <div class="filter">
+        <span>Status</span>
+        <select id="filter-status" onchange="applyFilters()">
+          <option value="">Active</option>
+          <option value="ALL">All</option>
+          <option value="HISTORICAL">Historical</option>
         </select>
       </div>
       <div id="rel-filter-label" class="filter" style="display:none">
@@ -1148,10 +1161,13 @@
     var tp      = document.getElementById('filter-type').value;
     var srch    = document.getElementById('searchInput').value.trim();
 
+    var statusFilter = document.getElementById('filter-status').value;
+
     var params = new URLSearchParams({ page: currentPage, limit: limit });
-    if (sev)  params.set('severity', sev);
-    if (tp)   params.set('type',     tp);
-    if (srch) params.set('search',   srch);
+    if (sev)          params.set('severity', sev);
+    if (tp)           params.set('type',     tp);
+    if (srch)         params.set('search',   srch);
+    if (statusFilter) params.set('status',   statusFilter);
 
     showIocSpinner();
     document.getElementById('btn-prev').disabled = true;
@@ -1201,20 +1217,27 @@
       var mitreId = ioc.mitre_technique_id || '';
       var mitreTac = ioc.mitre_tactic || '';
 
+      var iocStatus = (ioc.ioc_status || 'ACTIVE').toUpperCase();
+      var reactivatedBadge = iocStatus === 'REACTIVATED'
+        ? '<span class="badge-reactivated">&#x21A9; REACTIVATED</span>' : '';
+
       var mitreCell = mitreId
         ? '<a href="https://attack.mitre.org/techniques/' + escHtml(mitreId) + '/" target="_blank" class="tactic-link">' + escHtml(mitreTac || mitreId) + '</a>'
         : '<span style="color:var(--text-tertiary)">—</span>';
 
       var tr = document.createElement('tr');
-      tr.dataset.severity = sev;
-      tr.dataset.type     = type;
+      tr.dataset.severity  = sev;
+      tr.dataset.type      = type;
+      tr.dataset.iocStatus = iocStatus;
+      if (iocStatus === 'DECAYED')    tr.classList.add('tr-decayed');
+      if (iocStatus === 'HISTORICAL') tr.classList.add('tr-historical');
       if (selectedIocs.has(val)) tr.classList.add('row-selected');
 
       tr.innerHTML =
         '<td class="cb-col"><input type="checkbox" class="row-cb" data-value="' + escHtml(val) + '"' + (selectedIocs.has(val) ? ' checked' : '') + ' /></td>' +
         '<td class="rel-col"></td>' +
         '<td><span class="type-pill type-pill-' + escHtml(type) + '">' + escHtml(ioc.type || '') + '</span></td>' +
-        '<td class="value-cell" title="' + escHtml(val) + '">' + escHtml(disp) + '</td>' +
+        '<td class="value-cell" title="' + escHtml(val) + '">' + escHtml(disp) + reactivatedBadge + '</td>' +
         '<td class="dim-cell">' + escHtml(ioc.source || '') + '</td>' +
         '<td><span class="badge badge-' + sev + '">' + escHtml(sev) + '</span></td>' +
         '<td class="dim-cell">' + escHtml(country) + '</td>' +
@@ -1403,7 +1426,7 @@
   }
 
   function clearFilters() {
-    ['filter-severity', 'filter-type'].forEach(function(id) {
+    ['filter-severity', 'filter-type', 'filter-status'].forEach(function(id) {
       document.getElementById(id).value = '';
     });
     document.getElementById('searchInput').value = '';
