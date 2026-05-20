@@ -27,7 +27,15 @@ if sentry_dsn:
     except Exception:
         pass
 
-app = FastAPI(title="Aegis Threat Intelligence API", version="1.0.0")
+_is_production = os.getenv("ENVIRONMENT", "production") == "production"
+
+app = FastAPI(
+    title="Aegis Threat Intelligence API",
+    version="1.0.0",
+    docs_url=None if _is_production else "/docs",
+    redoc_url=None if _is_production else "/redoc",
+    openapi_url=None if _is_production else "/openapi.json",
+)
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # ── Rate limit helpers ────────────────────────────────────────────────────────
@@ -215,12 +223,21 @@ async def root():
                 <h1>Aegis Threat Intelligence</h1>
                 <p>O painel visual ainda não possui dados porque o banco está vazio neste servidor.</p>
                 <p>Para gerar o relatório HTML, você precisa executar o <b>pipeline de coleta de ameaças</b> através do painel interativo da API.</p>
-                <a href="/docs">Acessar Painel da API (/docs)</a>
+                <a href="/report">Ver Relatório de Ameaças</a>
             </div>
         </body>
     </html>
     """
     return HTMLResponse(content=html_content)
+
+
+# ── Security: honeypot endpoints to mislead automated scanners ────────────────
+
+@app.get("/api/docs-disabled")
+@app.get("/swagger")
+@app.get("/swagger-ui")
+async def docs_honeypot():
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 # ── New endpoints ─────────────────────────────────────────────────────────────
