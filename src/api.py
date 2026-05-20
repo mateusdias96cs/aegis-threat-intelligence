@@ -1,8 +1,9 @@
 import hmac
 import os
+import uuid
 import sentry_sdk
 from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
@@ -377,3 +378,150 @@ async def lookup_batch(body: BatchLookupRequest):
         db.close()
 
     return {"total": len(results), "results": results}
+
+
+# ── TAXII 2.1 ─────────────────────────────────────────────────────────────────
+# Discovery:   GET /taxii/                                    — public
+# Collections: GET /taxii/collections/                        — requires API Key
+# Objects:     GET /taxii/collections/{collection_id}/objects/ — requires API Key
+
+_TAXII_MEDIA_TYPE = "application/taxii+json;version=2.1"
+
+_TAXII_COLLECTIONS = {
+    "all": {
+        "id": "all",
+        "title": "All IOCs",
+        "description": "All threat indicators regardless of severity",
+        "can_read": True,
+        "can_write": False,
+        "media_types": [_TAXII_MEDIA_TYPE],
+    },
+    "critical": {
+        "id": "critical",
+        "title": "Critical IOCs",
+        "description": "Critical severity threat indicators",
+        "can_read": True,
+        "can_write": False,
+        "media_types": [_TAXII_MEDIA_TYPE],
+    },
+    "high": {
+        "id": "high",
+        "title": "High IOCs",
+        "description": "High severity threat indicators",
+        "can_read": True,
+        "can_write": False,
+        "media_types": [_TAXII_MEDIA_TYPE],
+    },
+    "medium": {
+        "id": "medium",
+        "title": "Medium IOCs",
+        "description": "Medium severity threat indicators",
+        "can_read": True,
+        "can_write": False,
+        "media_types": [_TAXII_MEDIA_TYPE],
+    },
+}
+
+_STIX_PATTERNS: dict = {
+    "ip":     lambda v: f"[ipv4-addr:value = '{v}']",
+    "domain": lambda v: f"[domain-name:value = '{v}']",
+    "url":    lambda v: f"[url:value = '{v}']",
+    "hash":   lambda v: f"[file:hashes.MD5 = '{v}']",
+    "cve":    lambda v: f"[vulnerability:name = '{v}']",
+}
+
+
+def _to_stix_timestamp(ts: str | None) -> str:
+    """Normalise a possibly-bare date/datetime string to RFC 3339 with Z suffix."""
+    if not ts:
+        return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    ts = str(ts).strip()
+    if "T" not in ts:
+        return ts[:10] + "T00:00:00Z"
+    if not ts.endswith("Z") and "+" not in ts:
+        return ts[:19] + "Z"
+    return ts
+
+
+def _ioc_to_stix(ioc: dict) -> dict:
+    ioc_type  = (ioc.get("type") or "").lower()
+    value     = ioc.get("value", "")
+    severity  = (ioc.get("severity") or "unknown").lower()
+    source    = (ioc.get("source") or "aegis").lower()
+    timestamp = _to_stix_timestamp(ioc.get("first_seen"))
+    tactic    = ioc.get("mitre_tactic")
+
+    pattern_fn = _STIX_PATTERNS.get(ioc_type, lambda v: f"[x-unknown:value = '{v}']")
+
+    # uuid5 with NAMESPACE_DNS → deterministic: same IOC value always yields the same STIX ID
+    stix_id = f"indicator--{uuid.uuid5(uuid.NAMESPACE_DNS, value)}"
+
+    obj: dict = {
+        "type":         "indicator",
+        "spec_version": "2.1",
+        "id":           stix_id,
+        "created":      timestamp,
+        "modified":     timestamp,
+        "name":         value,
+        "pattern":      pattern_fn(value),
+        "pattern_type": "stix",
+        "valid_from":   timestamp,
+        "labels":       [severity, source],
+    }
+
+    if tactic:
+        obj["kill_chain_phases"] = [
+            {"kill_chain_name": "mitre-attack", "phase_name": tactic.lower()}
+        ]
+
+    return obj
+
+
+@app.get("/taxii/")
+async def taxii_discovery():
+    return JSONResponse(
+        content={
+            "title":       "Aegis Threat Intelligence TAXII Server",
+            "description": "TAXII 2.1 feed exposing STIX 2.1 Indicator objects",
+            "contact":     "aegis-threat-intel",
+            "default":     "/taxii/",
+            "api_roots":   ["/taxii/"],
+        },
+        media_type=_TAXII_MEDIA_TYPE,
+    )
+
+
+@app.get("/taxii/collections/", dependencies=[Depends(_require_api_key)])
+async def taxii_collections():
+    return JSONResponse(
+        content={"collections": list(_TAXII_COLLECTIONS.values())},
+        media_type=_TAXII_MEDIA_TYPE,
+    )
+
+
+@app.get("/taxii/collections/{collection_id}/objects/", dependencies=[Depends(_require_api_key)])
+async def taxii_collection_objects(collection_id: str, limit: int = 100):
+    if collection_id not in _TAXII_COLLECTIONS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Collection '{collection_id}' not found. Valid: {list(_TAXII_COLLECTIONS)}",
+        )
+
+    limit = min(limit, 500)
+
+    db = DatabaseManager()
+    try:
+        raw = db.get_all_iocs() if collection_id == "all" else db.get_iocs_by_severity(collection_id.upper())
+    finally:
+        db.close()
+
+    bundle_id = f"bundle--{uuid.uuid5(uuid.NAMESPACE_DNS, f'aegis-{collection_id}')}"
+
+    return JSONResponse(
+        content={
+            "type":    "bundle",
+            "id":      bundle_id,
+            "objects": [_ioc_to_stix(ioc) for ioc in raw[:limit]],
+        },
+        media_type=_TAXII_MEDIA_TYPE,
+    )
