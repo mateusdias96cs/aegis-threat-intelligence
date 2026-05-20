@@ -1,7 +1,9 @@
+import hmac
 import os
 import sentry_sdk
-from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from datetime import datetime, timezone
@@ -66,6 +68,27 @@ def _is_ip(value: str) -> bool:
         return all(0 <= int(p) <= 255 for p in parts)
     except ValueError:
         return False
+
+
+# ── API Key authentication ────────────────────────────────────────────────────
+# Protected:  POST /api/pipeline/run, GET /api/iocs, POST /api/lookup/batch,
+#             GET /api/stats, GET /api/stats/trends, GET /api/alerts/latest
+# Public:     GET /health, GET /, GET /report, GET /api/lookup/{value}
+
+_api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
+
+
+def _require_api_key(api_key: str | None = Depends(_api_key_header)) -> None:
+    configured = os.getenv("AEGIS_API_KEY", "")
+    if not configured:
+        raise HTTPException(status_code=500, detail="AEGIS_API_KEY not configured on server.")
+    # hmac.compare_digest prevents timing attacks
+    if not api_key or not hmac.compare_digest(api_key.encode(), configured.encode()):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key. Send it in the X-API-Key header.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
 
 
 # ── Request body schemas ──────────────────────────────────────────────────────
@@ -134,7 +157,7 @@ async def health_check():
     return health
 
 
-@app.get("/api/iocs")
+@app.get("/api/iocs", dependencies=[Depends(_require_api_key)])
 async def get_all_iocs():
     db = DatabaseManager()
     try:
@@ -154,7 +177,7 @@ async def get_iocs_by_severity(severity: str):
         db.close()
 
 
-@app.get("/api/stats")
+@app.get("/api/stats", dependencies=[Depends(_require_api_key)])
 async def get_stats():
     db = DatabaseManager()
     try:
@@ -164,7 +187,7 @@ async def get_stats():
         db.close()
 
 
-@app.get("/api/stats/trends")
+@app.get("/api/stats/trends", dependencies=[Depends(_require_api_key)])
 async def get_trends(days: int = 30):
     """
     Returns IOC counts grouped by day for the last N days.
@@ -184,7 +207,7 @@ async def get_trends(days: int = 30):
         db.close()
 
 
-@app.post("/api/pipeline/run")
+@app.post("/api/pipeline/run", dependencies=[Depends(_require_api_key)])
 async def run_pipeline(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_pipeline_task)
     return {
@@ -298,7 +321,7 @@ async def lookup_ioc(value: str, request: Request):
     raise HTTPException(status_code=404, detail=f"IOC '{value}' not found in database.")
 
 
-@app.get("/api/alerts/latest")
+@app.get("/api/alerts/latest", dependencies=[Depends(_require_api_key)])
 async def get_latest_alerts(hours: int = 24):
     """
     Returns the most recent **CRITICAL** IOCs added within the last N hours.
@@ -323,7 +346,7 @@ async def get_latest_alerts(hours: int = 24):
     }
 
 
-@app.post("/api/lookup/batch")
+@app.post("/api/lookup/batch", dependencies=[Depends(_require_api_key)])
 async def lookup_batch(body: BatchLookupRequest):
     """
     Look up up to **10 IOC values** at once against the local database.
