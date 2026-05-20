@@ -92,6 +92,35 @@ def _require_api_key(api_key: str | None = Depends(_api_key_header)) -> None:
         )
 
 
+def _require_read_key(api_key: str | None = Depends(_api_key_header)) -> None:
+    """Accepts AEGIS_PUBLIC_KEY (dashboard read-only) or AEGIS_API_KEY (admin)."""
+    admin_key  = os.getenv("AEGIS_API_KEY", "")
+    public_key = os.getenv("AEGIS_PUBLIC_KEY", "")
+    if not admin_key:
+        raise HTTPException(status_code=500, detail="AEGIS_API_KEY not configured on server.")
+    if not api_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key. Send it in the X-API-Key header.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+    admin_ok  = hmac.compare_digest(api_key.encode(), admin_key.encode())
+    public_ok = bool(public_key) and hmac.compare_digest(api_key.encode(), public_key.encode())
+    if not admin_ok and not public_ok:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or missing API key. Send it in the X-API-Key header.",
+            headers={"WWW-Authenticate": "ApiKey"},
+        )
+
+
+def _inject_public_key(html: str) -> str:
+    """Replaces the placeholder comment with a JS variable for the public read-only API key."""
+    key    = os.getenv("AEGIS_PUBLIC_KEY", "")
+    script = f'<script>window.AEGIS_PUBLIC_KEY = "{key}";</script>'
+    return html.replace("<!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->", script, 1)
+
+
 # ── Request body schemas ──────────────────────────────────────────────────────
 
 class BatchLookupRequest(BaseModel):
@@ -158,12 +187,19 @@ async def health_check():
     return health
 
 
-@app.get("/api/iocs", dependencies=[Depends(_require_api_key)])
-async def get_all_iocs():
+@app.get("/api/iocs", dependencies=[Depends(_require_read_key)])
+async def get_all_iocs(
+    page: int = 1,
+    limit: int = 50,
+    severity: str | None = None,
+    type: str | None = None,
+    search: str | None = None,
+):
     db = DatabaseManager()
     try:
-        iocs = db.get_all_iocs()
-        return {"total": len(iocs), "iocs": iocs}
+        return db.get_iocs_paginated(
+            page=page, limit=limit, severity=severity, ioc_type=type, search=search
+        )
     finally:
         db.close()
 
@@ -221,14 +257,15 @@ async def run_pipeline(background_tasks: BackgroundTasks):
 async def get_report():
     report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
     if report_path.exists():
-        return FileResponse(report_path, media_type="text/html")
+        html = report_path.read_text(encoding="utf-8")
+        return HTMLResponse(content=_inject_public_key(html))
     db = DatabaseManager()
     try:
         html = db.get_latest_report()
     finally:
         db.close()
     if html:
-        return HTMLResponse(content=html)
+        return HTMLResponse(content=_inject_public_key(html))
     return {"error": "Report not generated yet. Run /api/pipeline/run first"}
 
 
@@ -236,7 +273,8 @@ async def get_report():
 async def root():
     report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
     if report_path.exists():
-        return FileResponse(report_path, media_type="text/html")
+        html = report_path.read_text(encoding="utf-8")
+        return HTMLResponse(content=_inject_public_key(html))
 
     db = DatabaseManager()
     try:
@@ -244,7 +282,7 @@ async def root():
     finally:
         db.close()
     if html:
-        return HTMLResponse(content=html)
+        return HTMLResponse(content=_inject_public_key(html))
 
     html_content = """
     <html>

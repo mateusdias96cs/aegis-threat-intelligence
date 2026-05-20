@@ -338,6 +338,7 @@
     .chart-container { height:200px; margin-bottom:20px; background:#0f0f0f; border:1px solid #1e1e1e; border-radius:8px; padding:16px; }
     .chart-container.hidden { display:none; }
   </style>
+  <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
@@ -486,27 +487,9 @@
           <option value="cve">CVE</option>
         </select>
       </div>
-      <div class="filter">
-        <span>Country</span>
-        <select id="countryFilter" onchange="applyFilters()">
-          <option value="">All Countries</option>
-        </select>
-      </div>
-      <div class="filter">
-        <span>Min Score</span>
-        <input type="number" id="abuseScoreMin" min="0" max="100" placeholder="0" oninput="applyFilters()" />
-      </div>
-      <div class="filter">
-        <span>From</span>
-        <input type="date" id="dateFrom" onchange="applyFilters()" />
-      </div>
-      <div class="filter">
-        <span>To</span>
-        <input type="date" id="dateTo" onchange="applyFilters()" />
-      </div>
       <div id="rel-filter-label" class="filter" style="display:none">
         <span>Relevance</span>
-        <select id="relevanceFilter" onchange="applyFilters()" style="display:none">
+        <select id="relevanceFilter" onchange="applyRelevanceFilter()" style="display:none">
           <option value="">All IOCs</option>
           <option value="relevant">Relevant only</option>
           <option value="monitor">Monitor</option>
@@ -515,10 +498,9 @@
       </div>
       <div class="filter">
         <span>Rows</span>
-        <select id="pageSizeSelect" onchange="renderPage(1)">
-          <option value="15" selected>15</option>
+        <select id="pageSizeSelect" onchange="fetchPage(1)">
           <option value="25">25</option>
-          <option value="50">50</option>
+          <option value="50" selected>50</option>
           <option value="100">100</option>
           <option value="200">200</option>
         </select>
@@ -558,31 +540,12 @@
             <th>MITRE Tactic</th>
           </tr>
         </thead>
-        <tbody>
-          {% for ioc in iocs %}
-          <tr data-severity="{{ ioc.severity | upper }}"
-              data-type="{{ ioc.type | lower }}"
-              data-first-seen="{{ ioc.first_seen or '' }}"
-              data-last-seen="{{ ioc.last_seen or '' }}"
-              data-country="{{ ioc.country or '' }}"
-              data-mitre="{{ ioc.mitre_tactic or '' }}"
-              data-mitre-id="{{ ioc.mitre_technique_id or '' }}"
-              data-description="{{ ioc.description or '' }}">
-            <td class="cb-col"><input type="checkbox" class="row-cb" data-value="{{ ioc.value }}" /></td>
-            <td class="rel-col"></td>
-            <td><span class="type-pill type-pill-{{ ioc.type | lower }}">{{ ioc.type }}</span></td>
-            <td class="value-cell" title="{{ ioc.value }}">{{ ioc.value }}</td>
-            <td class="dim-cell">{{ ioc.source }}</td>
-            <td><span class="badge badge-{{ ioc.severity | upper }}">{{ ioc.severity }}</span></td>
-            <td class="dim-cell">{{ ioc.country if ioc.country else '—' }}</td>
-            <td class="dim-cell">{{ ioc.abuse_score if ioc.abuse_score is not none else '—' }}</td>
-            <td class="value-cell" style="font-size:11px">{{ ioc.first_seen if ioc.first_seen else '—' }}</td>
-            <td class="dim-cell" title="{{ ioc.description }}">{{ ioc.description if ioc.description else '—' }}</td>
-            <td>{% if ioc.mitre_technique_id %}<a href="https://attack.mitre.org/techniques/{{ ioc.mitre_technique_id }}/" target="_blank" class="tactic-link">{{ ioc.mitre_tactic }}</a>{% else %}<span style="color:var(--text-tertiary)">—</span>{% endif %}</td>
+        <tbody id="ioc-tbody">
+          <tr id="ioc-spinner-row">
+            <td colspan="11" style="text-align:center;padding:40px;color:var(--text-secondary)">
+              Loading IOCs…
+            </td>
           </tr>
-          {% else %}
-          <tr><td colspan="11" class="empty">No IOCs found.</td></tr>
-          {% endfor %}
         </tbody>
       </table>
     </div>
@@ -590,9 +553,9 @@
     <div class="pag">
       <div class="pag-left"></div>
       <div class="pag-center">
-        <button id="btn-prev" class="pbtn" onclick="renderPage(currentPage - 1)" disabled>&#8592; Prev</button>
+        <button id="btn-prev" class="pbtn" onclick="fetchPage(currentPage - 1)" disabled>&#8592; Prev</button>
         <span class="page-info" id="ioc-page-info">Page 1 of 1</span>
-        <button id="btn-next" class="pbtn" onclick="renderPage(currentPage + 1)" disabled>Next &#8594;</button>
+        <button id="btn-next" class="pbtn" onclick="fetchPage(currentPage + 1)" disabled>Next &#8594;</button>
       </div>
       <div class="pag-right">
         <div class="rpp">
@@ -932,7 +895,7 @@
     /* Switch to Dashboard tab */
     switchTab('ioc');
 
-    renderPage(1);
+    fetchPage(1);
   }
 
   function showProfilingActiveState() {
@@ -975,11 +938,10 @@
     document.getElementById('customAssetsInput').value = '';
     updateProfilingCounter();
 
-    /* Clear relevance tags on all rows and cache */
-    allIocRows.forEach(function(row, i) {
+    /* Clear relevance tags on current page rows */
+    Array.from(document.querySelectorAll('#ioc-tbody tr[data-severity]')).forEach(function(row) {
       row.dataset.relevance = '';
-      rowData[i].relevance  = '';
-      row.cells[1].innerHTML = '';
+      if (row.cells[1]) row.cells[1].innerHTML = '';
     });
 
     /* Hide relevance column */
@@ -999,7 +961,7 @@
     document.getElementById('profiling-state-form').style.display   = '';
 
     switchTab('profiling');
-    renderPage(1);
+    fetchPage(currentPage);
   }
 
   function computeRelevance(d) {
@@ -1040,11 +1002,21 @@
   }
 
   function applyRelevanceTags() {
-    allIocRows.forEach(function(row, i) {
-      var rel = computeRelevance(rowData[i]);
-      rowData[i].relevance = rel;
+    var rows = Array.from(document.querySelectorAll('#ioc-tbody tr[data-severity]'));
+    rows.forEach(function(row, i) {
+      var ioc = currentIocData[i];
+      if (!ioc) return;
+      var d = {
+        description: ioc.description || '',
+        value:       ioc.value       || '',
+        type:        ioc.type        || '',
+        mitre:       ioc.mitre_tactic        || '',
+        mitreId:     ioc.mitre_technique_id  || '',
+      };
+      var rel = computeRelevance(d);
       row.dataset.relevance = rel;
       var cell = row.cells[1];
+      if (!cell) return;
       if (rel === 'relevant') {
         cell.innerHTML = '<span class="badge badge-RELEVANT">Relevant</span>';
       } else if (rel === 'monitor') {
@@ -1075,20 +1047,7 @@
     document.getElementById('btn-mitre').classList.toggle('active',     tab === 'mitre');
   }
 
-  /* ── Populate IOC country filter ── */
-  (function() {
-    var seen = {};
-    document.querySelectorAll('#ioc-table tbody tr[data-country]').forEach(function(row) {
-      var c = row.dataset.country;
-      if (c && c !== '—') seen[c] = true;
-    });
-    var sel = document.getElementById('countryFilter');
-    Object.keys(seen).sort().forEach(function(c) {
-      var o = document.createElement('option');
-      o.value = c; o.textContent = c;
-      sel.appendChild(o);
-    });
-  })();
+  /* Country filter removed — rows are now loaded dynamically via API */
 
   /* ── Build MITRE table from embedded JSON ── */
   var allMitreRows = [];
@@ -1167,130 +1126,203 @@
     allMitreRows = Array.from(tbody.querySelectorAll('tr'));
   })();
 
-  /* ── IOC tab: pagination + sort state ── */
-  var allIocRows = Array.from(document.querySelectorAll('#ioc-table tbody tr[data-severity]'));
-  var currentPage = 1;
+  /* ── IOC tab: server-side pagination state ── */
+  var currentPage    = 1;
+  var currentIocData = [];
+  var iocPagesMeta   = { total: 0, pages: 1, limit: 50 };
+  var selectedIocs   = new Set();
+  var selectedIocData = new Map(); /* value → ioc object, for CSV export */
 
-  /* ── Row data cache (built once; avoids DOM reads during filter/sort) ── */
-  var rowData = allIocRows.map(function(row) {
-    var cb       = row.querySelector('.row-cb');
-    var scoreRaw = row.cells[7].textContent.trim();
-    var fullVal  = row.cells[3].title || cb.dataset.value || '';
-    var src      = row.cells[4].textContent.trim();
-    var d = {
-      value:       fullVal,
-      type:        row.dataset.type        || '',
-      source:      src,
-      severity:    row.dataset.severity    || '',
-      country:     row.dataset.country     || '',
-      score:       (scoreRaw === '—' || scoreRaw === '') ? NaN : parseFloat(scoreRaw),
-      firstSeen:   row.dataset.firstSeen   || '',
-      lastSeen:    row.dataset.lastSeen    || '',
-      description: row.dataset.description || '',
-      mitre:       row.dataset.mitre       || '',
-      mitreId:     row.dataset.mitreId     || '',
-      relevance:   '',
-    };
-    d.searchText = [
-      d.value, d.type, d.source, d.severity, d.country,
-      isNaN(d.score) ? '' : String(d.score),
-      d.firstSeen, d.description, d.mitre, d.mitreId,
-    ].join(' ').toLowerCase();
-    return d;
-  });
+  /* ── Spinner ── */
+  function showIocSpinner() {
+    var row = document.getElementById('ioc-spinner-row');
+    if (row) row.style.display = '';
+  }
+  function hideIocSpinner() {
+    var row = document.getElementById('ioc-spinner-row');
+    if (row) row.style.display = 'none';
+  }
 
-  /* O(1) row→index lookup for sort comparisons */
-  var rowIndex = new Map();
-  allIocRows.forEach(function(row, i) { rowIndex.set(row, i); });
+  /* ── Fetch a page from the API ── */
+  var _fetchTimer = null;
+  function fetchPage(page) {
+    currentPage = Math.max(1, page);
+    var limit   = parseInt(document.getElementById('pageSizeSelect').value, 10) || 50;
+    var sev     = document.getElementById('filter-severity').value;
+    var tp      = document.getElementById('filter-type').value;
+    var srch    = document.getElementById('searchInput').value.trim();
 
-  /* ── Selection state ── */
-  var selectedIocs = new Set();
+    var params = new URLSearchParams({ page: currentPage, limit: limit });
+    if (sev)  params.set('severity', sev);
+    if (tp)   params.set('type',     tp);
+    if (srch) params.set('search',   srch);
 
-  /* ── Wire up header checkbox ── */
-  document.getElementById('header-checkbox').addEventListener('change', function() {
-    togglePageAll(this.checked);
-  });
+    showIocSpinner();
+    document.getElementById('btn-prev').disabled = true;
+    document.getElementById('btn-next').disabled = true;
 
-  /* ── Wire up row checkboxes ── */
-  allIocRows.forEach(function(row) {
-    var cb = row.querySelector('.row-cb');
-    cb.addEventListener('change', function() {
-      var val = cb.dataset.value;
-      if (cb.checked) {
-        selectedIocs.add(val);
-        row.classList.add('row-selected');
-      } else {
-        selectedIocs.delete(val);
-        row.classList.remove('row-selected');
-      }
+    fetch('/api/iocs?' + params.toString(), {
+      headers: { 'X-API-Key': window.AEGIS_PUBLIC_KEY || '' }
+    })
+    .then(function(r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(function(data) {
+      currentIocData = data.iocs || [];
+      iocPagesMeta   = { total: data.total, pages: data.pages, limit: data.limit };
+      currentPage    = data.page;
+      hideIocSpinner();
+      renderIocRows(currentIocData);
+      updateIocPagination(data.page, data.pages, data.total, data.limit);
+    })
+    .catch(function(err) {
+      hideIocSpinner();
+      var tbody = document.getElementById('ioc-tbody');
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">Error loading IOCs: ' + escHtml(String(err)) + '</td></tr>';
+      document.getElementById('ioc-counter').textContent = '';
+    });
+  }
+
+  /* ── Render rows from API JSON ── */
+  function renderIocRows(iocs) {
+    var tbody = document.getElementById('ioc-tbody');
+    tbody.innerHTML = '';
+
+    if (!iocs || iocs.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="11" class="empty">No IOCs match the current filters.</td></tr>';
       updateHeaderCheckbox();
       updateSelectionBar();
-    });
-  });
+      return;
+    }
 
-  /* Current visible page rows — updated by renderPage */
-  var currentPageRows = [];
+    iocs.forEach(function(ioc) {
+      var sev    = (ioc.severity || 'LOW').toUpperCase();
+      var type   = (ioc.type    || '').toLowerCase();
+      var val    = ioc.value || '';
+      var disp   = (type === 'hash' && val.length > 12) ? val.substring(0, 12) + '…' : val;
+      var country = ioc.country || '—';
+      var score   = ioc.abuse_score != null ? ioc.abuse_score : '—';
+      var fseen   = ioc.first_seen  || '—';
+      var desc    = ioc.description || '—';
+      var mitreId = ioc.mitre_technique_id || '';
+      var mitreTac = ioc.mitre_tactic || '';
 
-  function togglePageAll(checked) {
-    currentPageRows.forEach(function(row) {
-      var cb  = row.querySelector('.row-cb');
-      var val = cb.dataset.value;
-      cb.checked = checked;
-      if (checked) {
-        selectedIocs.add(val);
-        row.classList.add('row-selected');
-      } else {
-        selectedIocs.delete(val);
-        row.classList.remove('row-selected');
-      }
+      var mitreCell = mitreId
+        ? '<a href="https://attack.mitre.org/techniques/' + escHtml(mitreId) + '/" target="_blank" class="tactic-link">' + escHtml(mitreTac || mitreId) + '</a>'
+        : '<span style="color:var(--text-tertiary)">—</span>';
+
+      var tr = document.createElement('tr');
+      tr.dataset.severity = sev;
+      tr.dataset.type     = type;
+      if (selectedIocs.has(val)) tr.classList.add('row-selected');
+
+      tr.innerHTML =
+        '<td class="cb-col"><input type="checkbox" class="row-cb" data-value="' + escHtml(val) + '"' + (selectedIocs.has(val) ? ' checked' : '') + ' /></td>' +
+        '<td class="rel-col"></td>' +
+        '<td><span class="type-pill type-pill-' + escHtml(type) + '">' + escHtml(ioc.type || '') + '</span></td>' +
+        '<td class="value-cell" title="' + escHtml(val) + '">' + escHtml(disp) + '</td>' +
+        '<td class="dim-cell">' + escHtml(ioc.source || '') + '</td>' +
+        '<td><span class="badge badge-' + sev + '">' + escHtml(sev) + '</span></td>' +
+        '<td class="dim-cell">' + escHtml(country) + '</td>' +
+        '<td class="dim-cell">' + escHtml(String(score)) + '</td>' +
+        '<td class="value-cell" style="font-size:11px">' + escHtml(String(fseen)) + '</td>' +
+        '<td class="dim-cell" title="' + escHtml(desc) + '">' + escHtml(desc) + '</td>' +
+        '<td>' + mitreCell + '</td>';
+
+      (function(ioc, tr) {
+        var cb = tr.querySelector('.row-cb');
+        cb.addEventListener('change', function() {
+          if (cb.checked) {
+            selectedIocs.add(ioc.value);
+            selectedIocData.set(ioc.value, ioc);
+            tr.classList.add('row-selected');
+          } else {
+            selectedIocs.delete(ioc.value);
+            selectedIocData.delete(ioc.value);
+            tr.classList.remove('row-selected');
+          }
+          updateHeaderCheckbox();
+          updateSelectionBar();
+        });
+      })(ioc, tr);
+
+      tbody.appendChild(tr);
     });
+
+    /* Apply relevance tags if a profile is active */
+    if (assetProfile && (assetProfile.selected.size > 0 || assetProfile.custom.length > 0)) {
+      applyRelevanceTags();
+    }
+
+    updateHeaderCheckbox();
     updateSelectionBar();
   }
 
-  function updateHeaderCheckbox() {
-    var hcb = document.getElementById('header-checkbox');
-
-    if (currentPageRows.length === 0) {
-      hcb.checked = false;
-      hcb.indeterminate = false;
-      return;
-    }
-    var n = currentPageRows.filter(function(row) {
-      return selectedIocs.has(row.querySelector('.row-cb').dataset.value);
-    }).length;
-
-    if (n === currentPageRows.length) {
-      hcb.checked = true;
-      hcb.indeterminate = false;
-    } else if (n === 0) {
-      hcb.checked = false;
-      hcb.indeterminate = false;
-    } else {
-      hcb.checked = false;
-      hcb.indeterminate = true;
-    }
+  /* ── Pagination UI ── */
+  function updateIocPagination(page, pages, total, limit) {
+    var from  = total === 0 ? 0 : (page - 1) * limit + 1;
+    var to    = Math.min(page * limit, total);
+    var label = total === 0
+      ? 'No IOCs match the current filters'
+      : 'Showing ' + from + '–' + to + ' of ' + total + ' IOCs';
+    document.getElementById('ioc-counter').textContent   = label;
+    document.getElementById('ioc-page-info').textContent = 'Page ' + page + ' of ' + pages;
+    document.getElementById('btn-prev').disabled          = page <= 1;
+    document.getElementById('btn-next').disabled          = page >= pages;
   }
 
+  /* ── Header checkbox ── */
+  function updateHeaderCheckbox() {
+    var hcb  = document.getElementById('header-checkbox');
+    var rows = Array.from(document.querySelectorAll('#ioc-tbody tr[data-severity]'));
+    if (rows.length === 0) { hcb.checked = false; hcb.indeterminate = false; return; }
+    var n = rows.filter(function(r) {
+      var cb = r.querySelector('.row-cb');
+      return cb && selectedIocs.has(cb.dataset.value);
+    }).length;
+    if (n === rows.length) { hcb.checked = true;  hcb.indeterminate = false; }
+    else if (n === 0)      { hcb.checked = false; hcb.indeterminate = false; }
+    else                   { hcb.checked = false; hcb.indeterminate = true;  }
+  }
+
+  document.getElementById('header-checkbox').addEventListener('change', function() {
+    var checked = this.checked;
+    Array.from(document.querySelectorAll('#ioc-tbody .row-cb')).forEach(function(cb) {
+      var tr  = cb.closest('tr');
+      var val = cb.dataset.value;
+      var ioc = currentIocData.find(function(d) { return d.value === val; });
+      cb.checked = checked;
+      if (checked) {
+        selectedIocs.add(val);
+        if (ioc) selectedIocData.set(val, ioc);
+        if (tr) tr.classList.add('row-selected');
+      } else {
+        selectedIocs.delete(val);
+        selectedIocData.delete(val);
+        if (tr) tr.classList.remove('row-selected');
+      }
+    });
+    updateSelectionBar();
+  });
+
+  /* ── Selection bar ── */
   function updateSelectionBar() {
     var bar = document.getElementById('selection-bar');
     var n   = selectedIocs.size;
-    if (n === 0) {
-      bar.style.display = 'none';
-      return;
-    }
+    if (n === 0) { bar.style.display = 'none'; return; }
     bar.style.display = 'flex';
     document.getElementById('sel-count-label').textContent =
       n + ' IOC' + (n !== 1 ? 's' : '') + ' selected';
-    document.getElementById('sel-all-count').textContent = getFilteredRows().length;
+    document.getElementById('sel-all-count').textContent = iocPagesMeta.total;
   }
 
   function selectAllFiltered() {
-    var filtered = getFilteredRows();
-    filtered.forEach(function(row) {
-      var cb  = row.querySelector('.row-cb');
-      selectedIocs.add(cb.dataset.value);
+    Array.from(document.querySelectorAll('#ioc-tbody .row-cb')).forEach(function(cb) {
+      var tr  = cb.closest('tr');
+      var val = cb.dataset.value;
+      var ioc = currentIocData.find(function(d) { return d.value === val; });
       cb.checked = true;
-      row.classList.add('row-selected');
+      selectedIocs.add(val);
+      if (ioc) selectedIocData.set(val, ioc);
+      if (tr) tr.classList.add('row-selected');
     });
     updateHeaderCheckbox();
     updateSelectionBar();
@@ -1298,111 +1330,49 @@
 
   function clearSelection() {
     selectedIocs.clear();
-    allIocRows.forEach(function(row) {
-      row.classList.remove('row-selected');
-      row.querySelector('.row-cb').checked = false;
+    selectedIocData.clear();
+    Array.from(document.querySelectorAll('#ioc-tbody .row-cb')).forEach(function(cb) {
+      var tr = cb.closest('tr');
+      cb.checked = false;
+      if (tr) tr.classList.remove('row-selected');
     });
     var hcb = document.getElementById('header-checkbox');
-    hcb.checked = false;
-    hcb.indeterminate = false;
+    hcb.checked = false; hcb.indeterminate = false;
     updateSelectionBar();
   }
 
-  /* ── Truncate hash values in VALUE column
-     Column layout: 0=cb, 1=rel, 2=type, 3=value, 4=source, 5=severity,
-                    6=country, 7=score, 8=first_seen, 9=description, 10=mitre ── */
-  (function() {
-    allIocRows.forEach(function(row) {
-      if (row.dataset.type !== 'hash') return;
-      var cell = row.cells[3];
-      var full = cell.title;
-      if (!full || full.length <= 12) return;
-      cell.textContent = '';
-      cell.appendChild(document.createTextNode(full.substring(0, 12) + '…'));
-      var hidden = document.createElement('span');
-      hidden.style.cssText = 'display:none;';
-      hidden.textContent = full;
-      cell.appendChild(hidden);
-    });
-  })();
-
-  /* ── NEW badges: IOC tab ── */
-  (function() {
-    var today = new Date().toISOString().slice(0, 10);
-    var todayRows = allIocRows.filter(function(row) {
-      return (row.dataset.firstSeen || '').slice(0, 10) === today;
-    });
-
-    var candidates;
-    if (todayRows.length > 0) {
-      candidates = todayRows.slice().sort(function(a, b) {
-        return (b.dataset.firstSeen || '').localeCompare(a.dataset.firstSeen || '');
-      }).slice(0, 20);
-    } else {
-      candidates = allIocRows.slice().sort(function(a, b) {
-        return (b.dataset.firstSeen || '').localeCompare(a.dataset.firstSeen || '');
-      }).slice(0, 20);
-    }
-
-    candidates.forEach(function(row) {
-      var badge = document.createElement('span');
-      badge.className = 'badge-new';
-      badge.textContent = 'NEW';
-      row.cells[3].appendChild(badge);
-    });
-  })();
-
+  /* ── Sort (client-side within current page) ── */
   var sortCol = null;
   var sortDir = 'asc';
-
   var SEVERITY_RANK = { LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 
-  function sortRows(rows) {
-    if (!sortCol) return rows;
-    return rows.slice().sort(function(a, b) {
-      var da  = rowData[rowIndex.get(a)];
-      var db  = rowData[rowIndex.get(b)];
+  function clickSort(col) {
+    if (sortCol === col) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+    else { sortCol = col; sortDir = 'asc'; }
+    updateSortHeaders();
+    var sorted = currentIocData.slice().sort(function(a, b) {
       var av, bv, cmp;
-
-      if (sortCol === 'severity') {
-        av = SEVERITY_RANK[da.severity] !== undefined ? SEVERITY_RANK[da.severity] : -1;
-        bv = SEVERITY_RANK[db.severity] !== undefined ? SEVERITY_RANK[db.severity] : -1;
+      if (col === 'severity') {
+        av = SEVERITY_RANK[(a.severity || 'LOW').toUpperCase()]; av = av !== undefined ? av : -1;
+        bv = SEVERITY_RANK[(b.severity || 'LOW').toUpperCase()]; bv = bv !== undefined ? bv : -1;
         return sortDir === 'asc' ? av - bv : bv - av;
       }
-
-      if (sortCol === 'score') {
-        av = isNaN(da.score) ? -1 : da.score;
-        bv = isNaN(db.score) ? -1 : db.score;
+      if (col === 'score') {
+        av = a.abuse_score != null ? a.abuse_score : -1;
+        bv = b.abuse_score != null ? b.abuse_score : -1;
         return sortDir === 'asc' ? av - bv : bv - av;
       }
-
-      if (sortCol === 'firstseen') {
-        cmp = da.firstSeen.localeCompare(db.firstSeen);
+      if (col === 'firstseen') {
+        cmp = (a.first_seen || '').localeCompare(b.first_seen || '');
         return sortDir === 'asc' ? cmp : -cmp;
       }
-
-      if (sortCol === 'value') {
-        cmp = da.value.toLowerCase().localeCompare(db.value.toLowerCase());
-        return sortDir === 'asc' ? cmp : -cmp;
-      }
-
-      var field = { type: 'type', source: 'source', country: 'country' }[sortCol];
-      av = (da[field] || '').toLowerCase();
-      bv = (db[field] || '').toLowerCase();
+      var fieldMap = { type: 'type', source: 'source', country: 'country', value: 'value' };
+      av = ((a[fieldMap[col]] || '')).toLowerCase();
+      bv = ((b[fieldMap[col]] || '')).toLowerCase();
       cmp = av.localeCompare(bv);
       return sortDir === 'asc' ? cmp : -cmp;
     });
-  }
-
-  function clickSort(col) {
-    if (sortCol === col) {
-      sortDir = sortDir === 'asc' ? 'desc' : 'asc';
-    } else {
-      sortCol = col;
-      sortDir = 'asc';
-    }
-    updateSortHeaders();
-    renderPage(1);
+    renderIocRows(sorted);
   }
 
   function updateSortHeaders() {
@@ -1419,104 +1389,33 @@
     }
   }
 
-  function getFilteredRows() {
-    var severity    = document.getElementById('filter-severity').value;
-    var type        = document.getElementById('filter-type').value;
-    var term        = document.getElementById('searchInput').value.toLowerCase().trim();
-    var country     = document.getElementById('countryFilter').value;
-    var minScoreRaw = document.getElementById('abuseScoreMin').value;
-    var minScore    = minScoreRaw !== '' && Number(minScoreRaw) > 0 ? Number(minScoreRaw) : null;
-    var fromVal     = document.getElementById('dateFrom').value;
-    var toVal       = document.getElementById('dateTo').value;
-    var fromDate    = fromVal ? new Date(fromVal) : null;
-    var toDate      = toVal   ? new Date(toVal)   : null;
-    var relFilter   = document.getElementById('relevanceFilter').value;
-
-    var result = [];
-    for (var i = 0; i < rowData.length; i++) {
-      var d = rowData[i];
-
-      if (severity && d.severity !== severity) continue;
-      if (type     && d.type     !== type)     continue;
-      if (country  && d.country  !== country)  continue;
-
-      if (relFilter) {
-        var rel = d.relevance;
-        if (relFilter === 'untagged' ? rel : rel !== relFilter) continue;
-      }
-
-      if (minScore !== null && (isNaN(d.score) || d.score < minScore)) continue;
-
-      if (fromDate || toDate) {
-        if (!d.firstSeen) continue;
-        var dt = new Date(d.firstSeen.substring(0, 10));
-        if (fromDate && dt < fromDate) continue;
-        if (toDate   && dt > toDate)   continue;
-      }
-
-      if (term && !d.searchText.includes(term)) continue;
-
-      result.push(allIocRows[i]);
-    }
-    return result;
+  /* ── Filters: server-side (severity, type, search) with 300 ms debounce ── */
+  var _filterTimer = null;
+  function applyFilters() {
+    clearTimeout(_filterTimer);
+    _filterTimer = setTimeout(function() { fetchPage(1); }, 300);
   }
 
-  function renderPage(page) {
-    var pageSize   = parseInt(document.getElementById('pageSizeSelect').value, 10);
-    var filtered   = sortRows(getFilteredRows());
-    var total      = filtered.length;
-    var totalPages = Math.max(1, Math.ceil(total / pageSize));
-    page = Math.max(1, Math.min(page, totalPages));
-    currentPage = page;
-
-    var start = (page - 1) * pageSize;
-    var end   = start + pageSize;
-
-    allIocRows.forEach(function(row) { row.style.display = 'none'; });
-
-    currentPageRows = filtered.slice(start, end);
-    currentPageRows.forEach(function(row) {
-      row.style.display = '';
-      var cb  = row.querySelector('.row-cb');
-      var val = cb.dataset.value;
-      if (selectedIocs.has(val)) {
-        cb.checked = true;
-        row.classList.add('row-selected');
-      } else {
-        cb.checked = false;
-        row.classList.remove('row-selected');
-      }
+  /* Client-side relevance filter — applies to the current page only ── */
+  function applyRelevanceFilter() {
+    var relFilter = document.getElementById('relevanceFilter').value;
+    Array.from(document.querySelectorAll('#ioc-tbody tr[data-severity]')).forEach(function(row) {
+      var rel = row.dataset.relevance || '';
+      if (!relFilter) { row.style.display = ''; return; }
+      row.style.display = (relFilter === 'untagged' ? !rel : rel === relFilter) ? '' : 'none';
     });
-
-    var from  = total === 0 ? 0 : start + 1;
-    var to    = Math.min(end, total);
-    var label = total === 0
-      ? 'No IOCs match the current filters'
-      : 'Showing ' + from + '–' + to + ' of ' + total
-        + (total < allIocRows.length ? ' filtered' : '') + ' IOCs';
-    document.getElementById('ioc-counter').textContent   = label;
-    document.getElementById('ioc-page-info').textContent = 'Page ' + page + ' of ' + totalPages;
-    document.getElementById('btn-prev').disabled         = page <= 1;
-    document.getElementById('btn-next').disabled         = page >= totalPages;
-
-    updateHeaderCheckbox();
-    updateSelectionBar();
   }
-
-  function applyFilters() { renderPage(1); }
 
   function clearFilters() {
-    ['filter-severity','filter-type','countryFilter'].forEach(function(id) {
+    ['filter-severity', 'filter-type'].forEach(function(id) {
       document.getElementById(id).value = '';
     });
-    ['abuseScoreMin','searchInput','dateFrom','dateTo'].forEach(function(id) {
-      document.getElementById(id).value = '';
-    });
-    /* Keep relevance filter intact — it's profile-driven */
-    applyFilters();
+    document.getElementById('searchInput').value = '';
+    fetchPage(1);
   }
 
-  renderPage(1);
+  /* ── Initial load ── */
+  fetchPage(1);
 
   /* ── MITRE tab: pagination ── */
   function getMitreFilteredRows() {
@@ -1592,38 +1491,49 @@
     if (!q) { emptyEl.style.display = ''; return; }
     emptyEl.style.display = 'none';
 
-    var ql = q.toLowerCase();
-    var matchIdx = -1;
-    var partialIdx = -1;
-    for (var i = 0; i < rowData.length; i++) {
-      var val = rowData[i].value.toLowerCase();
-      if (val === ql)                             { matchIdx = i; break; }
-      if (partialIdx === -1 && val.includes(ql))  { partialIdx = i; }
-    }
+    resultEl.innerHTML = '<div style="color:var(--text-secondary);padding:20px 0">Looking up…</div>';
 
-    var idx = matchIdx !== -1 ? matchIdx : partialIdx;
-    if (idx === -1) {
-      resultEl.innerHTML =
-        '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
-      return;
-    }
-    renderLookupCard(allIocRows[idx], rowData[idx], resultEl);
+    fetch('/api/lookup/' + encodeURIComponent(q))
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        if (!data || (!data.value && !data.found_in_db)) {
+          resultEl.innerHTML = '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
+          return;
+        }
+        var d = {
+          value:       data.value || q,
+          type:        (data.type || '').toLowerCase(),
+          severity:    (data.severity || '').toUpperCase(),
+          country:     data.country || data.live_country || '',
+          score:       data.abuse_score != null ? data.abuse_score
+                        : (data.live_abuse_score != null ? data.live_abuse_score : NaN),
+          firstSeen:   data.first_seen  || '',
+          lastSeen:    data.last_seen   || '',
+          description: data.description || '',
+          mitre:       data.mitre_tactic        || '',
+          mitreId:     data.mitre_technique_id  || '',
+          source:      data.source || '',
+        };
+        renderLookupCard(d, resultEl);
+      })
+      .catch(function() {
+        resultEl.innerHTML = '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
+      });
   }
 
-  function renderLookupCard(row, d, container) {
-    /* Use the rowData cache (d) for all data reads — avoids DOM dependency */
+  function renderLookupCard(d, container) {
     var fullValue = d.value;
     var type      = d.type;
     var severity  = d.severity;
     var country   = d.country;
-    var firstSeen = d.firstSeen.substring(0, 10) || '—';
+    var firstSeen = d.firstSeen ? d.firstSeen.substring(0, 10) : '—';
     var lastSeen  = d.lastSeen  ? d.lastSeen.substring(0, 10) : firstSeen;
     var mitre     = d.mitre;
     var mitreId   = d.mitreId;
     var descr     = d.description;
     var source    = d.source;
     var score     = isNaN(d.score) ? null : d.score;
-    var isNew     = !!row.cells[3].querySelector('.badge-new');
+    var isNew     = false;
 
     var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
     var techName  = techData ? (techData.name || '') : '';
@@ -1740,10 +1650,6 @@
   function exportSelectedSiemCsv() {
     if (!selectedIocs.size) { alert('No rows selected.'); return; }
 
-    var rows = allIocRows.filter(function(row) {
-      return selectedIocs.has(row.querySelector('.row-cb').dataset.value);
-    });
-
     function csvCell(v) {
       var s = String(v === null || v === undefined ? '' : v).trim();
       if (s === '—') s = '';
@@ -1760,35 +1666,28 @@
 
     var lines = [headers.join(',')];
 
-    rows.forEach(function(row) {
-      /* Use rowData cache — avoids DOM reads in loop and handles truncated hash cells */
-      var idx = rowIndex.get(row);
-      var d   = rowData[idx];
-
-      var confidence = isNaN(d.score) ? '' : String(d.score);
-
-      var techData = d.mitreId
-        ? (MITRE_TECHNIQUES[d.mitreId] || null)
-        : null;
-      var techName  = techData ? (techData.name || '') : '';
-      var mitreTech = d.mitreId ? (d.mitreId + (techName ? ' — ' + techName : '')) : '';
-
-      var country    = d.country === '—' ? '' : d.country;
-      var firstSeen  = d.firstSeen.substring(0, 10);
-      var lastSeen   = d.lastSeen ? d.lastSeen.substring(0, 10) : firstSeen;
-      var mitreTactic = d.mitre === '—' ? '' : d.mitre;
+    selectedIocData.forEach(function(ioc) {
+      var confidence = ioc.abuse_score != null ? String(ioc.abuse_score) : '';
+      var mitreId    = ioc.mitre_technique_id || '';
+      var techData   = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
+      var techName   = techData ? (techData.name || '') : '';
+      var mitreTech  = mitreId ? (mitreId + (techName ? ' — ' + techName : '')) : '';
+      var country    = ioc.country   || '';
+      var mitreTac   = ioc.mitre_tactic || '';
+      var firstSeen  = (ioc.first_seen || '').substring(0, 10);
+      var lastSeen   = (ioc.last_seen  || firstSeen).substring(0, 10);
 
       lines.push([
-        csvCell(d.type),
-        csvCell(d.value),
-        csvCell(d.severity),
+        csvCell(ioc.type),
+        csvCell(ioc.value),
+        csvCell(ioc.severity),
         csvCell(confidence),
-        csvCell(d.source),
+        csvCell(ioc.source),
         csvCell(country),
-        csvCell(mitreTactic),
+        csvCell(mitreTac),
         csvCell(mitreTech),
         csvCell(firstSeen),
-        csvCell(lastSeen)
+        csvCell(lastSeen),
       ].join(','));
     });
 

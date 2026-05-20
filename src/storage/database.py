@@ -127,6 +127,67 @@ class DatabaseManager:
         rows = self._session.execute(text("SELECT * FROM iocs")).mappings().all()
         return [dict(row) for row in rows]
 
+    def get_iocs_paginated(
+        self,
+        page: int = 1,
+        limit: int = 50,
+        severity: str | None = None,
+        ioc_type: str | None = None,
+        search: str | None = None,
+    ) -> dict:
+        import math
+        page   = max(1, page)
+        limit  = min(limit, 500)
+        offset = (page - 1) * limit
+
+        conditions: list[str] = []
+        params: dict = {}
+
+        if severity:
+            conditions.append("severity = :severity")
+            params["severity"] = severity.upper()
+        if ioc_type:
+            conditions.append("type = :ioc_type")
+            params["ioc_type"] = ioc_type.lower()
+        if search:
+            # LOWER(x) LIKE :term works on both SQLite and PostgreSQL
+            conditions.append("(LOWER(value) LIKE :search OR LOWER(description) LIKE :search)")
+            params["search"] = f"%{search.lower()}%"
+
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        total = self._session.execute(
+            text(f"SELECT COUNT(*) FROM iocs {where}"), params
+        ).fetchone()[0]
+
+        params["limit"]  = limit
+        params["offset"] = offset
+
+        rows = self._session.execute(
+            text(f"""
+                SELECT * FROM iocs {where}
+                ORDER BY
+                    CASE severity
+                        WHEN 'CRITICAL' THEN 0
+                        WHEN 'HIGH'     THEN 1
+                        WHEN 'MEDIUM'   THEN 2
+                        WHEN 'LOW'      THEN 3
+                        ELSE 4
+                    END,
+                    first_seen DESC
+                LIMIT :limit OFFSET :offset
+            """),
+            params,
+        ).mappings().all()
+
+        return {
+            "total": total,
+            "page":  page,
+            "pages": max(1, math.ceil(total / limit)),
+            "limit": limit,
+            "iocs":  [dict(row) for row in rows],
+        }
+
     def get_existing_values(self) -> set[str]:
         rows = self._session.execute(text("SELECT value FROM iocs")).all()
         return {row[0] for row in rows}
