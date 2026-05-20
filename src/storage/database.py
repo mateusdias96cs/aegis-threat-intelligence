@@ -229,5 +229,15 @@ class DatabaseManager:
             print(f"[database] cleanup_old_iocs failed: {e}")
             return 0
 
+    def get_last_updated(self) -> str | None:
+        try:
+            result = self.conn.execute(
+                "SELECT MAX(first_seen) FROM iocs"
+            ).fetchone()
+            return result[0] if result and result[0] else None
+        except Exception as e:
+            print(f"[db] get_last_updated error: {e}")
+            return None
+
     def close(self):
         self.conn.close()

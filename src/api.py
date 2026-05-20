@@ -4,7 +4,7 @@ from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 from pydantic import BaseModel
 import time
 
@@ -70,7 +70,60 @@ class BatchLookupRequest(BaseModel):
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "message": "API is running"}
+    """
+    Returns detailed health status of the AEGIS platform.
+    Used by Railway for uptime monitoring and by operators
+    for quick system diagnostics.
+    """
+    health = {
+        "status": "healthy",
+        "version": "1.0.0",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "database": {
+            "status": "unknown",
+            "total_iocs": 0,
+            "critical": 0,
+            "high": 0,
+            "medium": 0,
+            "low": 0,
+            "last_updated": None,
+        },
+        "pipeline": {
+            "sources": [
+                "CISA-KEV",
+                "AlienVault-OTX",
+                "ThreatFox",
+                "URLhaus",
+                "FeodoTracker",
+                "AbuseIPDB-Blacklist",
+            ],
+        },
+    }
+
+    db = DatabaseManager()
+    try:
+        stats = db.get_stats()
+        by_severity = stats.get("by_severity", {})
+
+        health["database"]["status"] = "connected"
+        health["database"]["total_iocs"] = sum(by_severity.values())
+        health["database"]["critical"] = by_severity.get("CRITICAL", 0)
+        health["database"]["high"] = by_severity.get("HIGH", 0)
+        health["database"]["medium"] = by_severity.get("MEDIUM", 0)
+        health["database"]["low"] = by_severity.get("LOW", 0)
+
+        last_ioc = db.get_last_updated()
+        if last_ioc:
+            health["database"]["last_updated"] = last_ioc
+
+    except Exception as e:
+        health["status"] = "degraded"
+        health["database"]["status"] = "error"
+        health["database"]["error"] = str(e)
+    finally:
+        db.close()
+
+    return health
 
 
 @app.get("/api/iocs")
