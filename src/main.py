@@ -56,7 +56,11 @@ def run():
             feodo_iocs = feodo.collect()
             print(f"[pipeline] FeodoTracker: {len(feodo_iocs)} indicators")
 
-            raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs
+            print("[pipeline] collecting AbuseIPDB blacklist ...")
+            blacklist_iocs = abuseipdb.fetch_blacklist()
+            print(f"[pipeline] AbuseIPDB blacklist: {len(blacklist_iocs)} IPs")
+
+            raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + blacklist_iocs
             print(f"[pipeline] total collected: {len(raw_iocs)}")
 
             # Deduplicate internally first
@@ -73,18 +77,7 @@ def run():
                 print("[pipeline] normalizing ...")
                 new_iocs = normalizer.normalize(new_iocs)
 
-                # Limit Enrichment to avoid Rate Limits (e.g., max 300 per run)
-                MAX_ENRICH_PER_RUN = 300
-                iocs_to_enrich = new_iocs[:MAX_ENRICH_PER_RUN]
-                iocs_no_enrich = new_iocs[MAX_ENRICH_PER_RUN:]
-
-                if iocs_to_enrich:
-                    print(f"[pipeline] enriching {len(iocs_to_enrich)} IPs via AbuseIPDB ...")
-                    iocs_to_enrich = abuseipdb.enrich_batch(iocs_to_enrich)
-                else:
-                    print("[pipeline] no IPs to enrich.")
-
-                new_iocs = iocs_to_enrich + iocs_no_enrich
+                # AbuseIPDB enrichment handled via blacklist collector
 
                 print("[pipeline] classifying ...")
                 new_iocs = classifier.classify(new_iocs)

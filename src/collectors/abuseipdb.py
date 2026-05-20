@@ -1,8 +1,53 @@
 import os
 import time
 import requests
+from datetime import date
 
 ENDPOINT = "https://api.abuseipdb.com/api/v2/check"
+BLACKLIST_ENDPOINT = "https://api.abuseipdb.com/api/v2/blacklist"
+
+
+def fetch_blacklist() -> list:
+    api_key = os.getenv("ABUSEIPDB_API_KEY")
+    if not api_key:
+        print("[abuseipdb] ABUSEIPDB_API_KEY is not set — skipping blacklist")
+        return []
+
+    today = date.today().isoformat()
+    try:
+        response = requests.get(
+            BLACKLIST_ENDPOINT,
+            headers={"Key": api_key, "Accept": "application/json"},
+            params={"limit": 10000, "confidenceMinimum": 75},
+            timeout=30,
+        )
+        response.raise_for_status()
+        entries = response.json().get("data", [])
+    except Exception as e:
+        print(f"[abuseipdb] fetch_blacklist error: {e}")
+        return []
+
+    iocs = []
+    for entry in entries:
+        ip = entry.get("ipAddress", "")
+        if not ip:
+            continue
+        score = entry.get("abuseConfidenceScore", 0)
+        iocs.append({
+            "type": "ip",
+            "value": ip,
+            "source": "AbuseIPDB-Blacklist",
+            "severity": "CRITICAL" if score >= 90 else "HIGH",
+            "abuse_score": score,
+            "country": entry.get("countryCode"),
+            "description": f"AbuseIPDB blacklisted IP — confidence: {score}",
+            "first_seen": today,
+            "last_seen": today,
+            "mitre_technique_id": None,
+            "mitre_tactic": None,
+            "confidence_score": None,
+        })
+    return iocs
 
 _EMPTY = {"abuse_score": None, "country": None}
 

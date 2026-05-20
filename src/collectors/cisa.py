@@ -1,5 +1,5 @@
 import requests
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 FEED_URL = "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
 
@@ -14,6 +14,14 @@ def collect() -> list[dict]:
         return []
 
     today = date.today().isoformat()
+    cutoff = datetime.now(timezone.utc) - timedelta(days=90)
+    all_vulns = vulnerabilities
+    vulnerabilities = [
+        v for v in all_vulns
+        if datetime.strptime(v.get("dateAdded", "1970-01-01"), "%Y-%m-%d").replace(tzinfo=timezone.utc) >= cutoff
+    ]
+    print(f"[cisa] {len(vulnerabilities)} recent CVEs (last 90 days) of {len(all_vulns)} total")
+
     iocs = []
 
     for vuln in vulnerabilities:
