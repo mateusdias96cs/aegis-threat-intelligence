@@ -396,7 +396,7 @@
         </div>
       </div>
       <div class="topbar-right">
-        <div class="pipeline-meta">Total IOCs<b>{{ total }}</b></div>
+        <div class="pipeline-meta">Total IOCs<b id="topbar-total">{{ total_in_db }}</b></div>
         <button class="btn-run">&#9654; Run Pipeline</button>
       </div>
     </div>
@@ -408,11 +408,7 @@
       <div class="page-sub">
         <span>Generated <b>{{ generated_at }}</b></span>
         <span style="color:var(--text-tertiary)">·</span>
-        <span>Total IOCs <b>{{ total }}</b></span>
-        {% if total_in_db > total_displayed %}
-        <span style="color:var(--text-tertiary)">·</span>
-        <span>Showing {{ total_displayed_fmt }} most critical of <b>{{ total_in_db_fmt }}</b> in database</span>
-        {% endif %}
+        <span>Total IOCs in database <b id="stat-db-total">{{ total_in_db }}</b></span>
       </div>
     </div>
 
@@ -435,23 +431,23 @@
     <div class="stats">
       <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="num">{{ total }}</div>
+        <div class="num" id="stat-total">{{ total_in_db }}</div>
       </div>
       <div class="stat s-critical">
         <div class="label">Critical</div>
-        <div class="num">{{ stats.by_severity.get('CRITICAL', 0) }}</div>
+        <div class="num" id="stat-critical">{{ stats.by_severity.get('CRITICAL', 0) }}</div>
       </div>
       <div class="stat s-high">
         <div class="label">High</div>
-        <div class="num">{{ stats.by_severity.get('HIGH', 0) }}</div>
+        <div class="num" id="stat-high">{{ stats.by_severity.get('HIGH', 0) }}</div>
       </div>
       <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="num">{{ stats.by_severity.get('MEDIUM', 0) }}</div>
+        <div class="num" id="stat-medium">{{ stats.by_severity.get('MEDIUM', 0) }}</div>
       </div>
       <div class="stat s-low">
         <div class="label">Low</div>
-        <div class="num">{{ stats.by_severity.get('LOW', 0) }}</div>
+        <div class="num" id="stat-low">{{ stats.by_severity.get('LOW', 0) }}</div>
       </div>
     </div>
 
@@ -1414,8 +1410,36 @@
     fetchPage(1);
   }
 
+  /* ── Fetch live counts from /health and update stat cards ── */
+  function fetchHealthStats() {
+    fetch('/health')
+      .then(function(r) { return r.json(); })
+      .then(function(data) {
+        var db = data.database || {};
+        var total    = db.total_iocs != null ? db.total_iocs : 0;
+        var critical = db.critical   != null ? db.critical   : 0;
+        var high     = db.high       != null ? db.high       : 0;
+        var medium   = db.medium     != null ? db.medium     : 0;
+        var low      = db.low        != null ? db.low        : 0;
+
+        function setEl(id, val) {
+          var el = document.getElementById(id);
+          if (el) el.textContent = val.toLocaleString();
+        }
+        setEl('stat-total',    total);
+        setEl('stat-critical', critical);
+        setEl('stat-high',     high);
+        setEl('stat-medium',   medium);
+        setEl('stat-low',      low);
+        setEl('topbar-total',  total);
+        setEl('stat-db-total', total);
+      })
+      .catch(function() { /* /health unreachable — keep Jinja2 fallback values */ });
+  }
+
   /* ── Initial load ── */
   fetchPage(1);
+  fetchHealthStats();
 
   /* ── MITRE tab: pagination ── */
   function getMitreFilteredRows() {
