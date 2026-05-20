@@ -1,3 +1,5 @@
+import os
+import sentry_sdk
 from fastapi import FastAPI, BackgroundTasks, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -12,6 +14,18 @@ from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
 from src.main import run as run_pipeline_task
+
+sentry_dsn = os.getenv("SENTRY_DSN")
+if sentry_dsn:
+    try:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            traces_sample_rate=0.1,
+            profiles_sample_rate=0.1,
+            environment=os.getenv("DOPPLER_ENVIRONMENT", "production"),
+        )
+    except Exception:
+        pass
 
 app = FastAPI(title="Aegis Threat Intelligence API", version="1.0.0")
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
