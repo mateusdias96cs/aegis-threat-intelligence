@@ -222,6 +222,13 @@ async def get_report():
     report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
     if report_path.exists():
         return FileResponse(report_path, media_type="text/html")
+    db = DatabaseManager()
+    try:
+        html = db.get_latest_report()
+    finally:
+        db.close()
+    if html:
+        return HTMLResponse(content=html)
     return {"error": "Report not generated yet. Run /api/pipeline/run first"}
 
 
@@ -230,6 +237,14 @@ async def root():
     report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
     if report_path.exists():
         return FileResponse(report_path, media_type="text/html")
+
+    db = DatabaseManager()
+    try:
+        html = db.get_latest_report()
+    finally:
+        db.close()
+    if html:
+        return HTMLResponse(content=html)
 
     html_content = """
     <html>

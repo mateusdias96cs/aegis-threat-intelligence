@@ -2,7 +2,7 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import Column, Integer, String, create_engine, text
+from sqlalchemy import Column, DateTime, Integer, String, Text, create_engine, text
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 _raw_url = os.getenv("DATABASE_URL")
@@ -44,6 +44,14 @@ class IOC(Base):
     mitre_technique_id = Column(String)
     mitre_tactic       = Column(String)
     confidence_score   = Column(Integer)
+
+
+class Report(Base):
+    __tablename__ = "reports"
+
+    id           = Column(Integer, primary_key=True, autoincrement=False)
+    html_content = Column(Text, nullable=False)
+    generated_at = Column(DateTime, nullable=False)
 
 
 Base.metadata.create_all(engine)
@@ -271,6 +279,33 @@ class DatabaseManager:
         except Exception as e:
             print(f"[db] get_last_updated error: {e}")
             return None
+
+    # ── report persistence ────────────────────────────────────────────────────
+
+    def save_report(self, html_content: str) -> None:
+        """Upsert: always keeps a single row (id=1) with the latest HTML report."""
+        now = datetime.utcnow()
+        existing = self._session.execute(
+            text("SELECT id FROM reports WHERE id = 1")
+        ).fetchone()
+        if existing:
+            self._session.execute(
+                text("UPDATE reports SET html_content = :html, generated_at = :ts WHERE id = 1"),
+                {"html": html_content, "ts": now},
+            )
+        else:
+            self._session.execute(
+                text("INSERT INTO reports (id, html_content, generated_at) VALUES (1, :html, :ts)"),
+                {"html": html_content, "ts": now},
+            )
+        self._session.commit()
+
+    def get_latest_report(self) -> str | None:
+        """Returns the HTML content of the most recent saved report, or None."""
+        row = self._session.execute(
+            text("SELECT html_content FROM reports WHERE id = 1")
+        ).fetchone()
+        return row[0] if row else None
 
     def close(self):
         self._session.close()

@@ -67,5 +67,18 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
     try:
         output_path.write_text(html, encoding="utf-8")
     except OSError as e:
-        print(f"[html_report] failed to write report: {e}")
+        # Non-fatal on ephemeral filesystems (e.g. Render) — DB is the durable store
+        print(f"[html_report] disk write failed (non-fatal): {e}")
+
+    # Always persist to the database so the report survives restarts and deploys
+    try:
+        from src.storage.database import DatabaseManager
+        db = DatabaseManager()
+        try:
+            db.save_report(html)
+            print("[html_report] report saved to database")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[html_report] database save failed: {e}")
         raise
