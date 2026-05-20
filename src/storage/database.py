@@ -140,19 +140,92 @@ class DatabaseManager:
         ).fetchall()
         return [dict(row) for row in rows]
 
-    def cleanup_old_iocs(self, days: int = 30) -> int:
+    def get_trends(self, days: int = 30) -> list:
         try:
-            cursor = self.conn.execute(
+            rows = self.conn.execute(
                 """
-                DELETE FROM iocs
-                WHERE first_seen < date('now', '-' || ? || ' days')
-                AND NOT (source = 'CISA-KEV' AND severity = 'CRITICAL')
+                SELECT DATE(first_seen) as date,
+                       COUNT(*) as total,
+                       SUM(CASE WHEN severity='CRITICAL' THEN 1 ELSE 0 END) as critical,
+                       SUM(CASE WHEN severity='HIGH' THEN 1 ELSE 0 END) as high,
+                       SUM(CASE WHEN severity='MEDIUM' THEN 1 ELSE 0 END) as medium,
+                       SUM(CASE WHEN severity='LOW' THEN 1 ELSE 0 END) as low
+                FROM iocs
+                WHERE DATE(first_seen) >= DATE('now', '-' || ? || ' days')
+                GROUP BY DATE(first_seen)
+                ORDER BY date ASC
                 """,
                 (days,),
-            )
+            ).fetchall()
+            return [dict(row) for row in rows]
+        except Exception as e:
+            print(f"[database] get_trends failed: {e}")
+            return []
+
+    def cleanup_old_iocs(self) -> int:
+        try:
+            d1 = self.conn.execute(
+                "DELETE FROM iocs WHERE source = 'AbuseIPDB-Blacklist'"
+                " AND DATE(first_seen) < DATE('now', '-7 days')"
+            ).rowcount
             self.conn.commit()
-            return cursor.rowcount
-        except sqlite3.OperationalError as e:
+
+            d2 = self.conn.execute(
+                "DELETE FROM iocs WHERE type = 'ip' AND source = 'ThreatFox'"
+                " AND DATE(first_seen) < DATE('now', '-7 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d3 = self.conn.execute(
+                "DELETE FROM iocs WHERE source = 'FeodoTracker'"
+                " AND DATE(first_seen) < DATE('now', '-14 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d4 = self.conn.execute(
+                "DELETE FROM iocs WHERE type = 'url' AND description LIKE '%online%'"
+                " AND DATE(first_seen) < DATE('now', '-14 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d5 = self.conn.execute(
+                "DELETE FROM iocs WHERE type = 'url' AND description NOT LIKE '%online%'"
+                " AND DATE(first_seen) < DATE('now', '-30 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d6 = self.conn.execute(
+                "DELETE FROM iocs WHERE type = 'domain'"
+                " AND DATE(first_seen) < DATE('now', '-30 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d7 = self.conn.execute(
+                "DELETE FROM iocs WHERE type = 'ip'"
+                " AND source NOT IN ('AbuseIPDB-Blacklist', 'ThreatFox', 'FeodoTracker')"
+                " AND DATE(first_seen) < DATE('now', '-30 days')"
+            ).rowcount
+            self.conn.commit()
+
+            d8 = self.conn.execute(
+                "DELETE FROM iocs WHERE type NOT IN ('hash', 'cve', 'ip', 'url', 'domain')"
+                " AND source != 'CISA-KEV'"
+                " AND DATE(first_seen) < DATE('now', '-90 days')"
+            ).rowcount
+            self.conn.commit()
+
+            total_deleted = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8
+            print(f"[cleanup] AbuseIPDB-BL: {d1} removed")
+            print(f"[cleanup] ThreatFox IPs: {d2} removed")
+            print(f"[cleanup] Feodo IPs: {d3} removed")
+            print(f"[cleanup] Active URLs: {d4} removed")
+            print(f"[cleanup] Offline URLs: {d5} removed")
+            print(f"[cleanup] Domains: {d6} removed")
+            print(f"[cleanup] Other IPs: {d7} removed")
+            print(f"[cleanup] Other: {d8} removed")
+            print(f"[cleanup] Total removed: {total_deleted}")
+            return total_deleted
+        except Exception as e:
             print(f"[database] cleanup_old_iocs failed: {e}")
             return 0
 

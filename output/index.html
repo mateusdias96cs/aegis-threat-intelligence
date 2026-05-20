@@ -333,7 +333,12 @@
 
     /* ── Footer */
     footer { padding:11px 28px; border-top:1px solid var(--border); color:var(--text-tertiary); font-size:10px; letter-spacing:1px; text-transform:uppercase; flex-shrink:0; }
+
+    /* ── Trend chart */
+    .chart-container { height:200px; margin-bottom:20px; background:#0f0f0f; border:1px solid #1e1e1e; border-radius:8px; padding:16px; }
+    .chart-container.hidden { display:none; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -373,7 +378,7 @@
     <div class="sb-rule"></div>
     <div class="sb-foot">
       <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
-      <div class="sb-meta">Generated<br /><b>2026-05-19 21:24:56</b></div>
+      <div class="sb-meta">Generated<br /><b>2026-05-19 21:35:14</b></div>
     </div>
   </aside>
 
@@ -400,7 +405,7 @@
       <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
       <h1>AEGIS Threat Intelligence</h1>
       <div class="page-sub">
-        <span>Generated <b>2026-05-19 21:24:56</b></span>
+        <span>Generated <b>2026-05-19 21:35:14</b></span>
         <span style="color:var(--text-tertiary)">·</span>
         <span>Total IOCs <b>1000</b></span>
         
@@ -447,6 +452,11 @@
         <div class="label">Low</div>
         <div class="num">8</div>
       </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div class="chart-container" id="trendsChartContainer">
+      <canvas id="trendsChart"></canvas>
     </div>
 
     <!-- Filter bar -->
@@ -21767,7 +21777,7 @@
 
     </div><!-- /.scroller -->
 
-    <footer>AEGIS Threat Intelligence &mdash; 2026-05-19 21:24:56</footer>
+    <footer>AEGIS Threat Intelligence &mdash; 2026-05-19 21:35:14</footer>
 
   </main>
 
@@ -22772,6 +22782,60 @@
   }
 
   renderMitrePage(1);
+</script>
+
+<script>
+const TREND_DATA = [{"critical": 2, "date": "2026-04-20", "high": 6, "low": 0, "medium": 0, "total": 8}, {"critical": 0, "date": "2026-04-22", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-04-23", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 2, "date": "2026-04-24", "high": 2, "low": 0, "medium": 0, "total": 4}, {"critical": 1, "date": "2026-04-28", "high": 1, "low": 0, "medium": 0, "total": 2}, {"critical": 1, "date": "2026-04-30", "high": 0, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-01", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-06", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-07", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-08", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 1, "date": "2026-05-14", "high": 29, "low": 8, "medium": 0, "total": 38}, {"critical": 0, "date": "2026-05-15", "high": 13, "low": 0, "medium": 0, "total": 13}, {"critical": 0, "date": "2026-05-16", "high": 12, "low": 0, "medium": 120, "total": 132}, {"critical": 0, "date": "2026-05-17", "high": 134, "low": 0, "medium": 573, "total": 707}, {"critical": 0, "date": "2026-05-18", "high": 3770, "low": 0, "medium": 386, "total": 4156}, {"critical": 10000, "date": "2026-05-19", "high": 359, "low": 0, "medium": 172, "total": 10531}, {"critical": 0, "date": "2026-05-20", "high": 22, "low": 0, "medium": 1, "total": 23}];
+
+(function () {
+  var container = document.getElementById('trendsChartContainer');
+  if (!TREND_DATA || TREND_DATA.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  var labels = TREND_DATA.map(function(d) { return d.date; });
+  var ctx = document.getElementById('trendsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'CRITICAL', data: TREND_DATA.map(function(d) { return d.critical; }), backgroundColor: '#c0392b' },
+        { label: 'HIGH',     data: TREND_DATA.map(function(d) { return d.high;     }), backgroundColor: '#c06010' },
+        { label: 'MEDIUM',   data: TREND_DATA.map(function(d) { return d.medium;   }), backgroundColor: '#8a7000' },
+        { label: 'LOW',      data: TREND_DATA.map(function(d) { return d.low;      }), backgroundColor: '#1e6b1e' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: '#666666', boxWidth: 12, font: { size: 10 } },
+        },
+        tooltip: {
+          callbacks: {
+            label: function(item) { return item.dataset.label + ': ' + item.raw; },
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { color: '#1e1e1e' },
+          ticks: { color: '#666666', font: { size: 10 } },
+          title: { display: true, text: 'Date', color: '#666666', font: { size: 10 } },
+        },
+        y: {
+          stacked: true,
+          grid: { color: '#1e1e1e' },
+          ticks: { color: '#666666', font: { size: 10 } },
+          title: { display: true, text: 'IOCs', color: '#666666', font: { size: 10 } },
+        },
+      },
+    },
+  });
+})();
 </script>
 </body>
 </html>

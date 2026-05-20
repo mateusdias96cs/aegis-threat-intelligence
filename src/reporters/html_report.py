@@ -1,9 +1,32 @@
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from jinja2 import Environment, FileSystemLoader
 
 DISPLAY_LIMIT = 1000
 SEVERITY_ORDER = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
+def compute_trends(iocs: list, days: int = 30) -> list:
+    cutoff = datetime.now() - timedelta(days=days)
+    counts = defaultdict(lambda: {
+        "total": 0, "critical": 0,
+        "high": 0, "medium": 0, "low": 0
+    })
+    for ioc in iocs:
+        date_str = str(ioc.get("first_seen", ""))[:10]
+        if not date_str:
+            continue
+        try:
+            d = datetime.strptime(date_str, "%Y-%m-%d")
+            if d >= cutoff:
+                counts[date_str]["total"] += 1
+                sev = ioc.get("severity", "").lower()
+                if sev in counts[date_str]:
+                    counts[date_str][sev] += 1
+        except Exception:
+            continue
+    return [{"date": k, **v} for k, v in sorted(counts.items())]
 
 
 def generate(iocs: list, stats: dict, techniques: dict = None):
@@ -14,6 +37,7 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
     template = env.get_template("report.html")
 
     total_in_db = len(iocs)
+    trends = compute_trends(iocs)
 
     iocs = sorted(
         iocs,
@@ -30,6 +54,7 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
         iocs=iocs,
         stats=stats,
         techniques=techniques or {},
+        trends=trends,
         generated_at=datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d %H:%M:%S"),
         total=total_displayed,
         total_in_db=total_in_db,

@@ -333,7 +333,12 @@
 
     /* ── Footer */
     footer { padding:11px 28px; border-top:1px solid var(--border); color:var(--text-tertiary); font-size:10px; letter-spacing:1px; text-transform:uppercase; flex-shrink:0; }
+
+    /* ── Trend chart */
+    .chart-container { height:200px; margin-bottom:20px; background:#0f0f0f; border:1px solid #1e1e1e; border-radius:8px; padding:16px; }
+    .chart-container.hidden { display:none; }
   </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -447,6 +452,11 @@
         <div class="label">Low</div>
         <div class="num">{{ stats.by_severity.get('LOW', 0) }}</div>
       </div>
+    </div>
+
+    <!-- Trend chart -->
+    <div class="chart-container" id="trendsChartContainer">
+      <canvas id="trendsChart"></canvas>
     </div>
 
     <!-- Filter bar -->
@@ -1795,6 +1805,60 @@
   }
 
   renderMitrePage(1);
+</script>
+
+<script>
+const TREND_DATA = {{ trends | tojson }};
+
+(function () {
+  var container = document.getElementById('trendsChartContainer');
+  if (!TREND_DATA || TREND_DATA.length === 0) {
+    container.classList.add('hidden');
+    return;
+  }
+  var labels = TREND_DATA.map(function(d) { return d.date; });
+  var ctx = document.getElementById('trendsChart').getContext('2d');
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'CRITICAL', data: TREND_DATA.map(function(d) { return d.critical; }), backgroundColor: '#c0392b' },
+        { label: 'HIGH',     data: TREND_DATA.map(function(d) { return d.high;     }), backgroundColor: '#c06010' },
+        { label: 'MEDIUM',   data: TREND_DATA.map(function(d) { return d.medium;   }), backgroundColor: '#8a7000' },
+        { label: 'LOW',      data: TREND_DATA.map(function(d) { return d.low;      }), backgroundColor: '#1e6b1e' },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: '#666666', boxWidth: 12, font: { size: 10 } },
+        },
+        tooltip: {
+          callbacks: {
+            label: function(item) { return item.dataset.label + ': ' + item.raw; },
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: { color: '#1e1e1e' },
+          ticks: { color: '#666666', font: { size: 10 } },
+          title: { display: true, text: 'Date', color: '#666666', font: { size: 10 } },
+        },
+        y: {
+          stacked: true,
+          grid: { color: '#1e1e1e' },
+          ticks: { color: '#666666', font: { size: 10 } },
+          title: { display: true, text: 'IOCs', color: '#666666', font: { size: 10 } },
+        },
+      },
+    },
+  });
+})();
 </script>
 </body>
 </html>

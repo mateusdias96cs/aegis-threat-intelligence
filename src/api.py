@@ -103,6 +103,26 @@ async def get_stats():
         db.close()
 
 
+@app.get("/api/stats/trends")
+async def get_trends(days: int = 30):
+    """
+    Returns IOC counts grouped by day for the last N days.
+    Useful for trend charts and activity monitoring.
+    Max 90 days.
+    """
+    days = min(days, 90)
+    db = DatabaseManager()
+    try:
+        trends = db.get_trends(days)
+        return {
+            "days": days,
+            "data_points": len(trends),
+            "trends": trends,
+        }
+    finally:
+        db.close()
+
+
 @app.post("/api/pipeline/run")
 async def run_pipeline(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_pipeline_task)

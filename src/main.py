@@ -31,8 +31,8 @@ def run():
     with sentry_sdk.start_transaction(op="pipeline", name="AEGIS IOC Pipeline"):
         db = DatabaseManager()
         try:
-            print("[pipeline] cleaning up IOCs older than 30 days ...")
-            deleted = db.cleanup_old_iocs(days=30)
+            print("[pipeline] cleaning up expired IOCs ...")
+            deleted = db.cleanup_old_iocs()
             print(f"[pipeline] removed {deleted} expired IOCs")
 
             # Collect
