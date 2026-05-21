@@ -288,6 +288,27 @@ async def get_report():
     return {"error": "Report not generated yet. Run /api/pipeline/run first"}
 
 
+@app.post("/api/admin/force-report", dependencies=[Depends(_require_api_key)])
+async def force_report(background_tasks: BackgroundTasks):
+    from src.storage.database import DatabaseManager
+    from src.reporters import html_report
+    from src.collectors import mitre
+
+    async def _regen():
+        db = DatabaseManager()
+        try:
+            all_iocs = db.get_all_iocs()
+            stats = db.get_stats()
+            techniques = mitre.load_techniques()
+            html_report.generate(all_iocs, stats, techniques)
+            print("[force-report] done")
+        finally:
+            db.close()
+
+    background_tasks.add_task(_regen)
+    return {"status": "regenerating"}
+
+
 @app.get("/")
 async def root():
     db = DatabaseManager()
