@@ -79,15 +79,8 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
         try:
             if not techniques:
                 print("[html_report] WARNING: MITRE techniques dict is empty — MITRE Explorer will show 0 techniques")
-                existing = db.get_latest_report()
-                if existing:
-                    print("[html_report] existing DB report preserved — skipping overwrite (techniques empty)")
-                else:
-                    db.save_report(html)
-                    print("[html_report] report saved to database (no existing report; techniques empty)")
-            else:
-                db.save_report(html)
-                print("[html_report] report saved to database")
+            db.save_report(html)
+            print("[html_report] report saved to database")
         finally:
             db.close()
     except Exception as e:

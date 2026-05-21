@@ -110,6 +110,7 @@ def run():
             else:
                 print("[pipeline] loading MITRE ATT&CK techniques for report ...")
                 techniques = mitre.load_techniques()
+                print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
 
             print("[pipeline] applying BioSec decay ...")
             db.apply_decay()
