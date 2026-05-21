@@ -206,12 +206,14 @@ async def get_all_iocs(
     type: str | None = None,
     search: str | None = None,
     status: str | None = None,
+    keywords: str | None = None,
 ):
     db = DatabaseManager()
+    kw_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
     try:
         return db.get_iocs_paginated(
             page=page, limit=limit, severity=severity, ioc_type=type,
-            search=search, status=status,
+            search=search, status=status, keywords_list=kw_list,
         )
     finally:
         db.close()

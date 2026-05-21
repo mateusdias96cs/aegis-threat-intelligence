@@ -197,6 +197,7 @@ class DatabaseManager:
         ioc_type: str | None = None,
         search: str | None = None,
         status: str | None = None,
+        keywords_list: list[str] | None = None,
     ) -> dict:
         page   = max(1, page)
         limit  = min(limit, 500)
@@ -226,6 +227,16 @@ class DatabaseManager:
         else:
             # default: ACTIVE + REACTIVATED + NULLs (backward compat with pre-decay IOCs)
             conditions.append("(ioc_status IS NULL OR ioc_status IN ('ACTIVE', 'REACTIVATED'))")
+
+        # Relevance keyword pre-filter — OR logic across value + description (capped at 20 terms)
+        if keywords_list:
+            kw_conds = []
+            for i, kw in enumerate(keywords_list[:20]):
+                kw_conds.append(
+                    f"(LOWER(value) LIKE :kw{i} OR LOWER(description) LIKE :kw{i})"
+                )
+                params[f"kw{i}"] = f"%{kw.lower()}%"
+            conditions.append("(" + " OR ".join(kw_conds) + ")")
 
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
 
