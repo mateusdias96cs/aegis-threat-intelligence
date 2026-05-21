@@ -136,6 +136,10 @@ class RevertFalsePositiveBody(BaseModel):
     api_key: str
 
 
+class ShareWorkbenchRequest(BaseModel):
+    payload: str   # JSON string com pins e notas, serializado pelo frontend
+
+
 # ── Existing endpoints ────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -525,6 +529,53 @@ async def revert_false_positive_endpoint(value: str, body: RevertFalsePositiveBo
     if not ok:
         raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
     return {"success": True, "message": "Falso positivo revertido."}
+
+
+# ── Analyst Workbench ─────────────────────────────────────────────────────────
+
+@app.post("/api/workbench/share")
+async def share_workbench(body: ShareWorkbenchRequest):
+    """
+    Recebe o workbench serializado do frontend e salva no banco com
+    chave aleatória de 8 caracteres. Expira em 24 horas.
+    Público — o código aleatório é a autenticação.
+    """
+    import secrets
+    from datetime import timezone, timedelta
+
+    if len(body.payload) > 50_000:
+        raise HTTPException(status_code=400, detail="Payload muito grande (max 50kb).")
+
+    key = secrets.token_urlsafe(6)[:8].upper()
+    expires_at = (datetime.utcnow() + timedelta(hours=24)).strftime("%Y-%m-%d %H:%M:%S")
+
+    db = DatabaseManager()
+    try:
+        db.save_shared_workbench(key, body.payload, expires_at)
+    finally:
+        db.close()
+
+    return {"key": key, "expires_at": expires_at}
+
+
+@app.get("/api/workbench/{key}")
+async def get_workbench(key: str):
+    """
+    Retorna workbench compartilhado por chave.
+    404 se não existir ou expirado.
+    """
+    db = DatabaseManager()
+    try:
+        wb = db.get_shared_workbench(key.upper())
+    finally:
+        db.close()
+
+    if not wb:
+        raise HTTPException(
+            status_code=404,
+            detail="Workbench não encontrado ou expirado (validade: 24h)."
+        )
+    return wb
 
 
 # ── TAXII 2.1 ─────────────────────────────────────────────────────────────────

@@ -73,6 +73,15 @@ class Report(Base):
     generated_at = Column(DateTime, nullable=False)
 
 
+class SharedWorkbench(Base):
+    __tablename__ = "shared_workbenches"
+
+    key        = Column(String(8), primary_key=True)
+    payload    = Column(Text, nullable=False)   # JSON com pins + notas
+    created_at = Column(String, nullable=False)
+    expires_at = Column(String, nullable=False)
+
+
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 
@@ -819,6 +828,56 @@ class DatabaseManager:
             text("SELECT html_content FROM reports WHERE id = 1")
         ).fetchone()
         return row[0] if row else None
+
+    # ── Analyst Workbench ─────────────────────────────────────────────────────────
+
+    def save_shared_workbench(self, key: str, payload: str, expires_at: str) -> None:
+        """Salva um workbench compartilhado com chave aleatória."""
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        if _dialect == "postgresql":
+            self._session.execute(text("""
+                INSERT INTO shared_workbenches (key, payload, created_at, expires_at)
+                VALUES (:key, :payload, :created_at, :expires_at)
+                ON CONFLICT (key) DO UPDATE SET
+                    payload    = EXCLUDED.payload,
+                    created_at = EXCLUDED.created_at,
+                    expires_at = EXCLUDED.expires_at
+            """), {"key": key, "payload": payload, "created_at": now, "expires_at": expires_at})
+        else:
+            self._session.execute(text("""
+                INSERT OR REPLACE INTO shared_workbenches (key, payload, created_at, expires_at)
+                VALUES (:key, :payload, :created_at, :expires_at)
+            """), {"key": key, "payload": payload, "created_at": now, "expires_at": expires_at})
+        self._session.commit()
+
+    def get_shared_workbench(self, key: str) -> dict | None:
+        """Retorna workbench se existir e não tiver expirado."""
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        row = self._session.execute(
+            text("""
+                SELECT payload, created_at, expires_at
+                FROM shared_workbenches
+                WHERE key = :key AND expires_at > :now
+            """),
+            {"key": key, "now": now}
+        ).fetchone()
+        if not row:
+            return None
+        return {
+            "payload":    row[0],
+            "created_at": row[1],
+            "expires_at": row[2],
+        }
+
+    def cleanup_expired_workbenches(self) -> int:
+        """Remove workbenches expirados. Chamado no pipeline."""
+        now = datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
+        result = self._session.execute(
+            text("DELETE FROM shared_workbenches WHERE expires_at <= :now"),
+            {"now": now}
+        )
+        self._session.commit()
+        return result.rowcount
 
     def close(self):
         self._session.close()

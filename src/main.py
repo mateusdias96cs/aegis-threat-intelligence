@@ -38,6 +38,9 @@ def run():
                 print("[pipeline] cleaning up expired IOCs ...")
                 deleted = db.cleanup_old_iocs()
                 print(f"[pipeline] removed {deleted} expired IOCs")
+                wb_deleted = db.cleanup_expired_workbenches()
+                if wb_deleted:
+                    print(f"[pipeline] removed {wb_deleted} expired shared workbenches")
 
                 # Collect
                 print("[pipeline] collecting from CISA-KEV ...")
@@ -87,7 +90,11 @@ def run():
                     print("[pipeline] normalizing ...")
                     new_iocs = normalizer.normalize(new_iocs)
 
-                    # AbuseIPDB enrichment handled via blacklist collector
+                    # Enriquecer IPs novos com AbuseIPDB (quota: 900/dia)
+                    ip_new = [i for i in new_iocs if i.get("type") == "ip"]
+                    if ip_new:
+                        print(f"[pipeline] enriquecendo {len(ip_new)} IPs novos com AbuseIPDB ...")
+                        new_iocs = abuseipdb.enrich_batch(new_iocs)
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)
