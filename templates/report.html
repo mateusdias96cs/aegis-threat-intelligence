@@ -2014,6 +2014,7 @@ function renderDrawerBody(ioc) {
 function renderScoreSection(ioc) {
   var orig  = ioc.score_original != null ? Math.round(ioc.score_original) : null;
   var atual = ioc.score_atual    != null ? Math.round(ioc.score_atual)    : null;
+  var sb    = ioc.score_breakdown || null;
 
   var html = '<div class="drawer-section"><div class="drawer-section-title">Score &amp; Confiança</div>';
 
@@ -2021,23 +2022,130 @@ function renderScoreSection(ioc) {
     return v >= 71 ? '#e74c3c' : v >= 41 ? '#e3b341' : '#3fb950';
   }
 
-  if (orig !== null) {
-    var c = barColor(orig);
-    html += '<div class="score-bar-row">' +
-      '<div class="score-bar-label">Original</div>' +
-      '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,orig) + '%;background:' + c + '"></div></div>' +
-      '<div class="score-bar-value">' + orig + '</div></div>';
-  }
-  if (atual !== null) {
-    var c2 = barColor(atual);
-    html += '<div class="score-bar-row">' +
-      '<div class="score-bar-label">Atual</div>' +
-      '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,atual) + '%;background:' + c2 + '"></div></div>' +
-      '<div class="score-bar-value">' + atual + '</div></div>';
-  }
-  if (orig !== null && atual !== null && orig !== atual) {
-    html += '<div class="score-decay-note">Score original: <strong>' + orig +
-      '</strong> → Score atual: <strong>' + atual + '</strong> (decay aplicado)</div>';
+  if (sb) {
+    /* ── 1. Badge de interpretação ─────────────────────────────── */
+    var scoreVal = sb.score_arredondado != null ? sb.score_arredondado : (sb.score_final != null ? Math.round(sb.score_final) : 0);
+    var badgeBg, badgeFg;
+    if (scoreVal >= 85)      { badgeBg = '#1a4a2e'; badgeFg = '#2e9b3e'; }
+    else if (scoreVal >= 70) { badgeBg = '#1d3a66'; badgeFg = '#4a90e2'; }
+    else if (scoreVal >= 55) { badgeBg = '#4a3800'; badgeFg = '#e3b341'; }
+    else                     { badgeBg = '#4a1a1a'; badgeFg = '#e74c3c'; }
+
+    html += '<div style="background:' + badgeBg + ';color:' + badgeFg + ';padding:8px 12px;border-radius:3px;font-size:12px;font-weight:600;margin-bottom:12px;">' +
+      escHtml(sb.interpretacao || '') + '</div>';
+
+    /* ── 2. Score final grande + barra de progresso ─────────────── */
+    html += '<div style="margin-bottom:14px;">' +
+      '<div style="font-size:28px;font-weight:700;font-family:monospace;color:' + badgeFg + ';">' +
+        scoreVal + ' <span style="font-size:16px;opacity:0.6;">/ 100</span>' +
+      '</div>' +
+      '<div class="score-bar-track" style="margin-top:6px;"><div class="score-bar-fill" style="width:' + Math.min(100, scoreVal) + '%;background:' + badgeFg + ';"></div></div>' +
+    '</div>';
+
+    /* ── 3. Tabela de somatório ─────────────────────────────────── */
+    var sr = sb.source_reliability || {};
+    var co = sb.corroboration      || {};
+    var ts = sb.type_severity      || {};
+
+    var sS = sr.score != null ? Number(sr.score) : 0;
+    var sC = co.score != null ? Number(co.score) : 0;
+    var sT = ts.score != null ? Number(ts.score) : 0;
+
+    var wS = 0.40, wC = 0.30, wT = 0.30;
+    var contS = sS * wS, contC = sC * wC, contT = sT * wT;
+    var total = sb.score_final != null ? Number(sb.score_final) : (contS + contC + contT);
+
+    var srcLabel  = 'Fonte'        + (sr.source ? ' (' + escHtml(sr.source) + ')' : '');
+    var corrLabel = 'Corroboração' + (co.count  != null ? ' (' + co.count + ' fonte' + (co.count === 1 ? '' : 's') + ')' : '');
+    var typeLabel = 'Tipo'         + (ts.base   ? ' (' + escHtml(ts.base) + ')' : '');
+
+    html += '<div style="margin-top:12px;">' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1.8px;color:var(--text-tertiary);margin-bottom:6px;">Como este score foi calculado</div>' +
+      '<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:3px;overflow:hidden;">' +
+        '<thead>' +
+          '<tr style="background:#0f0f0f;">' +
+            '<th style="font-size:9.5px;text-transform:uppercase;padding:7px 10px;text-align:left;color:var(--text-secondary);font-weight:600;">Componente</th>' +
+            '<th style="font-size:9.5px;text-transform:uppercase;padding:7px 10px;text-align:right;color:var(--text-secondary);font-weight:600;">Score</th>' +
+            '<th style="font-size:9.5px;text-transform:uppercase;padding:7px 10px;text-align:right;color:var(--text-secondary);font-weight:600;">Peso</th>' +
+            '<th style="font-size:9.5px;text-transform:uppercase;padding:7px 10px;text-align:right;color:var(--text-secondary);font-weight:600;">Contribuição</th>' +
+          '</tr>' +
+        '</thead>' +
+        '<tbody>' +
+          '<tr style="background:#0a0a0a;">' +
+            '<td style="font-size:11px;padding:7px 10px;color:var(--text-secondary);">' + srcLabel + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);">' + sS.toFixed(1) + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;color:var(--text-secondary);">× 0.40</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);font-weight:600;">= ' + contS.toFixed(1) + ' pts</td>' +
+          '</tr>' +
+          '<tr style="background:#0d0d0d;">' +
+            '<td style="font-size:11px;padding:7px 10px;color:var(--text-secondary);">' + corrLabel + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);">' + sC.toFixed(1) + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;color:var(--text-secondary);">× 0.30</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);font-weight:600;">= ' + contC.toFixed(1) + ' pts</td>' +
+          '</tr>' +
+          '<tr style="background:#0a0a0a;">' +
+            '<td style="font-size:11px;padding:7px 10px;color:var(--text-secondary);">' + typeLabel + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);">' + sT.toFixed(1) + '</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;color:var(--text-secondary);">× 0.30</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);font-weight:600;">= ' + contT.toFixed(1) + ' pts</td>' +
+          '</tr>' +
+          '<tr style="background:#141414;border-top:1px solid var(--border);">' +
+            '<td style="font-size:11px;padding:7px 10px;font-weight:700;color:var(--text-primary);">TOTAL</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;color:var(--text-secondary);">—</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;color:var(--text-secondary);">—</td>' +
+            '<td style="font-size:11px;padding:7px 10px;text-align:right;font-family:monospace;color:var(--text-primary);font-weight:700;">= ' + total.toFixed(1) + ' pts</td>' +
+          '</tr>' +
+        '</tbody>' +
+      '</table>' +
+    '</div>';
+
+    /* ── 4. Links de referência ─────────────────────────────────── */
+    var links = [];
+    if (sr.referencia) {
+      var srcShort = sr.source ? escHtml(sr.source) : 'Fonte';
+      links.push('<a href="' + escHtml(sr.referencia) + '" target="_blank" rel="noopener" style="color:#7fb1ff;font-size:11px;text-decoration:none;">📎 ' + srcShort + '</a>');
+    }
+    if (ts.referencia && (ioc.type || '').toLowerCase() === 'cve') {
+      links.push('<a href="' + escHtml(ts.referencia) + '" target="_blank" rel="noopener" style="color:#7fb1ff;font-size:11px;text-decoration:none;">📎 NVD</a>');
+    }
+    if (ioc.mitre_technique_id) {
+      var mitreUrl = 'https://attack.mitre.org/techniques/' + encodeURIComponent(ioc.mitre_technique_id) + '/';
+      links.push('<a href="' + mitreUrl + '" target="_blank" rel="noopener" style="color:#7fb1ff;font-size:11px;text-decoration:none;">📎 ATT&amp;CK</a>');
+    }
+    links.push('<a href="https://docs.oasis-open.org/cti/stix/v2.1/" target="_blank" rel="noopener" style="color:#7fb1ff;font-size:11px;text-decoration:none;">📎 STIX 2.1</a>');
+
+    html += '<div style="margin-top:10px;">' +
+      '<span style="font-size:10px;text-transform:uppercase;color:var(--text-tertiary);margin-right:6px;">Verificar fontes:</span>' +
+      links.join(' ') +
+    '</div>';
+
+    /* ── 5. Aviso anti-viés ─────────────────────────────────────── */
+    if (sb.aviso) {
+      html += '<div style="font-size:10px;color:var(--text-tertiary);font-style:italic;padding:6px 0;border-top:1px solid var(--border-subtle);margin-top:10px;">' +
+        escHtml(sb.aviso) + '</div>';
+    }
+
+  } else {
+    /* ── Fallback: barras simples ────────────────────────────────── */
+    if (orig !== null) {
+      var c = barColor(orig);
+      html += '<div class="score-bar-row">' +
+        '<div class="score-bar-label">Original</div>' +
+        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,orig) + '%;background:' + c + '"></div></div>' +
+        '<div class="score-bar-value">' + orig + '</div></div>';
+    }
+    if (atual !== null) {
+      var c2 = barColor(atual);
+      html += '<div class="score-bar-row">' +
+        '<div class="score-bar-label">Atual</div>' +
+        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,atual) + '%;background:' + c2 + '"></div></div>' +
+        '<div class="score-bar-value">' + atual + '</div></div>';
+    }
+    if (orig !== null && atual !== null && orig !== atual) {
+      html += '<div class="score-decay-note">Score original: <strong>' + orig +
+        '</strong> → Score atual: <strong>' + atual + '</strong> (decay aplicado)</div>';
+    }
+    html += '<div style="font-size:10px;color:var(--text-tertiary);margin-top:8px;">Execute o pipeline para ver o cálculo detalhado</div>';
   }
 
   if ((ioc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE') {
