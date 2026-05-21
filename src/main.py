@@ -114,6 +114,9 @@ def run():
             print("[pipeline] applying BioSec decay ...")
             db.apply_decay()
 
+            print("[pipeline] recalculating scores (skips if already done) ...")
+            db.recalculate_all_scores()
+
             # Report
             print("[pipeline] generating report ...")
             stats = db.get_stats()

@@ -1,3 +1,4 @@
+import json
 import math
 import os
 from datetime import datetime, timedelta
@@ -56,6 +57,8 @@ class IOC(Base):
     false_positive_at   = Column(String)
     tags                = Column(Text)
     correlated_sources  = Column(Text)
+    # BioSec scoring v2
+    score_breakdown     = Column(Text)
 
 
 class Report(Base):
@@ -81,6 +84,8 @@ _DECAY_COLUMNS = [
     ("false_positive_at",   "TEXT"),
     ("tags",                "TEXT"),
     ("correlated_sources",  "TEXT"),
+    # scoring v2
+    ("score_breakdown",     "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -161,6 +166,7 @@ class DatabaseManager:
                 "score_atual":        float(cs) if cs is not None else None,
                 "ioc_status":         ioc.get("ioc_status", "ACTIVE"),
                 "reactivation_count": ioc.get("reactivation_count", 0),
+                "score_breakdown":    ioc.get("score_breakdown"),
             })
         if rows:
             self._session.execute(IOC.__table__.insert(), rows)
@@ -507,12 +513,22 @@ class DatabaseManager:
         return True
 
     def get_ioc_context(self, value: str) -> dict | None:
-        """Returns all fields of a single IOC by value (case-insensitive)."""
+        """Returns all fields of a single IOC by value (case-insensitive).
+        score_breakdown is returned as a parsed dict when present."""
         row = self._session.execute(
             text("SELECT * FROM iocs WHERE LOWER(value) = LOWER(:value)"),
             {"value": value},
         ).mappings().fetchone()
-        return dict(row) if row else None
+        if not row:
+            return None
+        result = dict(row)
+        raw_breakdown = result.get("score_breakdown")
+        if raw_breakdown:
+            try:
+                result["score_breakdown"] = json.loads(raw_breakdown)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return result
 
     def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:
         """Returns recent IOCs from the same source, excluding the anchor IOC."""
@@ -529,6 +545,63 @@ class DatabaseManager:
             {"source": source, "exclude": exclude_value, "limit": limit},
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    def recalculate_all_scores(self) -> int:
+        """Recalculates score_original, score_atual, confidence_score, and score_breakdown
+        for every IOC that lacks a score_breakdown (first-run migration).
+        Processes in batches of 500 to avoid locking the database."""
+        from src.processors.classifier import calculate_score_breakdown
+
+        rows = self._session.execute(
+            text("""
+                SELECT id, type, value, source, abuse_score
+                FROM iocs
+                WHERE score_breakdown IS NULL
+            """)
+        ).mappings().all()
+
+        if not rows:
+            print("[recalculate] score_breakdown already present on all IOCs — skipping")
+            return 0
+
+        updates = []
+        for row in rows:
+            ioc_dict = {
+                "type":        row["type"],
+                "value":       row["value"],
+                "source":      row["source"],
+                "abuse_score": row["abuse_score"],
+            }
+            # Corroboration is 1 per row (values are deduplicated in the DB)
+            breakdown = calculate_score_breakdown(ioc_dict, source_count=1)
+            score     = float(breakdown["score_arredondado"])
+            updates.append({
+                "id":               row["id"],
+                "confidence_score": breakdown["score_arredondado"],
+                "score_original":   score,
+                "score_atual":      score,
+                "score_breakdown":  json.dumps(breakdown, ensure_ascii=False),
+            })
+
+        BATCH_SIZE = 500
+        for i in range(0, len(updates), BATCH_SIZE):
+            batch = updates[i : i + BATCH_SIZE]
+            self._session.execute(
+                text("""
+                    UPDATE iocs
+                    SET confidence_score = :confidence_score,
+                        score_original   = :score_original,
+                        score_atual      = :score_atual,
+                        score_breakdown  = :score_breakdown
+                    WHERE id = :id
+                """),
+                batch,
+            )
+            self._session.commit()
+            print(f"[recalculate] batch {i // BATCH_SIZE + 1}: updated {len(batch)} IOCs")
+
+        print(f"[recalculate] total: {len(updates)} IOCs recalculated")
+        return len(updates)
 
     def cleanup_old_iocs(self) -> int:
         try:

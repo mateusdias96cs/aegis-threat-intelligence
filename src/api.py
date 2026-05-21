@@ -449,6 +449,26 @@ async def lookup_batch(body: BatchLookupRequest):
 # ── BioSec Contextualisation endpoints ───────────────────────────────────────
 
 
+@app.get("/api/iocs/{value}/score-breakdown")
+async def get_score_breakdown(value: str):
+    """Returns the detailed score breakdown for a single IOC. Public — no API key required."""
+    db = DatabaseManager()
+    try:
+        ioc = db.get_ioc_context(value)
+    finally:
+        db.close()
+    if not ioc:
+        raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+    breakdown = ioc.get("score_breakdown")
+    if not breakdown:
+        return {
+            "value": value,
+            "score_breakdown": None,
+            "message": "Execute o pipeline para calcular o score detalhado.",
+        }
+    return {"value": value, "score_breakdown": breakdown}
+
+
 @app.get("/api/iocs/{value}/context")
 async def get_ioc_context(value: str):
     """Returns full IOC context plus correlated IOCs from the same source.
