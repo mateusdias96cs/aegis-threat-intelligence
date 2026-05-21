@@ -2066,7 +2066,9 @@
         }
         el.innerHTML = html + '</div>';
         var catHtml = renderAbuseCategories(data.abuse_categories, data.total_reports);
-        if (catHtml) el.insertAdjacentHTML('afterend', catHtml);
+        if (catHtml && !document.getElementById('abuse-cats-block')) {
+          el.insertAdjacentHTML('afterend', catHtml);
+        }
       })
       .catch(function() {
         var el = document.getElementById('lookup-enrichment');
@@ -2689,7 +2691,7 @@ function renderAbuseCategories(cats, totalReports) {
       '<div class="abuse-cat-bar-bg"><div class="abuse-cat-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'+
     '</div>';
   }).join('');
-  return '<div class="drawer-section">'+
+  return '<div class="drawer-section" id="abuse-cats-block">'+
     '<div class="drawer-section-title">⚠ Comportamento de Abuso</div>'+
     '<div class="abuse-total-note">'+displayTotal+' reports totais · top categorias</div>'+
     '<div>'+bars+'</div>'+
@@ -2760,7 +2762,9 @@ function loadDrawerEnrichment(value) {
       }
       el.innerHTML = html + '</div>';
       var catHtml = renderAbuseCategories(data.abuse_categories, data.total_reports);
-      if (catHtml) el.insertAdjacentHTML('afterend', catHtml);
+      if (catHtml && !document.getElementById('abuse-cats-block')) {
+        el.insertAdjacentHTML('afterend', catHtml);
+      }
     })
     .catch(function() {
       var el = document.getElementById('drawer-enrichment');
