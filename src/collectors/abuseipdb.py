@@ -6,6 +6,29 @@ from datetime import date
 ENDPOINT = "https://api.abuseipdb.com/api/v2/check"
 BLACKLIST_ENDPOINT = "https://api.abuseipdb.com/api/v2/blacklist"
 
+# ── Quota diária AbuseIPDB (free tier: 1000 req/dia) ─────────────────────────
+# Reserva 100 para lookups manuais no dashboard. Pipeline usa até 900/dia.
+_DAILY_QUOTA = 900
+_quota_state: dict = {"date": None, "used": 0}
+
+
+def _quota_remaining() -> int:
+    """Retorna quantas chamadas ainda podem ser feitas hoje pelo pipeline."""
+    today = date.today().isoformat()
+    if _quota_state["date"] != today:
+        _quota_state["date"] = today
+        _quota_state["used"] = 0
+    return max(0, _DAILY_QUOTA - _quota_state["used"])
+
+
+def _quota_consume(n: int = 1) -> None:
+    """Registra n chamadas consumidas."""
+    today = date.today().isoformat()
+    if _quota_state["date"] != today:
+        _quota_state["date"] = today
+        _quota_state["used"] = 0
+    _quota_state["used"] += n
+
 
 def fetch_blacklist() -> list:
     api_key = os.getenv("ABUSEIPDB_API_KEY")
@@ -57,6 +80,11 @@ _CACHE_TTL = 3600  # 1 hour
 
 
 def enrich(ip: str) -> dict:
+    """Enriquece um único IP. Respeita quota diária do pipeline."""
+    if _quota_remaining() <= 0:
+        print(f"[abuseipdb] quota diária do pipeline esgotada — pulando {ip}")
+        return _EMPTY.copy()
+
     api_key = os.getenv("ABUSEIPDB_API_KEY")
     if not api_key:
         print("[abuseipdb] ABUSEIPDB_API_KEY is not set")
@@ -71,15 +99,18 @@ def enrich(ip: str) -> dict:
         )
         response.raise_for_status()
         data = response.json().get("data", {})
+        _quota_consume()
+
         reports = data.get("reports", [])
         cats: dict[int, int] = {}
         for r in reports:
             for cat_id in r.get("categories", []):
                 cats[cat_id] = cats.get(cat_id, 0) + 1
+
         return {
             "abuse_score": data.get("abuseConfidenceScore"),
             "country": data.get("countryCode"),
-            "abuse_categories": cats,
+            "abuse_categories": cats if cats else None,
         }
     except requests.RequestException as e:
         print(f"[abuseipdb] failed to enrich {ip}: {e}")
@@ -87,10 +118,29 @@ def enrich(ip: str) -> dict:
 
 
 def enrich_batch(iocs: list) -> list:
-    for ioc in iocs:
-        if ioc.get("type") == "ip" and ioc.get("value"):
-            ip_val = ioc["value"].split(":")[0]
-            ioc.update(enrich(ip_val))
+    """
+    Enriquece IPs com AbuseIPDB respeitando quota diária.
+    Processa apenas type=ip. Para quando quota esgota.
+    """
+    ip_iocs = [ioc for ioc in iocs if ioc.get("type") == "ip" and ioc.get("value")]
+    total = len(ip_iocs)
+    remaining = _quota_remaining()
+
+    if remaining <= 0:
+        print(f"[abuseipdb] enrich_batch: quota esgotada — {total} IPs sem enriquecimento")
+        return iocs
+
+    to_enrich = ip_iocs[:remaining]
+    skipped = total - len(to_enrich)
+
+    print(f"[abuseipdb] enrich_batch: {len(to_enrich)} IPs a enriquecer, {skipped} pulados (quota), {remaining} restantes hoje")
+
+    for ioc in to_enrich:
+        ip_val = ioc["value"].split(":")[0]
+        result = enrich(ip_val)
+        ioc.update(result)
+
+    print(f"[abuseipdb] enrich_batch: concluído. Quota restante: {_quota_remaining()}")
     return iocs
 
 
