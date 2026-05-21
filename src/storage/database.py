@@ -174,9 +174,20 @@ class DatabaseManager:
 
     # ── reads ─────────────────────────────────────────────────────────────────
 
+    @staticmethod
+    def _parse_breakdown(row: dict) -> dict:
+        """Parses score_breakdown from JSON string to dict in-place (if present)."""
+        raw = row.get("score_breakdown")
+        if raw and isinstance(raw, str):
+            try:
+                row["score_breakdown"] = json.loads(raw)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return row
+
     def get_all_iocs(self) -> list[dict]:
         rows = self._session.execute(text("SELECT * FROM iocs")).mappings().all()
-        return [dict(row) for row in rows]
+        return [self._parse_breakdown(dict(row)) for row in rows]
 
     def get_iocs_paginated(
         self,
@@ -247,7 +258,7 @@ class DatabaseManager:
             "page":  page,
             "pages": max(1, math.ceil(total / limit)),
             "limit": limit,
-            "iocs":  [dict(row) for row in rows],
+            "iocs":  [self._parse_breakdown(dict(row)) for row in rows],
         }
 
     def get_existing_values(self) -> set[str]:
@@ -521,14 +532,7 @@ class DatabaseManager:
         ).mappings().fetchone()
         if not row:
             return None
-        result = dict(row)
-        raw_breakdown = result.get("score_breakdown")
-        if raw_breakdown:
-            try:
-                result["score_breakdown"] = json.loads(raw_breakdown)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        return result
+        return self._parse_breakdown(dict(row))
 
     def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:
         """Returns recent IOCs from the same source, excluding the anchor IOC."""
@@ -552,6 +556,19 @@ class DatabaseManager:
         Processes in batches of 500 to avoid locking the database."""
         from src.processors.classifier import calculate_score_breakdown
 
+        # Pre-check: how many IOCs need recalculation
+        total_iocs = self._session.execute(
+            text("SELECT COUNT(*) FROM iocs")
+        ).fetchone()[0]
+        null_count = self._session.execute(
+            text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NULL")
+        ).fetchone()[0]
+        print(f"[recalculate] total IOCs in DB: {total_iocs} | missing score_breakdown: {null_count}")
+
+        if null_count == 0:
+            print("[recalculate] score_breakdown already present on all IOCs — skipping")
+            return 0
+
         rows = self._session.execute(
             text("""
                 SELECT id, type, value, source, abuse_score
@@ -559,10 +576,6 @@ class DatabaseManager:
                 WHERE score_breakdown IS NULL
             """)
         ).mappings().all()
-
-        if not rows:
-            print("[recalculate] score_breakdown already present on all IOCs — skipping")
-            return 0
 
         updates = []
         for row in rows:
@@ -584,9 +597,10 @@ class DatabaseManager:
             })
 
         BATCH_SIZE = 500
+        total_updated = 0
         for i in range(0, len(updates), BATCH_SIZE):
             batch = updates[i : i + BATCH_SIZE]
-            self._session.execute(
+            result = self._session.execute(
                 text("""
                     UPDATE iocs
                     SET confidence_score = :confidence_score,
@@ -598,10 +612,23 @@ class DatabaseManager:
                 batch,
             )
             self._session.commit()
-            print(f"[recalculate] batch {i // BATCH_SIZE + 1}: updated {len(batch)} IOCs")
+            # rowcount may be -1 on some drivers when using executemany; use batch length
+            batch_updated = result.rowcount if result.rowcount >= 0 else len(batch)
+            total_updated += len(batch)
+            print(f"[recalculate] batch {i // BATCH_SIZE + 1}/{-(-len(updates) // BATCH_SIZE)}: "
+                  f"{len(batch)} submitted, rowcount={result.rowcount}")
 
-        print(f"[recalculate] total: {len(updates)} IOCs recalculated")
-        return len(updates)
+        # Post-update verification
+        still_null = self._session.execute(
+            text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NULL")
+        ).fetchone()[0]
+        now_populated = self._session.execute(
+            text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NOT NULL")
+        ).fetchone()[0]
+        print(f"[recalculate] DONE — populated: {now_populated} | still NULL: {still_null} | total submitted: {total_updated}")
+        if still_null > 0:
+            print(f"[recalculate] WARNING: {still_null} IOCs still have NULL score_breakdown after update")
+        return total_updated
 
     def cleanup_old_iocs(self) -> int:
         try:
