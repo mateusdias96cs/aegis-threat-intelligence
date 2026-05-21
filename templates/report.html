@@ -575,7 +575,7 @@
       </div>
       <div id="rel-filter-label" class="filter" style="display:none">
         <span>Relevance</span>
-        <select id="relevanceFilter" onchange="applyRelevanceFilter()" style="display:none">
+        <select id="relevanceFilter" onchange="fetchPage(1)" style="display:none">
           <option value="">All IOCs</option>
           <option value="relevant">Relevant only</option>
           <option value="monitor">Monitor</option>
@@ -1265,7 +1265,12 @@
       });
       assetProfile.custom.forEach(function(kw) { if (kw && kw.length >= 3) kwSet.add(kw); });
       if (kwSet.size > 0) {
-        params.set('keywords', Array.from(kwSet).slice(0, 20).join(','));
+        var kwString = Array.from(kwSet).slice(0, 20).join(',');
+        params.set('keywords', kwString);
+        console.log('[AEGIS] fetchPage keywords →', kwString);
+        console.log('[AEGIS] full URL →', '/api/iocs?' + params.toString());
+      } else {
+        console.warn('[AEGIS] relevanceFilter=relevant mas kwSet vazio — nenhum asset com regra correspondente?', Array.from(assetProfile.selected));
       }
     }
 
@@ -1371,10 +1376,20 @@
       tbody.appendChild(tr);
     });
 
-    /* Apply relevance tags and immediately enforce the active filter */
+    /* Apply relevance tags and enforce the active filter.
+       When server already filtered by keywords (relevanceFilter=relevant), trust the
+       server result — only hide completely untagged rows, not 'monitor' ones. */
     if (assetProfile && (assetProfile.selected.size > 0 || assetProfile.custom.length > 0)) {
       applyRelevanceTags();
-      applyRelevanceFilter();
+      var relVal = document.getElementById('relevanceFilter').value;
+      if (relVal === 'relevant') {
+        Array.from(document.querySelectorAll('#ioc-tbody tr[data-severity]')).forEach(function(row) {
+          var rel = row.dataset.relevance || '';
+          row.style.display = (rel === 'relevant' || rel === 'monitor') ? '' : 'none';
+        });
+      } else {
+        applyRelevanceFilter();
+      }
     }
 
     updateHeaderCheckbox();
