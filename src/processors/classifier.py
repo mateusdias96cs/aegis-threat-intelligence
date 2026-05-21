@@ -113,11 +113,11 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1) -> dict:
 
     if ioc_type == "cve":
         if cvss is not None:
-            T        = min(100.0, float(cvss) * 10)
-            type_base = f"CVSS {float(cvss):.1f}/10"
+            T         = min(100.0, float(cvss) * 10)
+            type_base = f"CVSS {float(cvss):.1f}/10 (NVD)"
         else:
-            T        = 80.0
-            type_base = "padrão CVE (sem CVSS disponível)"
+            T         = 80.0
+            type_base = "padrão CVE (CVSS não disponível no NVD)"
         type_ref = _TYPE_REFS["cve"].replace("{value}", value)
 
     elif ioc_type == "ip":

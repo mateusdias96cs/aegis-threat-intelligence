@@ -59,6 +59,8 @@ class IOC(Base):
     correlated_sources  = Column(Text)
     # BioSec scoring v2
     score_breakdown     = Column(Text)
+    # NVD CVSS enrichment
+    cvss_score          = Column(Float)
 
 
 class Report(Base):
@@ -86,6 +88,8 @@ _DECAY_COLUMNS = [
     ("correlated_sources",  "TEXT"),
     # scoring v2
     ("score_breakdown",     "TEXT"),
+    # NVD CVSS enrichment
+    ("cvss_score",          "FLOAT"),
 ]
 _dialect = engine.dialect.name
 
@@ -167,6 +171,7 @@ class DatabaseManager:
                 "ioc_status":         ioc.get("ioc_status", "ACTIVE"),
                 "reactivation_count": ioc.get("reactivation_count", 0),
                 "score_breakdown":    ioc.get("score_breakdown"),
+                "cvss_score":         ioc.get("cvss_score"),
             })
         if rows:
             self._session.execute(IOC.__table__.insert(), rows)
@@ -582,7 +587,7 @@ class DatabaseManager:
 
         rows = self._session.execute(
             text("""
-                SELECT id, type, value, source, abuse_score
+                SELECT id, type, value, source, abuse_score, cvss_score
                 FROM iocs
                 WHERE score_breakdown IS NULL
             """)
@@ -595,6 +600,7 @@ class DatabaseManager:
                 "value":       row["value"],
                 "source":      row["source"],
                 "abuse_score": row["abuse_score"],
+                "cvss_score":  row["cvss_score"],
             }
             # Corroboration is 1 per row (values are deduplicated in the DB)
             breakdown = calculate_score_breakdown(ioc_dict, source_count=1)

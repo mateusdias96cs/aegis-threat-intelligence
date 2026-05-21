@@ -2073,7 +2073,11 @@ function renderScoreSection(ioc) {
 
     var srcLabel  = 'Fonte'        + (sr.source ? ' (' + escHtml(sr.source) + ')' : '');
     var corrLabel = 'Corroboração' + (co.count  != null ? ' (' + co.count + ' fonte' + (co.count === 1 ? '' : 's') + ')' : '');
-    var typeLabel = 'Tipo'         + (ts.base   ? ' (' + escHtml(ts.base) + ')' : '');
+    var typeBase  = ts.base || '';
+    var typeBaseHtml = typeBase.indexOf('CVSS') >= 0
+      ? '<span style="color:#4a90e2;font-weight:600;">' + escHtml(typeBase) + '</span>'
+      : escHtml(typeBase);
+    var typeLabel = 'Tipo' + (typeBase ? ' (' + typeBaseHtml + ')' : '');
 
     html += '<div style="margin-top:12px;">' +
       '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1.8px;color:var(--text-tertiary);margin-bottom:6px;">Como este score foi calculado</div>' +
