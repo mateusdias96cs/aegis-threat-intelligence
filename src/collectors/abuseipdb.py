@@ -66,14 +66,20 @@ def enrich(ip: str) -> dict:
         response = requests.get(
             ENDPOINT,
             headers={"Key": api_key, "Accept": "application/json"},
-            params={"ipAddress": ip, "maxAgeInDays": 90},
+            params={"ipAddress": ip, "maxAgeInDays": 90, "verbose": True},
             timeout=30,
         )
         response.raise_for_status()
         data = response.json().get("data", {})
+        reports = data.get("reports", [])
+        cats: dict[int, int] = {}
+        for r in reports:
+            for cat_id in r.get("categories", []):
+                cats[cat_id] = cats.get(cat_id, 0) + 1
         return {
             "abuse_score": data.get("abuseConfidenceScore"),
             "country": data.get("countryCode"),
+            "abuse_categories": cats,
         }
     except requests.RequestException as e:
         print(f"[abuseipdb] failed to enrich {ip}: {e}")
@@ -118,11 +124,17 @@ def lookup_ip(ip: str) -> dict:
         response = requests.get(
             ENDPOINT,
             headers={"Key": api_key, "Accept": "application/json"},
-            params={"ipAddress": ip, "maxAgeInDays": 90, "verbose": False},
+            params={"ipAddress": ip, "maxAgeInDays": 90, "verbose": True},
             timeout=10,
         )
         response.raise_for_status()
         data = response.json().get("data", {})
+        _reports = data.get("reports", [])
+        _cats: dict[int, int] = {}
+        for _r in _reports:
+            for _cat_id in _r.get("categories", []):
+                _cats[_cat_id] = _cats.get(_cat_id, 0) + 1
+
         result = {
             "ip": ip,
             "abuse_score": data.get("abuseConfidenceScore"),
@@ -135,6 +147,7 @@ def lookup_ip(ip: str) -> dict:
             "usage_type": data.get("usageType"),
             "source": "AbuseIPDB-Live",
             "_from_cache": False,
+            "abuse_categories": _cats,
         }
         _lookup_cache[ip] = {"result": result, "cached_at": now}
         return result

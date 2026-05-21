@@ -429,6 +429,17 @@
     .fp-apikey:focus { border-color:var(--red-muted); }
     .fp-form-error { font-size:11px; color:#e74c3c; padding:5px 0; }
     .fp-form-btns { display:flex; gap:8px; }
+    /* ── AbuseIPDB Abuse Categories ── */
+    .abuse-cat-row { margin-bottom:9px; }
+    .abuse-cat-header { display:flex; align-items:center; gap:6px; margin-bottom:3px; flex-wrap:wrap; }
+    .abuse-cat-name { font-size:11px; font-weight:600; color:var(--text-primary); flex-shrink:0; }
+    .abuse-cat-count { font-size:10px; color:var(--text-secondary); margin-left:auto; white-space:nowrap; }
+    .abuse-cat-badges { display:flex; gap:4px; }
+    .abuse-mitre-badge { font-size:9.5px; font-family:var(--font-mono); background:rgba(239,68,68,.15); color:#ef4444; padding:1px 5px; border-radius:2px; border:1px solid rgba(239,68,68,.3); }
+    .abuse-phase-badge { font-size:9.5px; padding:1px 6px; border-radius:2px; font-weight:500; }
+    .abuse-cat-bar-bg { height:4px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; }
+    .abuse-cat-bar    { height:100%; border-radius:2px; transition:width .4s cubic-bezier(.25,.46,.45,.94); }
+    .abuse-total-note { font-size:10px; color:var(--text-tertiary); margin-bottom:10px; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -867,6 +878,40 @@
 
 <script>
   const MITRE_TECHNIQUES = {{ techniques | tojson }};
+
+  const ABUSEIPDB_CATEGORIES = {
+    4:  { name: "DDoS Attack",      mitre: "T1498",     phase: "Impact" },
+    5:  { name: "FTP Brute-Force",  mitre: "T1110",     phase: "Credential Access" },
+    7:  { name: "Phishing",         mitre: "T1566",     phase: "Initial Access" },
+    11: { name: "Email Spam",       mitre: "T1566.001", phase: "Initial Access" },
+    14: { name: "Port Scan",        mitre: "T1046",     phase: "Reconnaissance" },
+    16: { name: "SQL Injection",    mitre: "T1190",     phase: "Initial Access" },
+    17: { name: "Spoofing",         mitre: "T1036",     phase: "Defense Evasion" },
+    18: { name: "Brute Force",      mitre: "T1110",     phase: "Credential Access" },
+    20: { name: "Exploited Host",   mitre: "T1210",     phase: "Lateral Movement" },
+    21: { name: "Web App Attack",   mitre: "T1190",     phase: "Initial Access" },
+    22: { name: "SSH Attack",       mitre: "T1021.004", phase: "Lateral Movement" },
+    1:  { name: "DNS Compromise",   mitre: null, phase: null },
+    2:  { name: "DNS Poisoning",    mitre: null, phase: null },
+    3:  { name: "Fraud Orders",     mitre: null, phase: null },
+    6:  { name: "Ping of Death",    mitre: null, phase: "Impact" },
+    8:  { name: "Fraud VoIP",       mitre: null, phase: null },
+    9:  { name: "Open Proxy",       mitre: null, phase: null },
+    10: { name: "Web Spam",         mitre: null, phase: null },
+    12: { name: "Blog Spam",        mitre: null, phase: null },
+    13: { name: "VPN IP",           mitre: null, phase: null },
+    15: { name: "Hacking",          mitre: null, phase: "Initial Access" },
+    19: { name: "Bad Web Bot",      mitre: null, phase: null },
+    23: { name: "IoT Targeted",     mitre: null, phase: null }
+  };
+  const ABUSE_PHASE_COLORS = {
+    "Reconnaissance":    "#6366f1",
+    "Initial Access":    "#ef4444",
+    "Credential Access": "#f59e0b",
+    "Lateral Movement":  "#8b5cf6",
+    "Impact":            "#dc2626",
+    "Defense Evasion":   "#06b6d4"
+  };
 
   /* ══════════════ Threat Profiling ══════════════ */
 
@@ -1949,6 +1994,8 @@
             '</div></div>';
         }
         el.innerHTML = html + '</div>';
+        var catHtml = renderAbuseCategories(data.abuse_categories, data.total_reports);
+        if (catHtml) el.insertAdjacentHTML('afterend', catHtml);
       })
       .catch(function() {
         var el = document.getElementById('lookup-enrichment');
@@ -2540,6 +2587,38 @@ function renderActionsSection(ioc) {
   return html;
 }
 
+/* ── AbuseIPDB Abuse Categories renderer ────────────────────── */
+function renderAbuseCategories(cats, totalReports) {
+  if (!cats || typeof cats !== 'object') return '';
+  var entries = Object.entries(cats).map(function(e) { return [parseInt(e[0],10), e[1]]; });
+  if (!entries.length) return '';
+  var total = entries.reduce(function(a,e){ return a+e[1]; }, 0);
+  if (!total) return '';
+  var sorted = entries.sort(function(a,b){ return b[1]-a[1]; }).slice(0,6);
+  var displayTotal = totalReports != null ? totalReports : total;
+  var bars = sorted.map(function(e) {
+    var catId = e[0], count = e[1];
+    var cat   = ABUSEIPDB_CATEGORIES[catId] || { name:'Category '+catId, mitre:null, phase:null };
+    var pct   = Math.round((count/total)*100);
+    var color = cat.phase ? (ABUSE_PHASE_COLORS[cat.phase]||'#64748b') : '#64748b';
+    var mitre = cat.mitre ? '<span class="abuse-mitre-badge">'+escHtml(cat.mitre)+'</span>' : '';
+    var phase = cat.phase ? '<span class="abuse-phase-badge" style="background:'+color+'20;color:'+color+'">'+escHtml(cat.phase)+'</span>' : '';
+    return '<div class="abuse-cat-row">'+
+      '<div class="abuse-cat-header">'+
+        '<span class="abuse-cat-name">'+escHtml(cat.name)+'</span>'+
+        '<div class="abuse-cat-badges">'+mitre+phase+'</div>'+
+        '<span class="abuse-cat-count">'+count+' ('+pct+'%)</span>'+
+      '</div>'+
+      '<div class="abuse-cat-bar-bg"><div class="abuse-cat-bar" style="width:'+pct+'%;background:'+color+'"></div></div>'+
+    '</div>';
+  }).join('');
+  return '<div class="drawer-section">'+
+    '<div class="drawer-section-title">⚠ Comportamento de Abuso</div>'+
+    '<div class="abuse-total-note">'+displayTotal+' reports totais · top categorias</div>'+
+    '<div>'+bars+'</div>'+
+  '</div>';
+}
+
 /* ── Helper: info block ─────────────────────────────────────── */
 function drawerInfoBlock(label, value) {
   return '<div class="drawer-info-block">' +
@@ -2603,6 +2682,8 @@ function loadDrawerEnrichment(value) {
           '</div></div>';
       }
       el.innerHTML = html + '</div>';
+      var catHtml = renderAbuseCategories(data.abuse_categories, data.total_reports);
+      if (catHtml) el.insertAdjacentHTML('afterend', catHtml);
     })
     .catch(function() {
       var el = document.getElementById('drawer-enrichment');

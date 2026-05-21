@@ -61,6 +61,8 @@ class IOC(Base):
     score_breakdown     = Column(Text)
     # NVD CVSS enrichment
     cvss_score          = Column(Float)
+    # AbuseIPDB abuse categories
+    abuse_categories    = Column(Text)   # JSON: {"18": 45, "14": 12}
 
 
 class Report(Base):
@@ -90,6 +92,8 @@ _DECAY_COLUMNS = [
     ("score_breakdown",     "TEXT"),
     # NVD CVSS enrichment
     ("cvss_score",          "FLOAT"),
+    # AbuseIPDB abuse categories
+    ("abuse_categories",    "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -172,6 +176,7 @@ class DatabaseManager:
                 "reactivation_count": ioc.get("reactivation_count", 0),
                 "score_breakdown":    ioc.get("score_breakdown"),
                 "cvss_score":         ioc.get("cvss_score"),
+                "abuse_categories":   json.dumps(ioc.get("abuse_categories")) if ioc.get("abuse_categories") else None,
             })
         if rows:
             self._session.execute(IOC.__table__.insert(), rows)
@@ -187,6 +192,16 @@ class DatabaseManager:
             try:
                 row["score_breakdown"] = json.loads(raw)
             except (json.JSONDecodeError, TypeError):
+                pass
+        return row
+
+    @staticmethod
+    def _parse_abuse_categories(row: dict) -> dict:
+        raw = row.get("abuse_categories")
+        if raw and isinstance(raw, str):
+            try:
+                row["abuse_categories"] = {int(k): v for k, v in json.loads(raw).items()}
+            except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         return row
 
@@ -310,7 +325,7 @@ class DatabaseManager:
             text("SELECT * FROM iocs WHERE LOWER(value) = LOWER(:value)"),
             {"value": value},
         ).mappings().fetchone()
-        return dict(row) if row else None
+        return self._parse_abuse_categories(dict(row)) if row else None
 
     def get_critical_since(self, hours: int, limit: int = 100) -> list[dict]:
         """Returns CRITICAL IOCs with first_seen within the last N hours, newest first."""
@@ -548,7 +563,7 @@ class DatabaseManager:
         ).mappings().fetchone()
         if not row:
             return None
-        return self._parse_breakdown(dict(row))
+        return self._parse_abuse_categories(self._parse_breakdown(dict(row)))
 
     def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:
         """Returns recent IOCs from the same source, excluding the anchor IOC."""

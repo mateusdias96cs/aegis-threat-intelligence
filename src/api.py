@@ -375,6 +375,7 @@ async def lookup_ioc(value: str, request: Request):
             result["last_reported"]    = live.get("last_reported")
             result["usage_type"]       = live.get("usage_type")
             result["live_data_cached"] = from_cache
+            result["abuse_categories"] = live.get("abuse_categories")
 
         return result
 
