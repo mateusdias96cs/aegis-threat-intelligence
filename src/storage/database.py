@@ -380,7 +380,7 @@ class DatabaseManager:
 
             dias = max(0, (today - last_seen).days)
             score_orig = float(row["score_original"])
-            score_atual = score_orig * math.exp(-0.693 * dias / half_life)
+            score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
 
             reactivation_count = row["reactivation_count"] or 0
             if last_seen == today and reactivation_count > 0:
@@ -422,7 +422,7 @@ class DatabaseManager:
         reactivation_count = (reactivation_count or 0) + 1
 
         score_atual = (
-            float(score_original) * (1.0 + 0.2 * reactivation_count)
+            min(100.0, float(score_original) * (1.0 + 0.2 * reactivation_count))
             if score_original is not None
             else None
         )
@@ -506,7 +506,7 @@ class DatabaseManager:
                 last_seen = today
             dias = max(0, (today - last_seen).days)
             score_orig = float(score_original)
-            score_atual = score_orig * math.exp(-0.693 * dias / half_life)
+            score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
             rc = reactivation_count or 0
             if last_seen == today and rc > 0:
                 ioc_status = "REACTIVATED"
