@@ -342,6 +342,83 @@
     .badge-reactivated { display:inline-block; background:rgba(74,144,226,.15); color:#4a90e2; border:1px solid #1d3a66; border-radius:2px; font-size:8.5px; font-weight:700; font-family:var(--font-mono); padding:1px 5px; margin-left:6px; vertical-align:middle; letter-spacing:.5px; white-space:nowrap; }
     .tr-decayed  { opacity:0.45; }
     .tr-historical td { font-style:italic; color:var(--text-tertiary) !important; }
+
+    /* ── IOC Context Drawer ─────────────────────────────────────────────────── */
+    .drawer-overlay { position:fixed; inset:0; background:rgba(0,0,0,.72); z-index:1000; opacity:0; visibility:hidden; transition:opacity 240ms ease,visibility 240ms ease; }
+    .drawer-overlay.open { opacity:1; visibility:visible; }
+
+    .ioc-drawer { position:fixed; top:0; right:0; width:42%; min-width:400px; max-width:720px; height:100vh; background:var(--bg-surface); border-left:1px solid var(--border-strong); z-index:1001; display:flex; flex-direction:column; transform:translateX(100%); transition:transform 250ms cubic-bezier(.25,.46,.45,.94); box-shadow:-6px 0 32px rgba(0,0,0,.55); }
+    .ioc-drawer.open { transform:translateX(0); }
+    @media (max-width:800px) { .ioc-drawer { width:100%; min-width:0; } }
+
+    .drawer-header { flex-shrink:0; padding:18px 48px 16px 20px; border-bottom:1px solid var(--border); position:relative; }
+    .drawer-header.sev-critical { background:linear-gradient(160deg,rgba(192,57,43,.14) 0%,transparent 60%); border-top:2px solid var(--critical); }
+    .drawer-header.sev-high     { background:linear-gradient(160deg,rgba(192,96,16,.14) 0%,transparent 60%); border-top:2px solid var(--high); }
+    .drawer-header.sev-medium   { background:linear-gradient(160deg,rgba(212,160,23,.14) 0%,transparent 60%); border-top:2px solid #d4a017; }
+    .drawer-header.sev-low      { background:linear-gradient(160deg,rgba(30,107,30,.14) 0%,transparent 60%); border-top:2px solid #2e9b3e; }
+    .drawer-header-row { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+    .drawer-status-chip { font-size:9px; font-weight:700; letter-spacing:1.4px; text-transform:uppercase; padding:2px 7px; border-radius:2px; border:1px solid; font-family:var(--font-mono); }
+    .drawer-ioc-value { font-family:var(--font-mono); font-size:14px; font-weight:600; color:#fff; word-break:break-all; line-height:1.4; }
+    .drawer-close { position:absolute; top:14px; right:14px; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border-radius:4px; background:rgba(255,255,255,.06); color:var(--text-secondary); font-size:14px; cursor:pointer; border:none; transition:background 150ms ease,color 150ms ease; font-family:inherit; }
+    .drawer-close:hover { background:rgba(255,255,255,.14); color:#fff; }
+
+    .drawer-body { flex:1; overflow-y:auto; padding-bottom:40px; }
+    .drawer-section { padding:16px 20px; border-bottom:1px solid var(--border-subtle); }
+    .drawer-section:last-child { border-bottom:none; }
+    .drawer-section-title { font-size:10px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:12px; }
+    .drawer-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .drawer-info-block { background:var(--bg-elevated); border-radius:3px; padding:9px 12px; }
+    .drawer-info-label { font-size:9.5px; color:var(--text-tertiary); margin-bottom:3px; letter-spacing:.5px; }
+    .drawer-info-value { font-size:12.5px; color:var(--text-primary); font-weight:500; word-break:break-word; }
+
+    /* score bars */
+    .score-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+    .score-bar-label { font-size:10px; color:var(--text-tertiary); width:56px; text-align:right; flex-shrink:0; letter-spacing:.3px; }
+    .score-bar-track { flex:1; height:7px; background:#1a1a1a; border-radius:3px; overflow:hidden; }
+    .score-bar-fill { height:100%; border-radius:3px; transition:width 600ms cubic-bezier(.25,.46,.45,.94); }
+    .score-bar-value { font-size:11px; font-family:var(--font-mono); color:var(--text-primary); width:28px; flex-shrink:0; text-align:right; }
+    .score-decay-note { font-size:11px; color:var(--text-secondary); margin-top:10px; line-height:1.5; }
+    .decay-explanation { font-size:11px; color:var(--text-secondary); margin-top:11px; line-height:1.6; padding:8px 11px; background:rgba(255,255,255,.02); border-radius:3px; border-left:2px solid var(--border-strong); }
+
+    /* FP styles */
+    .fp-warning { margin-top:11px; padding:8px 12px; background:rgba(231,76,60,.10); border:1px solid rgba(231,76,60,.35); border-radius:3px; font-size:12px; color:#e74c3c; font-weight:500; }
+    .fp-note { font-size:11px; color:var(--text-secondary); margin-top:6px; font-style:italic; }
+
+    /* mitre row */
+    .mitre-row { display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap; }
+    .mitre-tech-name { font-size:13px; color:var(--text-primary); font-weight:500; }
+
+    /* status dot */
+    .status-dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0; vertical-align:middle; margin-right:6px; }
+    .drawer-status-desc { font-size:12px; color:var(--text-secondary); line-height:1.6; display:flex; align-items:flex-start; flex-wrap:wrap; }
+
+    /* enrichment */
+    .enrich-loading { display:flex; align-items:center; gap:10px; color:var(--text-secondary); font-size:12px; }
+    .enrich-spinner { width:14px; height:14px; border:2px solid var(--border-strong); border-top-color:var(--text-secondary); border-radius:50%; animation:spin 700ms linear infinite; flex-shrink:0; }
+    @keyframes spin { to { transform:rotate(360deg); } }
+
+    /* correlated pills */
+    .correlated-pills { display:flex; flex-wrap:wrap; gap:6px; }
+    .correlated-pill { padding:3px 10px; border-radius:999px; font-size:11px; font-weight:500; cursor:pointer; border:1px solid var(--border-strong); background:rgba(255,255,255,.04); color:var(--text-secondary); font-family:var(--font-mono); transition:all 150ms ease; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:200px; }
+    .correlated-pill:hover { background:rgba(255,255,255,.09); color:#fff; border-color:var(--border-strong); }
+
+    /* action buttons */
+    .drawer-actions-section { border-bottom:none; }
+    .drawer-action-btns { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:14px; }
+    .btn-drawer-action { display:inline-flex; align-items:center; gap:5px; padding:6px 13px; border:1px solid var(--border-strong); border-radius:3px; font-size:11px; color:var(--text-primary); background:transparent; cursor:pointer; text-decoration:none; font-family:var(--font-sans); transition:all 150ms ease; }
+    .btn-drawer-action:hover { border-color:var(--red-muted); color:#fff; background:rgba(192,57,43,.10); }
+    .drawer-fp-area { padding-top:12px; border-top:1px solid var(--border-subtle); }
+    .btn-drawer-fp { padding:7px 14px; border:1px solid rgba(192,57,43,.4); border-radius:3px; font-size:11px; color:var(--red-bright); background:transparent; cursor:pointer; font-family:var(--font-sans); transition:all 150ms ease; display:inline-flex; align-items:center; gap:5px; }
+    .btn-drawer-fp:hover { background:rgba(192,57,43,.12); border-color:var(--red-primary); }
+    .btn-drawer-fp-revert { padding:7px 14px; border:1px solid rgba(74,144,226,.4); border-radius:3px; font-size:11px; color:#4a90e2; background:transparent; cursor:pointer; font-family:var(--font-sans); transition:all 150ms ease; display:inline-flex; align-items:center; gap:5px; }
+    .btn-drawer-fp-revert:hover { background:rgba(74,144,226,.12); border-color:#4a90e2; }
+    .fp-form-inner { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+    .fp-textarea { width:100%; background:#080808; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:3px; padding:8px 10px; font-size:12px; font-family:var(--font-sans); resize:vertical; min-height:52px; outline:none; transition:border-color 150ms; }
+    .fp-textarea:focus { border-color:var(--red-muted); }
+    .fp-apikey { width:100%; background:#080808; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:3px; padding:7px 10px; font-size:12px; font-family:var(--font-mono); outline:none; transition:border-color 150ms; }
+    .fp-apikey:focus { border-color:var(--red-muted); }
+    .fp-form-error { font-size:11px; color:#e74c3c; padding:5px 0; }
+    .fp-form-btns { display:flex; gap:8px; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -1261,6 +1338,11 @@
           updateHeaderCheckbox();
           updateSelectionBar();
         });
+        tr.style.cursor = 'pointer';
+        tr.addEventListener('click', function(e) {
+          if (e.target.closest('.cb-col')) return;
+          openDrawer(ioc);
+        });
       })(ioc, tr);
 
       tbody.appendChild(tr);
@@ -1753,6 +1835,16 @@
   renderMitrePage(1);
 </script>
 
+<!-- ═══════════════ IOC Context Drawer ═══════════════ -->
+<div id="drawer-overlay" class="drawer-overlay" onclick="closeDrawer()"></div>
+<div id="ioc-drawer" class="ioc-drawer" role="dialog" aria-modal="true">
+  <div id="drawer-header" class="drawer-header">
+    <button class="drawer-close" onclick="closeDrawer()" title="Fechar (ESC)">✕</button>
+    <div id="drawer-header-inner"></div>
+  </div>
+  <div id="drawer-body" class="drawer-body"></div>
+</div>
+
 <script>
 const TREND_DATA = {{ trends | tojson }};
 
@@ -1805,6 +1897,418 @@ const TREND_DATA = {{ trends | tojson }};
     },
   });
 })();
+</script>
+
+<script>
+/* ══════════════════════════════════════════════════════════════
+   BioSec Contextualisation — IOC Drawer
+══════════════════════════════════════════════════════════════ */
+
+var _drawerOpen     = false;
+var _drawerIoc      = null;
+var _drawerOrigTitle = document.title;
+var _correlatedIocs = [];
+
+var _HALF_LIVES_JS = { ip: 15, url: 7, domain: 30, hash: 180, cve: 365 };
+
+/* ── Open / close ─────────────────────────────────────────────── */
+function openDrawer(ioc) {
+  _drawerIoc  = ioc;
+  _drawerOpen = true;
+  document.title = (ioc.value || '') + ' — AEGIS';
+
+  renderDrawerHeader(ioc);
+  renderDrawerBody(ioc);
+
+  document.getElementById('drawer-overlay').classList.add('open');
+  document.getElementById('ioc-drawer').classList.add('open');
+  document.getElementById('drawer-body').scrollTop = 0;
+
+  loadDrawerContext(ioc.value);
+  if ((ioc.type || '').toLowerCase() === 'ip') loadDrawerEnrichment(ioc.value);
+}
+
+function closeDrawer() {
+  if (!_drawerOpen) return;
+  _drawerOpen = false;
+  document.title = _drawerOrigTitle;
+  document.getElementById('drawer-overlay').classList.remove('open');
+  document.getElementById('ioc-drawer').classList.remove('open');
+}
+
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape' && _drawerOpen) closeDrawer();
+});
+
+/* ── Header ──────────────────────────────────────────────────── */
+function renderDrawerHeader(ioc) {
+  var sev    = (ioc.severity   || 'LOW').toUpperCase();
+  var type   = (ioc.type       || '').toLowerCase();
+  var status = (ioc.ioc_status || 'ACTIVE').toUpperCase();
+  var val    = ioc.value || '';
+
+  var header = document.getElementById('drawer-header');
+  header.className = 'drawer-header sev-' + sev.toLowerCase();
+
+  var chipColor = { REACTIVATED:'#4a90e2', DECAYED:'#d4a017', HISTORICAL:'#555',
+                    FALSE_POSITIVE:'#e74c3c', ACTIVE:'#2e9b3e' }[status] || '#2e9b3e';
+
+  document.getElementById('drawer-header-inner').innerHTML =
+    '<div class="drawer-header-row">' +
+      '<span class="type-pill type-pill-' + escHtml(type) + '">' + escHtml(type || '—') + '</span>' +
+      '<span class="badge badge-' + escHtml(sev) + '">' + escHtml(sev) + '</span>' +
+      '<span class="drawer-status-chip" style="color:' + chipColor + ';border-color:' + chipColor + '">' +
+        escHtml(status) + '</span>' +
+    '</div>' +
+    '<div class="drawer-ioc-value" title="' + escHtml(val) + '">' + escHtml(val) + '</div>';
+}
+
+/* ── Body orchestration ──────────────────────────────────────── */
+function renderDrawerBody(ioc) {
+  var type = (ioc.type || '').toLowerCase();
+  var hasScore = ioc.score_original != null || ioc.score_atual != null;
+  var hasMitre = ioc.mitre_technique_id || ioc.mitre_tactic;
+
+  var html = '';
+  if (hasScore || ioc.ioc_status === 'FALSE_POSITIVE') html += renderScoreSection(ioc);
+  html += renderOriginSection(ioc);
+  if (hasMitre) html += renderMitreSection(ioc);
+  if (type === 'ip') html += '<div id="drawer-enrichment">' + renderEnrichLoading() + '</div>';
+  html += renderHistorySection(ioc);
+  html += '<div id="drawer-correlated"></div>';
+  html += renderActionsSection(ioc);
+
+  document.getElementById('drawer-body').innerHTML = html;
+
+  var fpBtn = document.getElementById('btn-drawer-fp');
+  if (fpBtn) {
+    fpBtn.addEventListener('click', function() { toggleFpForm(); });
+  }
+}
+
+/* ── Section: Score ─────────────────────────────────────────── */
+function renderScoreSection(ioc) {
+  var orig  = ioc.score_original != null ? Math.round(ioc.score_original) : null;
+  var atual = ioc.score_atual    != null ? Math.round(ioc.score_atual)    : null;
+
+  var html = '<div class="drawer-section"><div class="drawer-section-title">Score &amp; Confiança</div>';
+
+  function barColor(v) {
+    return v >= 71 ? '#e74c3c' : v >= 41 ? '#e3b341' : '#3fb950';
+  }
+
+  if (orig !== null) {
+    var c = barColor(orig);
+    html += '<div class="score-bar-row">' +
+      '<div class="score-bar-label">Original</div>' +
+      '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,orig) + '%;background:' + c + '"></div></div>' +
+      '<div class="score-bar-value">' + orig + '</div></div>';
+  }
+  if (atual !== null) {
+    var c2 = barColor(atual);
+    html += '<div class="score-bar-row">' +
+      '<div class="score-bar-label">Atual</div>' +
+      '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,atual) + '%;background:' + c2 + '"></div></div>' +
+      '<div class="score-bar-value">' + atual + '</div></div>';
+  }
+  if (orig !== null && atual !== null && orig !== atual) {
+    html += '<div class="score-decay-note">Score original: <strong>' + orig +
+      '</strong> → Score atual: <strong>' + atual + '</strong> (decay aplicado)</div>';
+  }
+
+  if ((ioc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE') {
+    html += '<div class="fp-warning">⚠ Marcado como falso positivo</div>';
+    if (ioc.false_positive_note) {
+      html += '<div class="fp-note">"' + escHtml(ioc.false_positive_note) + '"</div>';
+    }
+  }
+
+  return html + '</div>';
+}
+
+/* ── Section: Origin ────────────────────────────────────────── */
+function renderOriginSection(ioc) {
+  var lastSeenStr = (ioc.last_seen  || '').substring(0, 10);
+  var firstSeen   = (ioc.first_seen || '').substring(0, 10) || '—';
+  var days = 0;
+  if (lastSeenStr) {
+    days = Math.max(0, Math.floor((Date.now() - new Date(lastSeenStr)) / 86400000));
+  }
+  var halfLife = _HALF_LIVES_JS[(ioc.type || '').toLowerCase()] || 30;
+  var daysLabel = days === 0 ? 'hoje' : days === 1 ? 'ontem' : 'há ' + days + ' dias';
+
+  var html = '<div class="drawer-section"><div class="drawer-section-title">Origem &amp; Confirmação</div>' +
+    '<div class="drawer-info-grid">' +
+      drawerInfoBlock('Fonte',               escHtml(ioc.source || '—')) +
+      drawerInfoBlock('Primeira detecção',   escHtml(firstSeen)) +
+      drawerInfoBlock('Última confirmação',  escHtml(lastSeenStr || '—')) +
+      drawerInfoBlock('Reativações',         String(ioc.reactivation_count || 0)) +
+    '</div>';
+
+  if (lastSeenStr) {
+    html += '<div class="decay-explanation">' +
+      'Visto pela última vez <strong>' + daysLabel + '</strong>. ' +
+      'Meia-vida para <strong>' + escHtml(ioc.type || 'unknown') + '</strong>: ' +
+      '<strong>' + halfLife + ' dias</strong>.' +
+      '</div>';
+  }
+
+  return html + '</div>';
+}
+
+/* ── Section: MITRE ─────────────────────────────────────────── */
+function renderMitreSection(ioc) {
+  var techId   = ioc.mitre_technique_id || '';
+  var tactic   = ioc.mitre_tactic || '';
+  var techData = techId ? (MITRE_TECHNIQUES[techId] || null) : null;
+  var techName = techData ? (techData.name || '') : '';
+  var techUrl  = techData ? (techData.url || '') : (techId ? 'https://attack.mitre.org/techniques/' + techId + '/' : '');
+
+  var html = '<div class="drawer-section"><div class="drawer-section-title">Contexto de Ataque</div>';
+  html += '<div class="mitre-row">';
+  if (techId)   html += '<span class="lookup-tech-id">' + escHtml(techId) + '</span>';
+  if (techName) html += '<span class="mitre-tech-name">' + escHtml(techName) + '</span>';
+  html += '</div>';
+  if (tactic)  html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:6px">' + escHtml(tactic) + '</div>';
+  if (techUrl) html += '<a href="' + escHtml(techUrl) + '" target="_blank" class="lookup-att-link" style="font-size:11px">Ver no ATT&amp;CK ↗</a>';
+  return html + '</div>';
+}
+
+/* ── Section: Live Enrichment placeholder ───────────────────── */
+function renderEnrichLoading() {
+  return '<div class="drawer-section"><div class="drawer-section-title">Enriquecimento ao Vivo</div>' +
+    '<div class="enrich-loading"><span class="enrich-spinner"></span>Carregando dados ao vivo…</div></div>';
+}
+
+/* ── Section: History ───────────────────────────────────────── */
+function renderHistorySection(ioc) {
+  var status = (ioc.ioc_status || 'ACTIVE').toUpperCase();
+  var dotColors = { ACTIVE:'#2e9b3e', REACTIVATED:'#4a90e2', DECAYED:'#d4a017',
+                    HISTORICAL:'#555', FALSE_POSITIVE:'#e74c3c' };
+  var dot = '<span class="status-dot" style="background:' + (dotColors[status] || '#888') + ';display:inline-block"></span>';
+
+  var desc = '';
+  if (status === 'ACTIVE') {
+    desc = dot + ' Ativo — IOC com score vigente, monitoramento recomendado.';
+  } else if (status === 'REACTIVATED') {
+    desc = dot + ' Reativado — reapareceu <strong>' + (ioc.reactivation_count || 0) + 'x</strong> após período inativo. Alta confiança.';
+  } else if (status === 'DECAYED') {
+    desc = dot + ' Em Decay — score reduzido pelo tempo. Verifique relevância antes de agir.';
+  } else if (status === 'HISTORICAL') {
+    desc = dot + ' Histórico — score próximo de zero. Considere arquivar ou aguardar reativação.';
+  } else if (status === 'FALSE_POSITIVE') {
+    desc = dot + ' Falso Positivo';
+    if (ioc.false_positive_at) desc += ' — marcado em <strong>' + escHtml(String(ioc.false_positive_at).substring(0,10)) + '</strong>';
+    if (ioc.false_positive_note) desc += '<div class="fp-note" style="margin-top:5px">Nota: ' + escHtml(ioc.false_positive_note) + '</div>';
+  }
+
+  return '<div class="drawer-section"><div class="drawer-section-title">Histórico &amp; Contexto</div>' +
+    (desc ? '<div class="drawer-status-desc" style="font-size:12px;color:var(--text-secondary);line-height:1.65">' + desc + '</div>' : '') +
+    '</div>';
+}
+
+/* ── Section: Actions ───────────────────────────────────────── */
+function renderActionsSection(ioc) {
+  var val   = ioc.value || '';
+  var type  = (ioc.type || '').toLowerCase();
+  var isFp  = (ioc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE' || ioc.false_positive == 1;
+  var vtUrl = 'https://www.virustotal.com/gui/search/' + encodeURIComponent(val);
+  var shUrl = 'https://www.shodan.io/search?query=' + encodeURIComponent(val);
+
+  var html = '<div class="drawer-section drawer-actions-section">' +
+    '<div class="drawer-section-title">Ações do Analista</div>' +
+    '<div class="drawer-action-btns">' +
+      '<button class="btn-drawer-action" onclick="copyDrawerIoc()">📋 Copiar valor</button>' +
+      '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
+  if (type === 'ip') html += '<a href="' + escHtml(shUrl) + '" target="_blank" class="btn-drawer-action">🔗 Shodan</a>';
+  html += '</div>';
+
+  html += '<div class="drawer-fp-area">';
+  if (isFp) {
+    html += '<button class="btn-drawer-fp-revert" id="btn-drawer-fp">↩ Reverter Falso Positivo</button>';
+  } else {
+    html += '<button class="btn-drawer-fp" id="btn-drawer-fp">🚩 Marcar como Falso Positivo</button>';
+  }
+  html += '</div>';
+
+  html += '<div id="drawer-fp-form" style="display:none">' +
+    '<div class="fp-form-inner">' +
+      '<textarea id="fp-note-input" class="fp-textarea" placeholder="Nota opcional para o analista…"></textarea>' +
+      '<input id="fp-apikey-input" type="password" class="fp-apikey" placeholder="API Key (obrigatória)" />' +
+      '<div id="fp-form-error" class="fp-form-error" style="display:none"></div>' +
+      '<div class="fp-form-btns">' +
+        '<button class="btn-drawer-action btn-fp-confirm" id="btn-fp-confirm">Confirmar</button>' +
+        '<button class="btn-drawer-action" onclick="closeFpForm()">Cancelar</button>' +
+      '</div>' +
+    '</div>' +
+  '</div></div>';
+
+  return html;
+}
+
+/* ── Helper: info block ─────────────────────────────────────── */
+function drawerInfoBlock(label, value) {
+  return '<div class="drawer-info-block">' +
+    '<div class="drawer-info-label">' + escHtml(label) + '</div>' +
+    '<div class="drawer-info-value">' + value + '</div>' +
+    '</div>';
+}
+
+/* ── Async: context from /api/iocs/{value}/context ──────────── */
+function loadDrawerContext(value) {
+  fetch('/api/iocs/' + encodeURIComponent(value) + '/context')
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data) {
+      if (!_drawerOpen) return;
+      // Re-render with full data (handles correlated pill clicks with sparse data)
+      if (data && data.ioc) {
+        _drawerIoc = data.ioc;
+        renderDrawerHeader(data.ioc);
+        renderDrawerBody(data.ioc);
+        if ((data.ioc.type || '').toLowerCase() === 'ip') loadDrawerEnrichment(value);
+      }
+      var corrEl = document.getElementById('drawer-correlated');
+      if (corrEl) corrEl.innerHTML = renderCorrelatedSection(
+        data.correlated_iocs || [], (data.ioc || {}).source || '');
+    })
+    .catch(function() { /* context unavailable — keep initial render */ });
+}
+
+/* ── Async: live enrichment for IP ─────────────────────────── */
+function loadDrawerEnrichment(value) {
+  fetch('/api/lookup/' + encodeURIComponent(value))
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data) {
+      if (!_drawerOpen) return;
+      var el = document.getElementById('drawer-enrichment');
+      if (!el) return;
+
+      var score   = data.live_abuse_score != null ? data.live_abuse_score : data.abuse_score;
+      var country = data.live_country || data.country || '';
+      var isp     = data.isp || '—';
+      var reports = data.total_reports  != null ? data.total_reports  : '—';
+      var lastRep = (data.last_reported || '').substring(0, 10) || '—';
+      var flag    = (country && country.length === 2) ? countryFlag(country) + ' ' : '';
+      var barClr  = score != null ? (score >= 71 ? '#e74c3c' : score >= 31 ? '#e3b341' : '#3fb950') : '#666';
+      var pct     = score != null ? Math.min(100, score) : 0;
+
+      var html = '<div class="drawer-section"><div class="drawer-section-title">Enriquecimento ao Vivo</div>' +
+        '<div class="drawer-info-grid">' +
+          drawerInfoBlock('País',           flag + escHtml(country || '—')) +
+          drawerInfoBlock('ISP',            escHtml(isp)) +
+          drawerInfoBlock('Total reportes', String(reports)) +
+          drawerInfoBlock('Último reporte', escHtml(lastRep)) +
+        '</div>';
+
+      if (score != null) {
+        html += '<div style="margin-top:13px">' +
+          '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">ABUSEIPDB SCORE</div>' +
+          '<div class="score-bar-row">' +
+            '<div class="score-bar-track" style="flex:1"><div class="score-bar-fill" style="width:' + pct + '%;background:' + barClr + '"></div></div>' +
+            '<div class="score-bar-value" style="color:' + barClr + ';width:auto;padding-left:8px">' + score + '/100</div>' +
+          '</div></div>';
+      }
+      el.innerHTML = html + '</div>';
+    })
+    .catch(function() {
+      var el = document.getElementById('drawer-enrichment');
+      if (el) el.innerHTML = '<div class="drawer-section"><div class="drawer-section-title">Enriquecimento ao Vivo</div>' +
+        '<div style="color:var(--text-tertiary);font-size:12px">Enriquecimento indisponível no momento.</div></div>';
+    });
+}
+
+/* ── Correlated IOCs section ────────────────────────────────── */
+function renderCorrelatedSection(correlated, source) {
+  _correlatedIocs = correlated || [];
+  if (!_correlatedIocs.length) return '';
+
+  var html = '<div class="drawer-section"><div class="drawer-section-title">Outros IOCs desta Campanha</div>' +
+    '<div style="font-size:10.5px;color:var(--text-tertiary);margin-bottom:9px">Fonte: ' + escHtml(source) + '</div>' +
+    '<div class="correlated-pills">';
+
+  _correlatedIocs.forEach(function(c, idx) {
+    var disp = (c.value || '').length > 22 ? (c.value || '').substring(0, 22) + '…' : (c.value || '');
+    html += '<span class="correlated-pill" onclick="openCorrelatedIoc(' + idx + ')" title="' +
+      escHtml(c.value || '') + '">' + escHtml(disp) + '</span>';
+  });
+
+  return html + '</div></div>';
+}
+
+function openCorrelatedIoc(idx) {
+  var c = _correlatedIocs[idx];
+  if (c) openDrawer(c);
+}
+
+/* ── FP form ────────────────────────────────────────────────── */
+function toggleFpForm() {
+  var form = document.getElementById('drawer-fp-form');
+  if (!form) return;
+  var show = form.style.display === 'none';
+  form.style.display = show ? '' : 'none';
+  if (show) {
+    var errEl = document.getElementById('fp-form-error');
+    if (errEl) errEl.style.display = 'none';
+    var conf = document.getElementById('btn-fp-confirm');
+    if (conf) {
+      var isFp = (_drawerIoc && (_drawerIoc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE');
+      conf.onclick = function() { submitFpAction(isFp); };
+    }
+  }
+}
+
+function closeFpForm() {
+  var form = document.getElementById('drawer-fp-form');
+  if (form) form.style.display = 'none';
+}
+
+function submitFpAction(isRevert) {
+  var apiKey = (document.getElementById('fp-apikey-input') || {}).value || '';
+  var note   = (document.getElementById('fp-note-input')   || {}).value || '';
+  var errEl  = document.getElementById('fp-form-error');
+
+  if (!apiKey) {
+    if (errEl) { errEl.textContent = 'API Key é obrigatória.'; errEl.style.display = ''; }
+    return;
+  }
+
+  var value = (_drawerIoc || {}).value || '';
+  var url   = isRevert
+    ? '/api/iocs/' + encodeURIComponent(value) + '/revert-false-positive'
+    : '/api/iocs/' + encodeURIComponent(value) + '/false-positive';
+  var payload = isRevert ? { api_key: apiKey } : { note: note, api_key: apiKey };
+
+  var conf = document.getElementById('btn-fp-confirm');
+  if (conf) { conf.textContent = 'Enviando…'; conf.disabled = true; }
+
+  fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  })
+  .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+  .then(function(res) {
+    if (conf) { conf.textContent = 'Confirmar'; conf.disabled = false; }
+    if (!res.ok) {
+      var msg = (res.data && res.data.detail) ? res.data.detail : 'Erro ao processar.';
+      if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+      return;
+    }
+    closeFpForm();
+    loadDrawerContext(value);   // re-renders drawer with updated FP state
+  })
+  .catch(function() {
+    if (conf) { conf.textContent = 'Confirmar'; conf.disabled = false; }
+    if (errEl) { errEl.textContent = 'Erro de conexão.'; errEl.style.display = ''; }
+  });
+}
+
+/* ── Copy IOC value ─────────────────────────────────────────── */
+function copyDrawerIoc() {
+  var val = (_drawerIoc || {}).value || '';
+  if (!val) return;
+  navigator.clipboard.writeText(val).catch(function() {});
+}
 </script>
 </body>
 </html>

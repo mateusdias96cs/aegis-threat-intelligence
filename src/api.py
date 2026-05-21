@@ -127,6 +127,15 @@ class BatchLookupRequest(BaseModel):
     values: list[str]
 
 
+class FalsePositiveBody(BaseModel):
+    note: str = ""
+    api_key: str
+
+
+class RevertFalsePositiveBody(BaseModel):
+    api_key: str
+
+
 # ── Existing endpoints ────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -435,6 +444,64 @@ async def lookup_batch(body: BatchLookupRequest):
         db.close()
 
     return {"total": len(results), "results": results}
+
+
+# ── BioSec Contextualisation endpoints ───────────────────────────────────────
+
+
+@app.get("/api/iocs/{value}/context")
+async def get_ioc_context(value: str):
+    """Returns full IOC context plus correlated IOCs from the same source.
+    Public — no API key required. Used by the drawer panel."""
+    db = DatabaseManager()
+    try:
+        ioc = db.get_ioc_context(value)
+        if not ioc:
+            raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+        correlated = db.get_correlated_iocs(
+            source=ioc.get("source", ""),
+            exclude_value=value,
+            limit=5,
+        )
+        return {"ioc": ioc, "correlated_iocs": correlated}
+    finally:
+        db.close()
+
+
+@app.post("/api/iocs/{value}/false-positive")
+async def mark_false_positive_endpoint(value: str, body: FalsePositiveBody):
+    """Marks an IOC as a false positive. Requires AEGIS_API_KEY in the request body."""
+    configured = os.getenv("AEGIS_API_KEY", "")
+    if not configured:
+        raise HTTPException(status_code=500, detail="AEGIS_API_KEY não configurada no servidor.")
+    if not body.api_key or not hmac.compare_digest(body.api_key.encode(), configured.encode()):
+        raise HTTPException(status_code=401, detail="API key inválida.")
+    db = DatabaseManager()
+    try:
+        ok = db.mark_false_positive(value, body.note)
+    finally:
+        db.close()
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+    return {"success": True, "message": "IOC marcado como falso positivo."}
+
+
+@app.post("/api/iocs/{value}/revert-false-positive")
+async def revert_false_positive_endpoint(value: str, body: RevertFalsePositiveBody):
+    """Reverts a false-positive flag. Requires AEGIS_API_KEY in the request body."""
+    configured = os.getenv("AEGIS_API_KEY", "")
+    if not configured:
+        raise HTTPException(status_code=500, detail="AEGIS_API_KEY não configurada no servidor.")
+    if not body.api_key or not hmac.compare_digest(body.api_key.encode(), configured.encode()):
+        raise HTTPException(status_code=401, detail="API key inválida.")
+    db = DatabaseManager()
+    try:
+        ok = db.unmark_false_positive(value)
+    finally:
+        db.close()
+    if not ok:
+        raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+    return {"success": True, "message": "Falso positivo revertido."}
 
 
 # ── TAXII 2.1 ─────────────────────────────────────────────────────────────────

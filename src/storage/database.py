@@ -50,6 +50,12 @@ class IOC(Base):
     score_atual        = Column(Float)
     ioc_status         = Column(String(20), default="ACTIVE")
     reactivation_count = Column(Integer, default=0)
+    # BioSec contextualisation fields
+    false_positive      = Column(Integer, default=0)   # stored as 0/1 for SQLite compat
+    false_positive_note = Column(Text)
+    false_positive_at   = Column(String)
+    tags                = Column(Text)
+    correlated_sources  = Column(Text)
 
 
 class Report(Base):
@@ -63,12 +69,18 @@ class Report(Base):
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 
-# ── BioSec decay migration (safe — adds columns only if absent) ───────────────
+# ── BioSec migrations (safe — adds columns only if absent) ───────────────────
 _DECAY_COLUMNS = [
     ("score_original",     "FLOAT"),
     ("score_atual",        "FLOAT"),
     ("ioc_status",         "VARCHAR(20) DEFAULT 'ACTIVE'"),
     ("reactivation_count", "INTEGER DEFAULT 0"),
+    # contextualisation
+    ("false_positive",      "INTEGER DEFAULT 0"),
+    ("false_positive_note", "TEXT"),
+    ("false_positive_at",   "TEXT"),
+    ("tags",                "TEXT"),
+    ("correlated_sources",  "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -191,7 +203,7 @@ class DatabaseManager:
         status_upper = (status or "").upper()
         if status_upper == "ALL":
             pass  # no status filter
-        elif status_upper in ("ACTIVE", "DECAYED", "HISTORICAL", "REACTIVATED"):
+        elif status_upper in ("ACTIVE", "DECAYED", "HISTORICAL", "REACTIVATED", "FALSE_POSITIVE"):
             conditions.append("ioc_status = :ioc_status")
             params["ioc_status"] = status_upper
         else:
@@ -325,6 +337,7 @@ class DatabaseManager:
                 SELECT id, type, score_original, last_seen, ioc_status, reactivation_count
                 FROM iocs
                 WHERE score_original IS NOT NULL
+                  AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
             """)
         ).mappings().all()
 
@@ -415,6 +428,107 @@ class DatabaseManager:
             text("SELECT ioc_status, COUNT(*) AS count FROM iocs GROUP BY ioc_status")
         ).all()
         return {(row[0] or "UNKNOWN"): row[1] for row in rows}
+
+    # ── BioSec contextualisation ──────────────────────────────────────────────
+
+    def mark_false_positive(self, value: str, note: str = "") -> bool:
+        """Flags an IOC as a false positive, reducing its score by 80%."""
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        row = self._session.execute(
+            text("SELECT id, score_atual FROM iocs WHERE LOWER(value) = LOWER(:value)"),
+            {"value": value},
+        ).fetchone()
+        if not row:
+            return False
+        ioc_id, score_atual = row
+        new_score = float(score_atual or 0) * 0.2
+        self._session.execute(
+            text("""
+                UPDATE iocs
+                SET false_positive = 1,
+                    false_positive_note = :note,
+                    false_positive_at = :at,
+                    score_atual = :score,
+                    ioc_status = 'FALSE_POSITIVE'
+                WHERE id = :id
+            """),
+            {"note": note, "at": today, "score": new_score, "id": ioc_id},
+        )
+        self._session.commit()
+        return True
+
+    def unmark_false_positive(self, value: str) -> bool:
+        """Reverts a false-positive flag and restores the natural decay status."""
+        today = datetime.utcnow().date()
+        row = self._session.execute(
+            text("""
+                SELECT id, type, score_original, last_seen, reactivation_count
+                FROM iocs WHERE LOWER(value) = LOWER(:value)
+            """),
+            {"value": value},
+        ).fetchone()
+        if not row:
+            return False
+        ioc_id, ioc_type, score_original, last_seen_raw, reactivation_count = row
+        if score_original is not None:
+            half_life = self._HALF_LIVES.get(ioc_type or "", 30)
+            try:
+                last_seen = datetime.strptime(str(last_seen_raw or "")[:10], "%Y-%m-%d").date()
+            except (ValueError, TypeError):
+                last_seen = today
+            dias = max(0, (today - last_seen).days)
+            score_orig = float(score_original)
+            score_atual = score_orig * math.exp(-0.693 * dias / half_life)
+            rc = reactivation_count or 0
+            if last_seen == today and rc > 0:
+                ioc_status = "REACTIVATED"
+            elif score_atual >= 0.20 * score_orig:
+                ioc_status = "ACTIVE"
+            elif score_atual >= 0.05 * score_orig:
+                ioc_status = "DECAYED"
+            else:
+                ioc_status = "HISTORICAL"
+        else:
+            score_atual = None
+            ioc_status = "ACTIVE"
+        self._session.execute(
+            text("""
+                UPDATE iocs
+                SET false_positive = 0,
+                    false_positive_note = NULL,
+                    false_positive_at = NULL,
+                    score_atual = :score,
+                    ioc_status = :status
+                WHERE id = :id
+            """),
+            {"score": score_atual, "status": ioc_status, "id": ioc_id},
+        )
+        self._session.commit()
+        return True
+
+    def get_ioc_context(self, value: str) -> dict | None:
+        """Returns all fields of a single IOC by value (case-insensitive)."""
+        row = self._session.execute(
+            text("SELECT * FROM iocs WHERE LOWER(value) = LOWER(:value)"),
+            {"value": value},
+        ).mappings().fetchone()
+        return dict(row) if row else None
+
+    def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:
+        """Returns recent IOCs from the same source, excluding the anchor IOC."""
+        if not source:
+            return []
+        rows = self._session.execute(
+            text("""
+                SELECT value, type, severity, ioc_status
+                FROM iocs
+                WHERE source = :source AND LOWER(value) != LOWER(:exclude)
+                ORDER BY first_seen DESC
+                LIMIT :limit
+            """),
+            {"source": source, "exclude": exclude_value, "limit": limit},
+        ).mappings().all()
+        return [dict(row) for row in rows]
 
     def cleanup_old_iocs(self) -> int:
         try:
