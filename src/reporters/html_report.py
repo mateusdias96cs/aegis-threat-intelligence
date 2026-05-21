@@ -70,13 +70,24 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
         # Non-fatal on ephemeral filesystems (e.g. Render) — DB is the durable store
         print(f"[html_report] disk write failed (non-fatal): {e}")
 
-    # Always persist to the database so the report survives restarts and deploys
+    # Persist to the database so the report survives restarts and deploys.
+    # Guard: if techniques is empty, do NOT overwrite an existing good DB report —
+    # the previous report likely has MITRE data and is more useful than a degraded one.
     try:
         from src.storage.database import DatabaseManager
         db = DatabaseManager()
         try:
-            db.save_report(html)
-            print("[html_report] report saved to database")
+            if not techniques:
+                print("[html_report] WARNING: MITRE techniques dict is empty — MITRE Explorer will show 0 techniques")
+                existing = db.get_latest_report()
+                if existing:
+                    print("[html_report] existing DB report preserved — skipping overwrite (techniques empty)")
+                else:
+                    db.save_report(html)
+                    print("[html_report] report saved to database (no existing report; techniques empty)")
+            else:
+                db.save_report(html)
+                print("[html_report] report saved to database")
         finally:
             db.close()
     except Exception as e:
