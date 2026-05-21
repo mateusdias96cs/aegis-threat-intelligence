@@ -391,6 +391,7 @@
     /* status dot */
     .status-dot { display:inline-block; width:7px; height:7px; border-radius:50%; flex-shrink:0; vertical-align:middle; margin-right:6px; }
     .drawer-status-desc { font-size:12px; color:var(--text-secondary); line-height:1.6; display:flex; align-items:flex-start; flex-wrap:wrap; }
+    .status-desc-text { display:inline; font-size:inherit; line-height:inherit; }
 
     /* enrichment */
     .enrich-loading { display:flex; align-items:center; gap:10px; color:var(--text-secondary); font-size:12px; }
@@ -2141,24 +2142,14 @@ function renderScoreSection(ioc) {
     }
 
   } else {
-    /* ── Fallback: barras simples ────────────────────────────────── */
-    if (orig !== null) {
-      var c = barColor(orig);
+    /* ── Fallback: barra única com o score disponível ─────────────── */
+    var fallbackScore = atual !== null ? atual : orig;
+    if (fallbackScore !== null) {
+      var cFb = barColor(fallbackScore);
       html += '<div class="score-bar-row">' +
-        '<div class="score-bar-label">Original</div>' +
-        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,orig) + '%;background:' + c + '"></div></div>' +
-        '<div class="score-bar-value">' + orig + '</div></div>';
-    }
-    if (atual !== null) {
-      var c2 = barColor(atual);
-      html += '<div class="score-bar-row">' +
-        '<div class="score-bar-label">Atual</div>' +
-        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100,atual) + '%;background:' + c2 + '"></div></div>' +
-        '<div class="score-bar-value">' + atual + '</div></div>';
-    }
-    if (orig !== null && atual !== null && orig !== atual) {
-      html += '<div class="score-decay-note">Score original: <strong>' + orig +
-        '</strong> → Score atual: <strong>' + atual + '</strong> (decay aplicado)</div>';
+        '<div class="score-bar-label">Score</div>' +
+        '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(100, fallbackScore) + '%;background:' + cFb + '"></div></div>' +
+        '<div class="score-bar-value">' + fallbackScore + '</div></div>';
     }
     html += '<div style="font-size:10px;color:var(--text-tertiary);margin-top:8px;">Execute o pipeline para ver o cálculo detalhado</div>';
   }
@@ -2249,9 +2240,107 @@ function renderHistorySection(ioc) {
     if (ioc.false_positive_note) desc += '<div class="fp-note" style="margin-top:5px">Nota: ' + escHtml(ioc.false_positive_note) + '</div>';
   }
 
+  /* ── Bloco EPSS (apenas para CVEs) ─────────────────────────── */
+  var epssBlock = '';
+  if ((ioc.type || '').toLowerCase() === 'cve') {
+    var cveId = (ioc.value || '').trim().toUpperCase();
+    var epssContainerId = 'drawer-epss-' + cveId.replace(/[^A-Z0-9-]/g, '');
+
+    var loadingHtml =
+      '<div style="display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text-tertiary);">' +
+        '<span class="enrich-spinner" style="width:11px;height:11px;border-width:1.5px;flex-shrink:0;"></span>' +
+        'Consultando FIRST EPSS API…' +
+      '</div>';
+
+    var warningHtml =
+      '<div style="background:rgba(255,255,255,.03);border-left:2px solid #e3b341;padding:8px 10px;border-radius:3px;margin-top:10px;">' +
+        '<span style="font-size:10px;color:#e3b341;line-height:1.6;">' +
+          '⚠ EPSS estima probabilidade de exploração, não risco para sua organização. ' +
+          'Use em conjunto com o Threat Profiling para avaliar impacto real no seu ambiente.' +
+        '</span>' +
+      '</div>';
+
+    var refHtml =
+      '<div style="margin-top:8px;">' +
+        '<a href="https://www.first.org/epss/" target="_blank" rel="noopener" ' +
+           'style="font-size:10px;color:#7fb1ff;text-decoration:none;">' +
+          'Fonte: FIRST.org/epss — atualizado diariamente' +
+        '</a>' +
+      '</div>';
+
+    epssBlock =
+      '<div style="border-top:1px solid var(--border-subtle);margin:12px 0;"></div>' +
+      '<div style="font-size:10px;text-transform:uppercase;letter-spacing:1.8px;color:var(--text-tertiary);margin-bottom:10px;">' +
+        'Probabilidade de Exploração — EPSS' +
+      '</div>' +
+      '<div id="' + escHtml(epssContainerId) + '">' + loadingHtml + '</div>' +
+      warningHtml +
+      refHtml;
+
+    /* Kick off async fetch after this render turn */
+    setTimeout(function() { loadEpssScore(cveId, epssContainerId); }, 0);
+  }
+
   return '<div class="drawer-section"><div class="drawer-section-title">Histórico &amp; Contexto</div>' +
-    (desc ? '<div class="drawer-status-desc" style="font-size:12px;color:var(--text-secondary);line-height:1.65">' + desc + '</div>' : '') +
+    (desc ? '<div class="drawer-status-desc"><span class="status-desc-text">' + desc + '</span></div>' : '') +
+    epssBlock +
     '</div>';
+}
+
+/* ── EPSS async loader ──────────────────────────────────────── */
+function loadEpssScore(cveId, containerId) {
+  var el = document.getElementById(containerId);
+  if (!el) return;
+
+  var controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  var timer = setTimeout(function() { if (controller) controller.abort(); }, 5000);
+
+  var opts = controller ? { signal: controller.signal } : {};
+  fetch('https://api.first.org/data/v1/epss?cve=' + encodeURIComponent(cveId), opts)
+    .then(function(r) {
+      clearTimeout(timer);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.json();
+    })
+    .then(function(data) {
+      var el2 = document.getElementById(containerId);
+      if (!el2) return;
+
+      var entry = data && data.data && data.data[0];
+      if (!entry) {
+        el2.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary);">EPSS não disponível para este CVE</span>';
+        return;
+      }
+
+      var epssRaw   = parseFloat(entry.epss)       || 0;
+      var pctRaw    = parseFloat(entry.percentile)  || 0;
+      var epssPercent  = (epssRaw  * 100).toFixed(2);
+      var pctPercent   = (pctRaw   * 100).toFixed(1);
+      var pctTop       = (100 - pctRaw * 100).toFixed(1);
+
+      var color = epssRaw >= 0.5 ? '#e74c3c' : epssRaw >= 0.2 ? '#e3b341' : '#3fb950';
+
+      el2.innerHTML =
+        '<div style="margin-bottom:8px;">' +
+          '<span style="font-size:24px;font-weight:700;font-family:monospace;color:' + color + ';">' +
+            epssPercent + '%' +
+          '</span>' +
+          '<div style="font-size:11px;color:var(--text-secondary);margin-top:4px;">' +
+            'de probabilidade de ser explorado nos próximos 30 dias' +
+          '</div>' +
+        '</div>' +
+        '<div style="font-size:11px;color:var(--text-secondary);margin-bottom:3px;">' +
+          'Percentil: TOP ' + pctTop + '%' +
+        '</div>' +
+        '<div style="font-size:10px;color:var(--text-tertiary);font-style:italic;">' +
+          'Este CVE tem score maior que ' + pctPercent + '% de todos os CVEs conhecidos' +
+        '</div>';
+    })
+    .catch(function() {
+      clearTimeout(timer);
+      var el3 = document.getElementById(containerId);
+      if (el3) el3.innerHTML = '<span style="font-size:11px;color:var(--text-tertiary);">EPSS não disponível para este CVE</span>';
+    });
 }
 
 /* ── Section: Actions ───────────────────────────────────────── */
