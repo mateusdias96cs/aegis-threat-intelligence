@@ -293,6 +293,15 @@
     .lookup-source-pill.active { background:rgba(31,90,160,.14); color:#7fb1ff; border-color:#1d3a66; }
     .lookup-description { font-size:12px; color:var(--text-secondary); line-height:1.7; }
     .lookup-actions { padding:11px 20px; display:flex; gap:8px; flex-wrap:wrap; }
+    /* ── Lookup full panel (replaces lookup-card) ── */
+    .lookup-panel { background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; overflow:hidden; }
+    .lookup-panel-header { padding:16px 20px 14px; border-bottom:1px solid var(--border); position:relative; }
+    .lookup-panel-header::before { content:""; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(to right, var(--red-primary), transparent 60%); }
+    .lookup-panel-badges { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    .lookup-panel-value { font-family:var(--font-mono); font-size:18px; color:#fff; word-break:break-all; line-height:1.4; }
+    .lookup-panel-spinner { text-align:center; padding:48px 20px; }
+    .lookup-panel-spinner .enrich-spinner { width:22px; height:22px; border-width:2.5px; display:inline-block; }
+    .lookup-panel-spinner p { font-size:12px; color:var(--text-tertiary); margin-top:14px; }
     .btn-action { background:transparent; color:var(--text-primary); border:1px solid var(--border-strong); border-radius:2px; padding:5px 12px; font-size:11px; cursor:pointer; text-decoration:none; display:inline-block; white-space:nowrap; font-family:var(--font-sans); transition:all 160ms ease; }
     .btn-action:hover { border-color:var(--red-muted); color:#fff; background:rgba(192,57,43,.08); }
 
@@ -1651,6 +1660,10 @@
 
   var _lookupValue = '';
 
+  /* ── IOC Lookup — full-panel implementation ─────────────────── */
+
+  var _lookupIoc = null;
+
   function runLookup() {
     var q        = document.getElementById('lookupInput').value.trim();
     var resultEl = document.getElementById('lookup-result');
@@ -1660,7 +1673,11 @@
     if (!q) { emptyEl.style.display = ''; return; }
     emptyEl.style.display = 'none';
 
-    resultEl.innerHTML = '<div style="color:var(--text-secondary);padding:20px 0">Looking up…</div>';
+    resultEl.innerHTML =
+      '<div class="lookup-panel-spinner">' +
+        '<span class="enrich-spinner"></span>' +
+        '<p>A consultar base de dados…</p>' +
+      '</div>';
 
     fetch('/api/lookup/' + encodeURIComponent(q))
       .then(function(r) { return r.json(); })
@@ -1669,149 +1686,286 @@
           resultEl.innerHTML = '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
           return;
         }
-        var d = {
-          value:       data.value || q,
-          type:        (data.type || '').toLowerCase(),
-          severity:    (data.severity || '').toUpperCase(),
-          country:     data.country || data.live_country || '',
-          score:       data.abuse_score != null ? data.abuse_score
-                        : (data.live_abuse_score != null ? data.live_abuse_score : NaN),
-          firstSeen:   data.first_seen  || '',
-          lastSeen:    data.last_seen   || '',
-          description: data.description || '',
-          mitre:       data.mitre_tactic        || '',
-          mitreId:     data.mitre_technique_id  || '',
-          source:      data.source || '',
-        };
-        renderLookupCard(d, resultEl);
+        var searchVal = data.value || q;
+        _lookupValue  = searchVal;
+
+        resultEl.innerHTML =
+          '<div class="lookup-panel-spinner">' +
+            '<span class="enrich-spinner"></span>' +
+            '<p>A carregar contexto completo…</p>' +
+          '</div>';
+
+        fetch('/api/iocs/' + encodeURIComponent(searchVal) + '/context')
+          .then(function(r2) { if (!r2.ok) throw new Error(r2.status); return r2.json(); })
+          .then(function(ctx) {
+            var ioc = (ctx && ctx.ioc) ? ctx.ioc : _buildQuickIoc(data, searchVal);
+            renderLookupPanel(ioc);
+            /* async: correlated pills */
+            var corrEl = document.getElementById('lookup-correlated');
+            if (corrEl) corrEl.innerHTML = renderLookupCorrelatedSection(
+              (ctx && ctx.correlated_iocs) ? ctx.correlated_iocs : [],
+              ioc.source || ''
+            );
+            /* async: IP enrichment */
+            if ((ioc.type || '').toLowerCase() === 'ip') loadLookupEnrichment(ioc.value);
+          })
+          .catch(function() {
+            renderLookupPanel(_buildQuickIoc(data, searchVal));
+          });
       })
       .catch(function() {
         resultEl.innerHTML = '<div class="lookup-no-result">No results found for <strong>' + escHtml(q) + '</strong></div>';
       });
   }
 
-  function renderLookupCard(d, container) {
-    var fullValue = d.value;
-    var type      = d.type;
-    var severity  = d.severity;
-    var country   = d.country;
-    var firstSeen = d.firstSeen ? d.firstSeen.substring(0, 10) : '—';
-    var lastSeen  = d.lastSeen  ? d.lastSeen.substring(0, 10) : firstSeen;
-    var mitre     = d.mitre;
-    var mitreId   = d.mitreId;
-    var descr     = d.description;
-    var source    = d.source;
-    var score     = isNaN(d.score) ? null : d.score;
-    var isNew     = false;
+  /* Trigger lookup programmatically (e.g. from correlated pill click) */
+  function runLookupDirect(value) {
+    var input = document.getElementById('lookupInput');
+    if (input) input.value = value;
+    var tab = document.getElementById('tab-lookup');
+    if (tab) tab.scrollTop = 0;
+    runLookup();
+  }
 
-    var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
-    var techName  = techData ? (techData.name || '') : '';
-    var mitreUrl  = techData ? (techData.url  || '') : (mitreId ? 'https://attack.mitre.org/techniques/' + mitreId + '/' : '');
+  /* Normalise /api/lookup response into the same shape as /context ioc */
+  function _buildQuickIoc(data, val) {
+    return {
+      value:              data.value || val,
+      type:               (data.type || '').toLowerCase(),
+      severity:           (data.severity || 'LOW').toUpperCase(),
+      country:            data.country || data.live_country || '',
+      abuse_score:        data.abuse_score,
+      description:        data.description || '',
+      first_seen:         data.first_seen  || '',
+      last_seen:          data.last_seen   || '',
+      source:             data.source      || '',
+      ioc_status:         data.ioc_status  || 'ACTIVE',
+      score_original:     data.score_original   != null ? data.score_original   : null,
+      score_atual:        data.score_atual       != null ? data.score_atual       : null,
+      score_breakdown:    data.score_breakdown   || null,
+      reactivation_count: data.reactivation_count || 0,
+      false_positive:     data.false_positive     || 0,
+      false_positive_note:data.false_positive_note || '',
+      false_positive_at:  data.false_positive_at  || '',
+      mitre_tactic:       data.mitre_tactic        || '',
+      mitre_technique_id: data.mitre_technique_id  || '',
+    };
+  }
 
-    var barColor = score !== null
-      ? (score >= 80 ? '#f85149' : score >= 50 ? '#e3b341' : '#3fb950')
-      : '';
+  /* Render the full lookup panel using the same drawer section functions */
+  function renderLookupPanel(ioc) {
+    _lookupIoc   = ioc;
+    _lookupValue = ioc.value || '';
 
-    var flag = (type === 'ip' && country && country !== '—') ? countryFlag(country) + ' ' : '';
-    var countryDisplay = (country && country !== '—') ? flag + escHtml(country) : '—';
+    var type      = (ioc.type      || '').toLowerCase();
+    var sev       = (ioc.severity  || 'LOW').toUpperCase();
+    var status    = (ioc.ioc_status|| 'ACTIVE').toUpperCase();
+    var val       = ioc.value || '';
+    var hasScore  = ioc.score_original != null || ioc.score_atual != null || ioc.score_breakdown;
+    var hasMitre  = ioc.mitre_technique_id || ioc.mitre_tactic;
+    var chipColor = ({ REACTIVATED:'#4a90e2', DECAYED:'#d4a017', HISTORICAL:'#555',
+                       FALSE_POSITIVE:'#e74c3c', ACTIVE:'#2e9b3e' })[status] || '#2e9b3e';
 
-    var srcNorm = source.replace(/[\s_-]+/g, '').toLowerCase();
-    var ALL_SOURCES = ['CISA-KEV', 'AlienVault-OTX', 'AbuseIPDB'];
+    var h = '<div class="lookup-panel">';
 
-    _lookupValue = fullValue;
-
-    var h = '';
-    h += '<div class="lookup-card">';
-
-    h += '<div class="lookup-card-header">';
-    h += '<div class="lookup-value">' + escHtml(fullValue) + '</div>';
-    h += '<div class="lookup-badges">';
-    h += '<span class="type-pill">' + escHtml(type) + '</span> ';
-    h += '<span class="badge badge-' + escHtml(severity) + '">' + escHtml(severity) + '</span>';
-    if (isNew) h += ' <span class="badge-new">NEW</span>';
+    /* ── Header ── */
+    h += '<div class="lookup-panel-header">';
+    h += '<div class="lookup-panel-badges">';
+    h += '<span class="type-pill type-pill-' + escHtml(type) + '">' + escHtml(type || '—') + '</span>';
+    h += '<span class="badge badge-' + escHtml(sev) + '">' + escHtml(sev) + '</span>';
+    h += '<span class="drawer-status-chip" style="color:' + chipColor + ';border-color:' + chipColor + '">' + escHtml(status) + '</span>';
     h += '</div>';
+    h += '<div class="lookup-panel-value">' + escHtml(val) + '</div>';
     h += '</div>';
 
-    h += '<div class="lookup-section">';
-    h += '<div class="lookup-section-title">Identification</div>';
-    h += '<div class="lookup-grid">';
-    h += '<div class="lookup-info-block"><div class="lookup-info-label">Country</div>';
-    h += '<div class="lookup-info-value">' + countryDisplay + '</div></div>';
-    h += '<div class="lookup-info-block"><div class="lookup-info-label">First Seen</div>';
-    h += '<div class="lookup-info-value">' + escHtml(firstSeen) + '</div></div>';
-    h += '<div class="lookup-info-block"><div class="lookup-info-label">Last Seen</div>';
-    h += '<div class="lookup-info-value">' + escHtml(lastSeen) + '</div></div>';
-    h += '</div></div>';
+    /* ── Sections (drawer functions reused as-is) ── */
+    if (hasScore || status === 'FALSE_POSITIVE') h += renderScoreSection(ioc);
+    h += renderOriginSection(ioc);
+    if (hasMitre) h += renderMitreSection(ioc);
+    if (type === 'ip') h += '<div id="lookup-enrichment">' + renderEnrichLoading() + '</div>';
+    h += renderHistorySection(ioc);
+    h += '<div id="lookup-correlated"></div>';
+    h += _renderLookupActions(ioc);
 
-    if (score !== null) {
-      var pct = Math.min(100, Math.max(0, score));
-      h += '<div class="lookup-section">';
-      h += '<div class="lookup-section-title">AbuseIPDB Confidence Score</div>';
-      h += '<div class="lookup-score-row">';
-      h += '<span class="lookup-score-val" style="color:' + barColor + '">' + score + '</span>';
-      h += '<span style="color:#8b949e;font-size:14px;">/ 100</span>';
-      h += '</div>';
-      h += '<div class="lookup-bar-wrap">';
-      h += '<div class="lookup-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div>';
-      h += '</div>';
-      h += '</div>';
+    h += '</div>';
+
+    document.getElementById('lookup-result').innerHTML = h;
+
+    /* Wire FP button after DOM insertion */
+    var fpBtn = document.getElementById('lookup-fp-btn');
+    if (fpBtn) fpBtn.addEventListener('click', function() { _toggleLookupFpForm(); });
+  }
+
+  /* Lookup-specific actions section (drawer-fp-form IDs would conflict) */
+  function _renderLookupActions(ioc) {
+    var val   = ioc.value || '';
+    var type  = (ioc.type || '').toLowerCase();
+    var isFp  = (ioc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE' || ioc.false_positive == 1;
+    var vtUrl = 'https://www.virustotal.com/gui/search/' + encodeURIComponent(val);
+    var shUrl = 'https://www.shodan.io/search?query='    + encodeURIComponent(val);
+
+    var h = '<div class="drawer-section drawer-actions-section">';
+    h += '<div class="drawer-section-title">Ações do Analista</div>';
+    h += '<div class="drawer-action-btns">';
+    h += '<button class="btn-drawer-action" id="lookup-copy-btn" onclick="copyLookupIoc()">📋 Copiar valor</button>';
+    h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
+    if (type === 'ip') h += '<a href="' + escHtml(shUrl) + '" target="_blank" class="btn-drawer-action">🔗 Shodan</a>';
+    h += '</div>';
+
+    h += '<div class="drawer-fp-area">';
+    if (isFp) {
+      h += '<button class="btn-drawer-fp-revert" id="lookup-fp-btn">↩ Reverter Falso Positivo</button>';
+    } else {
+      h += '<button class="btn-drawer-fp" id="lookup-fp-btn">🚩 Marcar como Falso Positivo</button>';
     }
+    h += '</div>';
 
-    if (mitre || mitreId) {
-      h += '<div class="lookup-section">';
-      h += '<div class="lookup-section-title">MITRE ATT&amp;CK Mapping</div>';
-      h += '<div class="lookup-mitre-row">';
-      if (mitreId) h += '<span class="lookup-tech-id">' + escHtml(mitreId) + '</span>';
-      if (techName) h += '<span class="lookup-tech-name">' + escHtml(techName) + '</span>';
-      h += '</div>';
-      if (mitre) h += '<div class="lookup-tactic">' + escHtml(mitre) + '</div>';
-      if (mitreUrl) {
-        h += '<a href="' + escHtml(mitreUrl) + '" target="_blank" class="lookup-att-link">View on ATT&amp;CK ↗</a>';
+    h += '<div id="lookup-fp-form" style="display:none">' +
+      '<div class="fp-form-inner">' +
+        '<textarea id="lookup-fp-note" class="fp-textarea" placeholder="Nota opcional para o analista…"></textarea>' +
+        '<input id="lookup-fp-apikey" type="password" class="fp-apikey" placeholder="API Key (obrigatória)" />' +
+        '<div id="lookup-fp-error" class="fp-form-error" style="display:none"></div>' +
+        '<div class="fp-form-btns">' +
+          '<button class="btn-drawer-action btn-fp-confirm" id="lookup-fp-confirm">Confirmar</button>' +
+          '<button class="btn-drawer-action" onclick="_closeLookupFpForm()">Cancelar</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+
+    h += '</div>';
+    return h;
+  }
+
+  function _toggleLookupFpForm() {
+    var form = document.getElementById('lookup-fp-form');
+    if (!form) return;
+    var show = form.style.display === 'none';
+    form.style.display = show ? '' : 'none';
+    if (show) {
+      var errEl = document.getElementById('lookup-fp-error');
+      if (errEl) errEl.style.display = 'none';
+      var conf  = document.getElementById('lookup-fp-confirm');
+      if (conf) {
+        var isFp = _lookupIoc && (_lookupIoc.ioc_status || '').toUpperCase() === 'FALSE_POSITIVE';
+        conf.onclick = function() { _submitLookupFpAction(isFp); };
       }
-      h += '</div>';
+    }
+  }
+
+  function _closeLookupFpForm() {
+    var form = document.getElementById('lookup-fp-form');
+    if (form) form.style.display = 'none';
+  }
+
+  function _submitLookupFpAction(isRevert) {
+    var apiKey = (document.getElementById('lookup-fp-apikey') || {}).value || '';
+    var note   = (document.getElementById('lookup-fp-note')   || {}).value || '';
+    var errEl  = document.getElementById('lookup-fp-error');
+
+    if (!apiKey) {
+      if (errEl) { errEl.textContent = 'API Key é obrigatória.'; errEl.style.display = ''; }
+      return;
     }
 
-    h += '<div class="lookup-section">';
-    h += '<div class="lookup-section-title">Intelligence Sources</div>';
-    h += '<div class="lookup-source-pills">';
-    ALL_SOURCES.forEach(function(s) {
-      var pillNorm = s.replace(/[\s_-]+/g, '').toLowerCase();
-      var isActive = srcNorm === pillNorm;
-      h += '<span class="lookup-source-pill' + (isActive ? ' active' : '') + '">' + escHtml(s) + '</span>';
+    var value = (_lookupIoc || {}).value || '';
+    var url   = isRevert
+      ? '/api/iocs/' + encodeURIComponent(value) + '/revert-false-positive'
+      : '/api/iocs/' + encodeURIComponent(value) + '/false-positive';
+    var payload = isRevert ? { api_key: apiKey } : { note: note, api_key: apiKey };
+
+    var conf = document.getElementById('lookup-fp-confirm');
+    if (conf) { conf.textContent = 'Enviando…'; conf.disabled = true; }
+
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+    .then(function(r) { return r.json().then(function(d) { return { ok: r.ok, data: d }; }); })
+    .then(function(res) {
+      if (conf) { conf.textContent = 'Confirmar'; conf.disabled = false; }
+      if (!res.ok) {
+        var msg = (res.data && res.data.detail) ? res.data.detail : 'Erro ao processar.';
+        if (errEl) { errEl.textContent = msg; errEl.style.display = ''; }
+        return;
+      }
+      _closeLookupFpForm();
+      runLookupDirect(value);   /* re-run lookup to refresh state */
+    })
+    .catch(function() {
+      if (conf) { conf.textContent = 'Confirmar'; conf.disabled = false; }
+      if (errEl) { errEl.textContent = 'Erro de rede.'; errEl.style.display = ''; }
     });
-    h += '</div></div>';
+  }
 
-    if (descr && descr !== '—') {
-      h += '<div class="lookup-section">';
-      h += '<div class="lookup-section-title">Description</div>';
-      h += '<div class="lookup-description">' + escHtml(descr) + '</div>';
-      h += '</div>';
-    }
+  /* Correlated pills that trigger new lookup (not drawer) */
+  function renderLookupCorrelatedSection(correlated, source) {
+    if (!correlated || !correlated.length) return '';
 
-    var vtUrl     = 'https://www.virustotal.com/gui/search/' + encodeURIComponent(fullValue);
-    var shodanUrl = 'https://www.shodan.io/search?query='    + encodeURIComponent(fullValue);
-    var abuseUrl  = 'https://www.abuseipdb.com/check/'       + encodeURIComponent(fullValue);
+    var html = '<div class="drawer-section"><div class="drawer-section-title">Outros IOCs desta Campanha</div>' +
+      '<div style="font-size:10.5px;color:var(--text-tertiary);margin-bottom:9px">Fonte: ' + escHtml(source) + '</div>' +
+      '<div class="correlated-pills">';
 
-    h += '<div class="lookup-actions">';
-    h += '<button class="btn-action" id="btn-copy-ioc" onclick="copyLookupIoc()">Copy IOC</button>';
-    h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-action">VirusTotal ↗</a>';
-    if (type === 'ip') {
-      h += '<a href="' + escHtml(shodanUrl) + '" target="_blank" class="btn-action">Shodan ↗</a>';
-      h += '<a href="' + escHtml(abuseUrl)  + '" target="_blank" class="btn-action">AbuseIPDB ↗</a>';
-    }
-    h += '</div>';
+    correlated.forEach(function(c) {
+      var disp = (c.value || '').length > 22 ? (c.value || '').substring(0, 22) + '…' : (c.value || '');
+      html += '<span class="correlated-pill" onclick="runLookupDirect(' + JSON.stringify(c.value || '') + ')" title="' +
+        escHtml(c.value || '') + '">' + escHtml(disp) + '</span>';
+    });
 
-    h += '</div>';
-    container.innerHTML = h;
+    return html + '</div></div>';
+  }
+
+  /* IP enrichment targeting lookup-enrichment instead of drawer-enrichment */
+  function loadLookupEnrichment(value) {
+    fetch('/api/lookup/' + encodeURIComponent(value))
+      .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function(data) {
+        var el = document.getElementById('lookup-enrichment');
+        if (!el) return;
+
+        var score   = data.live_abuse_score != null ? data.live_abuse_score : data.abuse_score;
+        var country = data.live_country || data.country || '';
+        var isp     = data.isp || '—';
+        var reports = data.total_reports  != null ? data.total_reports  : '—';
+        var lastRep = (data.last_reported || '').substring(0, 10) || '—';
+        var flag    = (country && country.length === 2) ? countryFlag(country) + ' ' : '';
+        var barClr  = score != null ? (score >= 71 ? '#e74c3c' : score >= 31 ? '#e3b341' : '#3fb950') : '#666';
+        var pct     = score != null ? Math.min(100, score) : 0;
+
+        var html = '<div class="drawer-section"><div class="drawer-section-title">Enriquecimento ao Vivo</div>' +
+          '<div class="drawer-info-grid">' +
+            drawerInfoBlock('País',           flag + escHtml(country || '—')) +
+            drawerInfoBlock('ISP',            escHtml(isp)) +
+            drawerInfoBlock('Total reportes', String(reports)) +
+            drawerInfoBlock('Último reporte', escHtml(lastRep)) +
+          '</div>';
+
+        if (score != null) {
+          html += '<div style="margin-top:13px">' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">ABUSEIPDB SCORE</div>' +
+            '<div class="score-bar-row">' +
+              '<div class="score-bar-track" style="flex:1"><div class="score-bar-fill" style="width:' + pct + '%;background:' + barClr + '"></div></div>' +
+              '<div class="score-bar-value" style="color:' + barClr + ';width:auto;padding-left:8px">' + score + '/100</div>' +
+            '</div></div>';
+        }
+        el.innerHTML = html + '</div>';
+      })
+      .catch(function() {
+        var el = document.getElementById('lookup-enrichment');
+        if (el) el.innerHTML =
+          '<div class="drawer-section"><div class="drawer-section-title">Enriquecimento ao Vivo</div>' +
+          '<div style="color:var(--text-tertiary);font-size:12px">Enriquecimento indisponível no momento.</div></div>';
+      });
   }
 
   function copyLookupIoc() {
     if (!_lookupValue) return;
     navigator.clipboard.writeText(_lookupValue).then(function() {
-      var btn = document.getElementById('btn-copy-ioc');
+      var btn = document.getElementById('lookup-copy-btn');
       if (!btn) return;
-      btn.textContent = 'Copied!';
-      setTimeout(function() { if (btn) btn.textContent = 'Copy IOC'; }, 2000);
+      var orig = btn.textContent;
+      btn.textContent = '✓ Copiado!';
+      setTimeout(function() { if (btn) btn.textContent = orig; }, 2000);
     });
   }
 
