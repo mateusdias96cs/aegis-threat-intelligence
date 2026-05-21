@@ -270,33 +270,33 @@ async def run_pipeline(background_tasks: BackgroundTasks):
 
 @app.get("/report")
 async def get_report():
-    report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
-    if report_path.exists():
-        html = report_path.read_text(encoding="utf-8")
-        return HTMLResponse(content=_inject_public_key(html))
     db = DatabaseManager()
     try:
         html = db.get_latest_report()
     finally:
         db.close()
     if html:
+        return HTMLResponse(content=_inject_public_key(html))
+    report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
+    if report_path.exists():
+        html = report_path.read_text(encoding="utf-8")
         return HTMLResponse(content=_inject_public_key(html))
     return {"error": "Report not generated yet. Run /api/pipeline/run first"}
 
 
 @app.get("/")
 async def root():
-    report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
-    if report_path.exists():
-        html = report_path.read_text(encoding="utf-8")
-        return HTMLResponse(content=_inject_public_key(html))
-
     db = DatabaseManager()
     try:
         html = db.get_latest_report()
     finally:
         db.close()
     if html:
+        return HTMLResponse(content=_inject_public_key(html))
+
+    report_path = Path(__file__).resolve().parents[1] / "output" / "index.html"
+    if report_path.exists():
+        html = report_path.read_text(encoding="utf-8")
         return HTMLResponse(content=_inject_public_key(html))
 
     html_content = """

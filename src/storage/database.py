@@ -733,19 +733,22 @@ class DatabaseManager:
     # ── report persistence ────────────────────────────────────────────────────
 
     def save_report(self, html_content: str) -> None:
-        """Upsert: always keeps a single row (id=1) with the latest HTML report."""
+        """Upsert (id=1) using dialect-appropriate atomic syntax."""
         now = datetime.utcnow()
-        existing = self._session.execute(
-            text("SELECT id FROM reports WHERE id = 1")
-        ).fetchone()
-        if existing:
+        if _dialect == "postgresql":
             self._session.execute(
-                text("UPDATE reports SET html_content = :html, generated_at = :ts WHERE id = 1"),
+                text("""
+                    INSERT INTO reports (id, html_content, generated_at)
+                    VALUES (1, :html, :ts)
+                    ON CONFLICT (id) DO UPDATE SET
+                        html_content = EXCLUDED.html_content,
+                        generated_at = EXCLUDED.generated_at
+                """),
                 {"html": html_content, "ts": now},
             )
         else:
             self._session.execute(
-                text("INSERT INTO reports (id, html_content, generated_at) VALUES (1, :html, :ts)"),
+                text("INSERT OR REPLACE INTO reports (id, html_content, generated_at) VALUES (1, :html, :ts)"),
                 {"html": html_content, "ts": now},
             )
         self._session.commit()

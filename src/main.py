@@ -30,95 +30,103 @@ def run():
 
     with sentry_sdk.start_transaction(op="pipeline", name="AEGIS IOC Pipeline"):
         db = DatabaseManager()
+        techniques = {}
+        new_iocs = []
         try:
-            print("[pipeline] cleaning up expired IOCs ...")
-            deleted = db.cleanup_old_iocs()
-            print(f"[pipeline] removed {deleted} expired IOCs")
+            # ── Phase 1: collection + processing (non-fatal) ──────────────────
+            try:
+                print("[pipeline] cleaning up expired IOCs ...")
+                deleted = db.cleanup_old_iocs()
+                print(f"[pipeline] removed {deleted} expired IOCs")
 
-            # Collect
-            print("[pipeline] collecting from CISA-KEV ...")
-            cisa_iocs = cisa.collect()
-            print(f"[pipeline] CISA-KEV: {len(cisa_iocs)} indicators")
+                # Collect
+                print("[pipeline] collecting from CISA-KEV ...")
+                cisa_iocs = cisa.collect()
+                print(f"[pipeline] CISA-KEV: {len(cisa_iocs)} indicators")
 
-            print("[pipeline] collecting from AlienVault OTX ...")
-            otx_iocs = otx.collect()
-            print(f"[pipeline] OTX: {len(otx_iocs)} indicators")
+                print("[pipeline] collecting from AlienVault OTX ...")
+                otx_iocs = otx.collect()
+                print(f"[pipeline] OTX: {len(otx_iocs)} indicators")
 
-            print("[pipeline] collecting from ThreatFox ...")
-            tf_iocs = threatfox.collect()
-            print(f"[pipeline] ThreatFox: {len(tf_iocs)} indicators")
+                print("[pipeline] collecting from ThreatFox ...")
+                tf_iocs = threatfox.collect()
+                print(f"[pipeline] ThreatFox: {len(tf_iocs)} indicators")
 
-            print("[pipeline] collecting from URLhaus ...")
-            urlhaus_iocs = urlhaus.collect()
-            print(f"[pipeline] URLhaus: {len(urlhaus_iocs)} indicators")
+                print("[pipeline] collecting from URLhaus ...")
+                urlhaus_iocs = urlhaus.collect()
+                print(f"[pipeline] URLhaus: {len(urlhaus_iocs)} indicators")
 
-            print("[pipeline] collecting from Feodo Tracker ...")
-            feodo_iocs = feodo.collect()
-            print(f"[pipeline] FeodoTracker: {len(feodo_iocs)} indicators")
+                print("[pipeline] collecting from Feodo Tracker ...")
+                feodo_iocs = feodo.collect()
+                print(f"[pipeline] FeodoTracker: {len(feodo_iocs)} indicators")
 
-            print("[pipeline] collecting AbuseIPDB blacklist ...")
-            blacklist_iocs = abuseipdb.fetch_blacklist()
-            print(f"[pipeline] AbuseIPDB blacklist: {len(blacklist_iocs)} IPs")
+                print("[pipeline] collecting AbuseIPDB blacklist ...")
+                blacklist_iocs = abuseipdb.fetch_blacklist()
+                print(f"[pipeline] AbuseIPDB blacklist: {len(blacklist_iocs)} IPs")
 
-            raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + blacklist_iocs
-            print(f"[pipeline] total collected: {len(raw_iocs)}")
+                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + blacklist_iocs
+                print(f"[pipeline] total collected: {len(raw_iocs)}")
 
-            # Deduplicate internally first
-            raw_iocs = deduplicator.deduplicate(raw_iocs)
-            print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
+                # Deduplicate internally first
+                raw_iocs = deduplicator.deduplicate(raw_iocs)
+                print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
 
-            # Separate new from existing; reactivate those already in DB
-            existing_values = db.get_existing_values()
-            new_iocs      = [ioc for ioc in raw_iocs if ioc.get("value") not in existing_values]
-            seen_again    = [ioc for ioc in raw_iocs if ioc.get("value") in existing_values]
-            print(f"[pipeline] new indicators to process: {len(new_iocs)}")
-            print(f"[pipeline] existing IOCs to reactivate: {len(seen_again)}")
-            for _ioc in seen_again:
-                _val = _ioc.get("value")
-                if _val:
-                    db.reactivate_ioc(_val)
+                # Separate new from existing; reactivate those already in DB
+                existing_values = db.get_existing_values()
+                new_iocs      = [ioc for ioc in raw_iocs if ioc.get("value") not in existing_values]
+                seen_again    = [ioc for ioc in raw_iocs if ioc.get("value") in existing_values]
+                print(f"[pipeline] new indicators to process: {len(new_iocs)}")
+                print(f"[pipeline] existing IOCs to reactivate: {len(seen_again)}")
+                for _ioc in seen_again:
+                    _val = _ioc.get("value")
+                    if _val:
+                        db.reactivate_ioc(_val)
 
-            # Process new IOCs
-            if new_iocs:
-                print("[pipeline] normalizing ...")
-                new_iocs = normalizer.normalize(new_iocs)
+                # Process new IOCs
+                if new_iocs:
+                    print("[pipeline] normalizing ...")
+                    new_iocs = normalizer.normalize(new_iocs)
 
-                # AbuseIPDB enrichment handled via blacklist collector
+                    # AbuseIPDB enrichment handled via blacklist collector
 
-                print("[pipeline] classifying ...")
-                new_iocs = classifier.classify(new_iocs)
-                new_iocs = classifier.apply_confidence(new_iocs)
-                print("[pipeline] confidence scores calculated")
+                    print("[pipeline] classifying ...")
+                    new_iocs = classifier.classify(new_iocs)
+                    new_iocs = classifier.apply_confidence(new_iocs)
+                    print("[pipeline] confidence scores calculated")
 
-                # Load MITRE ATT&CK technique index once before processing
-                print("[pipeline] loading MITRE ATT&CK techniques ...")
-                techniques = mitre.load_techniques()
-                print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
+                    # Load MITRE ATT&CK technique index once before processing
+                    print("[pipeline] loading MITRE ATT&CK techniques ...")
+                    techniques = mitre.load_techniques()
+                    print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
 
-                print("[pipeline] mapping to MITRE ATT&CK ...")
-                for ioc in new_iocs:
-                    technique = mitre.map_ioc_to_technique(ioc, techniques)
-                    if technique:
-                        ioc["mitre_technique_id"] = technique["id"]
-                        ioc["mitre_tactic"] = technique["tactic"]
-                    else:
-                        ioc["mitre_technique_id"] = None
-                        ioc["mitre_tactic"] = None
+                    print("[pipeline] mapping to MITRE ATT&CK ...")
+                    for ioc in new_iocs:
+                        technique = mitre.map_ioc_to_technique(ioc, techniques)
+                        if technique:
+                            ioc["mitre_technique_id"] = technique["id"]
+                            ioc["mitre_tactic"] = technique["tactic"]
+                        else:
+                            ioc["mitre_technique_id"] = None
+                            ioc["mitre_tactic"] = None
 
-                print("[pipeline] saving to database ...")
-                db.insert_many(new_iocs)
-            else:
-                print("[pipeline] loading MITRE ATT&CK techniques for report ...")
-                techniques = mitre.load_techniques()
-                print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
+                    print("[pipeline] saving to database ...")
+                    db.insert_many(new_iocs)
+                else:
+                    print("[pipeline] loading MITRE ATT&CK techniques for report ...")
+                    techniques = mitre.load_techniques()
+                    print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
 
-            print("[pipeline] applying BioSec decay ...")
-            db.apply_decay()
+                print("[pipeline] applying BioSec decay ...")
+                db.apply_decay()
 
-            print("[pipeline] recalculating scores (skips if already done) ...")
-            db.recalculate_all_scores()
+                print("[pipeline] recalculating scores (skips if already done) ...")
+                db.recalculate_all_scores()
 
-            # Report
+            except Exception as e:
+                print(f"[pipeline] collection/processing error (continuing to report): {e}")
+                sentry_sdk.capture_exception(e)
+
+            # ── Phase 2: report (always runs regardless of phase 1 outcome) ──
             print("[pipeline] generating report ...")
             stats = db.get_stats()
             all_iocs = db.get_all_iocs()
