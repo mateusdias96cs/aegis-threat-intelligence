@@ -568,72 +568,114 @@ class DatabaseManager:
 
     def recalculate_all_scores(self) -> int:
         """Recalculates score_original, score_atual, confidence_score, and score_breakdown
-        for every IOC that lacks a score_breakdown (first-run migration).
+        for two groups:
+          1. IOCs with score_breakdown IS NULL (first-run migration).
+          2. CVEs that already have a score_breakdown using the default T=80 placeholder
+             but now have a real cvss_score from NVD.
         Processes in batches of 500 to avoid locking the database."""
         from src.processors.classifier import calculate_score_breakdown
 
-        # Pre-check: how many IOCs need recalculation
         total_iocs = self._session.execute(
             text("SELECT COUNT(*) FROM iocs")
         ).fetchone()[0]
         null_count = self._session.execute(
             text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NULL")
         ).fetchone()[0]
-        print(f"[recalculate] total IOCs in DB: {total_iocs} | missing score_breakdown: {null_count}")
+        stale_cvss_count = self._session.execute(
+            text("""
+                SELECT COUNT(*) FROM iocs
+                WHERE type = 'cve'
+                  AND cvss_score IS NOT NULL
+                  AND score_breakdown LIKE '%padrão CVE%'
+            """)
+        ).fetchone()[0]
+        print(
+            f"[recalculate] total IOCs: {total_iocs} | "
+            f"sem score_breakdown: {null_count} | "
+            f"CVEs com CVSS desatualizado: {stale_cvss_count}"
+        )
 
-        if null_count == 0:
-            print("[recalculate] score_breakdown already present on all IOCs — skipping")
+        if null_count == 0 and stale_cvss_count == 0:
+            print("[recalculate] nenhum IOC precisa de recálculo — pulando")
             return 0
 
-        rows = self._session.execute(
-            text("""
-                SELECT id, type, value, source, abuse_score, cvss_score
-                FROM iocs
-                WHERE score_breakdown IS NULL
-            """)
-        ).mappings().all()
+        def _build_updates(rows):
+            result = []
+            for row in rows:
+                ioc_dict = {
+                    "type":        row["type"],
+                    "value":       row["value"],
+                    "source":      row["source"],
+                    "abuse_score": row["abuse_score"],
+                    "cvss_score":  row["cvss_score"],
+                }
+                breakdown = calculate_score_breakdown(ioc_dict, source_count=1)
+                score     = float(breakdown["score_arredondado"])
+                result.append({
+                    "id":               row["id"],
+                    "confidence_score": breakdown["score_arredondado"],
+                    "score_original":   score,
+                    "score_atual":      score,
+                    "score_breakdown":  json.dumps(breakdown, ensure_ascii=False),
+                })
+            return result
 
-        updates = []
-        for row in rows:
-            ioc_dict = {
-                "type":        row["type"],
-                "value":       row["value"],
-                "source":      row["source"],
-                "abuse_score": row["abuse_score"],
-                "cvss_score":  row["cvss_score"],
-            }
-            # Corroboration is 1 per row (values are deduplicated in the DB)
-            breakdown = calculate_score_breakdown(ioc_dict, source_count=1)
-            score     = float(breakdown["score_arredondado"])
-            updates.append({
-                "id":               row["id"],
-                "confidence_score": breakdown["score_arredondado"],
-                "score_original":   score,
-                "score_atual":      score,
-                "score_breakdown":  json.dumps(breakdown, ensure_ascii=False),
-            })
+        def _flush_batches(updates, label):
+            BATCH_SIZE = 500
+            submitted = 0
+            for i in range(0, len(updates), BATCH_SIZE):
+                batch = updates[i : i + BATCH_SIZE]
+                res = self._session.execute(
+                    text("""
+                        UPDATE iocs
+                        SET confidence_score = :confidence_score,
+                            score_original   = :score_original,
+                            score_atual      = :score_atual,
+                            score_breakdown  = :score_breakdown
+                        WHERE id = :id
+                    """),
+                    batch,
+                )
+                self._session.commit()
+                submitted += len(batch)
+                print(
+                    f"[recalculate:{label}] batch "
+                    f"{i // BATCH_SIZE + 1}/{-(-len(updates) // BATCH_SIZE)}: "
+                    f"{len(batch)} submetidos, rowcount={res.rowcount}"
+                )
+            return submitted
 
-        BATCH_SIZE = 500
         total_updated = 0
-        for i in range(0, len(updates), BATCH_SIZE):
-            batch = updates[i : i + BATCH_SIZE]
-            result = self._session.execute(
+
+        # --- Grupo 1: IOCs sem score_breakdown ---
+        if null_count > 0:
+            null_rows = self._session.execute(
                 text("""
-                    UPDATE iocs
-                    SET confidence_score = :confidence_score,
-                        score_original   = :score_original,
-                        score_atual      = :score_atual,
-                        score_breakdown  = :score_breakdown
-                    WHERE id = :id
-                """),
-                batch,
-            )
-            self._session.commit()
-            # rowcount may be -1 on some drivers when using executemany; use batch length
-            batch_updated = result.rowcount if result.rowcount >= 0 else len(batch)
-            total_updated += len(batch)
-            print(f"[recalculate] batch {i // BATCH_SIZE + 1}/{-(-len(updates) // BATCH_SIZE)}: "
-                  f"{len(batch)} submitted, rowcount={result.rowcount}")
+                    SELECT id, type, value, source, abuse_score, cvss_score
+                    FROM iocs
+                    WHERE score_breakdown IS NULL
+                """)
+            ).mappings().all()
+            updates_null = _build_updates(null_rows)
+            count_null = _flush_batches(updates_null, "sem_breakdown")
+            total_updated += count_null
+            print(f"[recalculate] {count_null} IOCs sem score_breakdown recalculados")
+
+        # --- Grupo 2: CVEs com CVSS real mas breakdown com placeholder padrão ---
+        if stale_cvss_count > 0:
+            stale_rows = self._session.execute(
+                text("""
+                    SELECT id, type, value, source, abuse_score, cvss_score
+                    FROM iocs
+                    WHERE type = 'cve'
+                      AND cvss_score IS NOT NULL
+                      AND score_breakdown LIKE '%padrão CVE%'
+                """)
+            ).mappings().all()
+            updates_stale = _build_updates(stale_rows)
+            count_stale = _flush_batches(updates_stale, "cvss_atualizado")
+            total_updated += count_stale
+            print(f"[recalculate] {count_stale} CVEs com CVSS atualizado")
 
         # Post-update verification
         still_null = self._session.execute(
@@ -642,9 +684,12 @@ class DatabaseManager:
         now_populated = self._session.execute(
             text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NOT NULL")
         ).fetchone()[0]
-        print(f"[recalculate] DONE — populated: {now_populated} | still NULL: {still_null} | total submitted: {total_updated}")
+        print(
+            f"[recalculate] DONE — populados: {now_populated} | "
+            f"ainda NULL: {still_null} | total submetidos: {total_updated}"
+        )
         if still_null > 0:
-            print(f"[recalculate] WARNING: {still_null} IOCs still have NULL score_breakdown after update")
+            print(f"[recalculate] WARNING: {still_null} IOCs ainda têm score_breakdown NULL após atualização")
         return total_updated
 
     def cleanup_old_iocs(self) -> int:
