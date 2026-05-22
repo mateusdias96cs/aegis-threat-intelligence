@@ -42,6 +42,11 @@ T1046             —                 T1110               T1021.004
 
 Com correlação de IPs que apresentaram o mesmo padrão de ataque na mesma janela temporal.
 
+### MITRE ATT&CK Explorer
+Navegação completa pelas técnicas do framework MITRE ATT&CK carregadas automaticamente pelo pipeline, com filtro por tática e busca por ID ou nome.
+
+![MITRE Explorer](screenshots/mitre-explorer.png)
+
 ### Analyst Workbench
 Área de investigação local por analista — pina IOCs suspeitos, escreve notas de contexto e gera um código de compartilhamento para handoff de turno. O próximo analista cola o código e vê os IOCs e anotações em modo leitura.
 
