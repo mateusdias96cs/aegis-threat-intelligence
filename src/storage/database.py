@@ -85,6 +85,22 @@ class SharedWorkbench(Base):
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 
+# ── Índices para queries de correlação (Campaigns) ───────────────────────────
+_CAMPAIGN_INDEXES = [
+    "CREATE INDEX IF NOT EXISTS idx_iocs_source       ON iocs (source)",
+    "CREATE INDEX IF NOT EXISTS idx_iocs_country      ON iocs (country)",
+    "CREATE INDEX IF NOT EXISTS idx_iocs_mitre_tactic ON iocs (mitre_tactic)",
+    "CREATE INDEX IF NOT EXISTS idx_iocs_type_status  ON iocs (type, ioc_status)",
+    "CREATE INDEX IF NOT EXISTS idx_iocs_first_seen   ON iocs (first_seen)",
+]
+for _idx_sql in _CAMPAIGN_INDEXES:
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_idx_sql))
+            _conn.commit()
+    except Exception:
+        pass
+
 # ── BioSec migrations (safe — adds columns only if absent) ───────────────────
 _DECAY_COLUMNS = [
     ("score_original",     "FLOAT"),
@@ -878,6 +894,196 @@ class DatabaseManager:
         )
         self._session.commit()
         return result.rowcount
+
+    def get_campaign_context(self, value: str, ioc_type: str, ioc_data: dict) -> dict:
+        """
+        Retorna contexto de campanha para um IOC específico.
+        Tratamento diferenciado por tipo: ip, cve, hash, url, domain.
+        Todas as queries são leves e indexadas.
+        """
+        ioc_type = (ioc_type or "").lower()
+        source   = ioc_data.get("source", "")
+        country  = ioc_data.get("country", "")
+        tactic   = ioc_data.get("mitre_tactic", "")
+        desc     = ioc_data.get("description", "")
+        first_seen = (ioc_data.get("first_seen") or "")[:10]
+
+        # Janela temporal: 7 dias antes e depois do first_seen
+        try:
+            from datetime import datetime, timedelta
+            fs_date  = datetime.strptime(first_seen, "%Y-%m-%d")
+            win_from = (fs_date - timedelta(days=7)).strftime("%Y-%m-%d")
+            win_to   = (fs_date + timedelta(days=7)).strftime("%Y-%m-%d")
+        except Exception:
+            win_from = win_to = first_seen
+
+        similar = []
+
+        if ioc_type == "ip":
+            rows = self._session.execute(text("""
+                SELECT value, severity, source, mitre_tactic, country, abuse_categories,
+                       first_seen, ioc_status, reactivation_count
+                FROM iocs
+                WHERE type = 'ip'
+                  AND LOWER(value) != LOWER(:value)
+                  AND (
+                    (country = :country AND country IS NOT NULL AND country != '')
+                    OR source = :source
+                  )
+                  AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                  AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE', 'HISTORICAL'))
+                ORDER BY
+                    CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END,
+                    first_seen DESC
+                LIMIT 8
+            """), {
+                "value": value, "country": country, "source": source,
+                "win_from": win_from, "win_to": win_to
+            }).mappings().all()
+            similar = [dict(r) for r in rows]
+
+        elif ioc_type == "cve":
+            vendor = desc.split(" - ")[0].strip() if " - " in desc else ""
+            if vendor:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, cvss_score, first_seen, ioc_status
+                    FROM iocs
+                    WHERE type = 'cve'
+                      AND LOWER(value) != LOWER(:value)
+                      AND LOWER(description) LIKE :vendor_pat
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                      AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE'))
+                    ORDER BY cvss_score DESC NULLS LAST, first_seen DESC
+                    LIMIT 6
+                """), {
+                    "value": value,
+                    "vendor_pat": f"%{vendor.lower()[:30]}%",
+                    "win_from": win_from, "win_to": win_to
+                }).mappings().all()
+            else:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, cvss_score, first_seen, ioc_status
+                    FROM iocs
+                    WHERE type = 'cve'
+                      AND LOWER(value) != LOWER(:value)
+                      AND source = :source
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                    ORDER BY cvss_score DESC NULLS LAST
+                    LIMIT 6
+                """), {"value": value, "source": source,
+                       "win_from": win_from, "win_to": win_to}).mappings().all()
+            similar = [dict(r) for r in rows]
+
+        elif ioc_type == "hash":
+            malware_family = ""
+            if "malware:" in desc.lower():
+                malware_family = desc.split(":")[-1].strip().split(" ")[0]
+            elif " - " in desc:
+                malware_family = desc.split(" - ")[0].strip()
+
+            if malware_family and len(malware_family) > 3:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, first_seen, mitre_tactic, ioc_status
+                    FROM iocs
+                    WHERE type = 'hash'
+                      AND LOWER(value) != LOWER(:value)
+                      AND LOWER(description) LIKE :family_pat
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                      AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE'))
+                    ORDER BY first_seen DESC
+                    LIMIT 6
+                """), {
+                    "value": value,
+                    "family_pat": f"%{malware_family.lower()[:20]}%",
+                    "win_from": win_from, "win_to": win_to
+                }).mappings().all()
+            else:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, first_seen, mitre_tactic, ioc_status
+                    FROM iocs
+                    WHERE type = 'hash'
+                      AND LOWER(value) != LOWER(:value)
+                      AND source = :source
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                    ORDER BY first_seen DESC
+                    LIMIT 6
+                """), {"value": value, "source": source,
+                       "win_from": win_from, "win_to": win_to}).mappings().all()
+            similar = [dict(r) for r in rows]
+
+        elif ioc_type == "url":
+            domain_base = ""
+            try:
+                from urllib.parse import urlparse
+                parsed = urlparse(value if value.startswith("http") else "http://" + value)
+                domain_base = parsed.netloc.lower().lstrip("www.")
+            except Exception:
+                pass
+
+            if domain_base:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, first_seen, ioc_status
+                    FROM iocs
+                    WHERE type = 'url'
+                      AND LOWER(value) != LOWER(:value)
+                      AND LOWER(value) LIKE :domain_pat
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                      AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE'))
+                    ORDER BY first_seen DESC
+                    LIMIT 6
+                """), {
+                    "value": value,
+                    "domain_pat": f"%{domain_base[:40]}%",
+                    "win_from": win_from, "win_to": win_to
+                }).mappings().all()
+            else:
+                rows = self._session.execute(text("""
+                    SELECT value, severity, source, description, first_seen, ioc_status
+                    FROM iocs
+                    WHERE type = 'url'
+                      AND LOWER(value) != LOWER(:value)
+                      AND source = :source
+                      AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                    ORDER BY first_seen DESC
+                    LIMIT 6
+                """), {"value": value, "source": source,
+                       "win_from": win_from, "win_to": win_to}).mappings().all()
+            similar = [dict(r) for r in rows]
+
+        elif ioc_type == "domain":
+            rows = self._session.execute(text("""
+                SELECT value, severity, source, description, first_seen, mitre_tactic, ioc_status
+                FROM iocs
+                WHERE type = 'domain'
+                  AND LOWER(value) != LOWER(:value)
+                  AND (source = :source OR mitre_tactic = :tactic)
+                  AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
+                  AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE'))
+                ORDER BY first_seen DESC
+                LIMIT 6
+            """), {
+                "value": value, "source": source, "tactic": tactic or "",
+                "win_from": win_from, "win_to": win_to
+            }).mappings().all()
+            similar = [dict(r) for r in rows]
+
+        # Parse abuse_categories para similar IPs
+        import json as _json
+        for s in similar:
+            raw = s.get("abuse_categories")
+            if raw and isinstance(raw, str):
+                try:
+                    s["abuse_categories"] = {int(k): v for k, v in _json.loads(raw).items()}
+                except Exception:
+                    s["abuse_categories"] = {}
+
+        return {
+            "ioc_type":      ioc_type,
+            "value":         value,
+            "window":        {"from": win_from, "to": win_to},
+            "similar":       similar,
+            "similar_count": len(similar),
+        }
 
     def close(self):
         self._session.close()

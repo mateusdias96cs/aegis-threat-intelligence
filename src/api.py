@@ -516,6 +516,28 @@ async def get_ioc_context(value: str):
         db.close()
 
 
+@app.get("/api/iocs/{value}/campaign")
+async def get_ioc_campaign(value: str):
+    """
+    Retorna contexto de campanha para um IOC — Kill Chain reconstruída
+    e IOCs similares correlacionados por tipo. Público.
+    """
+    db = DatabaseManager()
+    try:
+        ioc = db.get_ioc_context(value)
+        if not ioc:
+            raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+        campaign = db.get_campaign_context(
+            value=value,
+            ioc_type=ioc.get("type", ""),
+            ioc_data=ioc,
+        )
+        campaign["ioc"] = ioc
+        return campaign
+    finally:
+        db.close()
+
+
 @app.post("/api/iocs/{value}/false-positive")
 async def mark_false_positive_endpoint(value: str, body: FalsePositiveBody):
     """Marks an IOC as a false positive. Requires AEGIS_API_KEY in the request body."""
