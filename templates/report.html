@@ -1921,7 +1921,7 @@
     var isLookupPinned = !!_wbPins[val];
     h += '<button class="btn-drawer-action" ' +
       (isLookupPinned ? 'disabled' : '') +
-      ' onclick="wbPinByValue(' + JSON.stringify(val) + ')">' +
+      ' onclick="event.stopPropagation();wbPinByValue(' + JSON.stringify(val) + ')">' +
       (isLookupPinned ? '📌 Pinado' : '📌 Pin') +
     '</button>';
     h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
@@ -2636,7 +2636,7 @@ function renderActionsSection(ioc) {
       '<button class="btn-drawer-action" onclick="copyDrawerIoc()">📋 Copiar valor</button>' +
       '<button class="btn-drawer-action" id="wb-pin-btn-' + escHtml(val) + '" ' +
         (isPinned ? 'disabled' : '') +
-        ' onclick="wbPinByValue(' + JSON.stringify(val) + ')">' +
+        ' onclick="event.stopPropagation();wbPinByValue(' + JSON.stringify(val) + ')">' +
         (isPinned ? '📌 Pinado' : '📌 Pin') +
       '</button>' +
       '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
