@@ -2,14 +2,19 @@ import hmac
 import os
 import uuid
 import sentry_sdk
-from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request
+from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 from datetime import datetime, timezone
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 import time
+
+import re
+from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request as StarletteRequest
 
 from src.collectors import cisa, otx, mitre
 from src.collectors import abuseipdb
@@ -39,6 +44,27 @@ app = FastAPI(
     redoc_url=None if _is_production else "/redoc",
     openapi_url=None if _is_production else "/openapi.json",
 )
+# ── Security Middleware ───────────────────────────────────────────────────────
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: StarletteRequest, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+        return response
+
+app.add_middleware(SecurityHeadersMiddleware)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["https://aegiscti.me"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
+    allow_headers=["X-API-Key", "Content-Type"],
+)
+
 app.mount("/assets", StaticFiles(directory="assets"), name="assets")
 
 # ── Rate limit helpers ────────────────────────────────────────────────────────
@@ -49,8 +75,13 @@ _RATE_LIMIT_WINDOW = 60         # seconds
 
 
 def _check_rate_limit(client_ip: str) -> bool:
-    """Returns True if the request is within quota, False if limit is exceeded."""
+    """Returns True se dentro da quota. Faz cleanup de IPs inativos > 5min."""
     now = time.time()
+    if len(_rate_limit) > 10_000:
+        stale = [ip for ip, ts in list(_rate_limit.items())
+                 if not ts or now - max(ts) > 300]
+        for ip in stale:
+            del _rate_limit[ip]
     timestamps = [t for t in _rate_limit.get(client_ip, []) if now - t < _RATE_LIMIT_WINDOW]
     if len(timestamps) >= _RATE_LIMIT_MAX:
         _rate_limit[client_ip] = timestamps
@@ -69,6 +100,26 @@ def _is_ip(value: str) -> bool:
         return all(0 <= int(p) <= 255 for p in parts)
     except ValueError:
         return False
+
+
+_MAX_IOC_LEN = 512
+
+def _sanitize_ioc_value(value: str) -> str | None:
+    """
+    Sanitiza e valida um valor de IOC recebido via path param.
+    Remove caracteres de controle e limita tamanho.
+    Aceita: IPs, domínios, hashes, CVEs, URLs.
+    Retorna None se inválido.
+    """
+    if not value:
+        return None
+    value = value.strip()
+    if len(value) > _MAX_IOC_LEN:
+        return None
+    value = re.sub(r'[\x00-\x1f\x7f]', '', value)
+    if not value:
+        return None
+    return value
 
 
 # ── API Key authentication ────────────────────────────────────────────────────
@@ -126,18 +177,61 @@ def _inject_public_key(html: str) -> str:
 class BatchLookupRequest(BaseModel):
     values: list[str]
 
+    @field_validator("values")
+    @classmethod
+    def validate_values(cls, v):
+        if len(v) > 10:
+            raise ValueError("Max 10 values per batch request.")
+        sanitized = []
+        for val in v:
+            val = str(val).strip()[:500]
+            if val:
+                sanitized.append(val)
+        return sanitized
+
 
 class FalsePositiveBody(BaseModel):
     note: str = ""
     api_key: str
 
+    @field_validator("note")
+    @classmethod
+    def sanitize_note(cls, v):
+        v = str(v).strip()[:1000]
+        v = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', v)
+        return v
+
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, v):
+        if not v or not str(v).strip():
+            raise ValueError("api_key é obrigatória.")
+        return str(v).strip()[:256]
+
 
 class RevertFalsePositiveBody(BaseModel):
     api_key: str
 
+    @field_validator("api_key")
+    @classmethod
+    def validate_api_key(cls, v):
+        if not v or not str(v).strip():
+            raise ValueError("api_key é obrigatória.")
+        return str(v).strip()[:256]
+
 
 class ShareWorkbenchRequest(BaseModel):
-    payload: str   # JSON string com pins e notas, serializado pelo frontend
+    payload: str
+
+    @field_validator("payload")
+    @classmethod
+    def validate_payload(cls, v):
+        v = str(v).strip()
+        if not v:
+            raise ValueError("payload não pode ser vazio.")
+        if len(v) > 50_000:
+            raise ValueError("Payload muito grande (max 50kb).")
+        return v
 
 
 # ── Existing endpoints ────────────────────────────────────────────────────────
@@ -204,13 +298,13 @@ async def health_check():
 
 @app.get("/api/iocs", dependencies=[Depends(_require_read_key)])
 async def get_all_iocs(
-    page: int = 1,
-    limit: int = 50,
-    severity: str | None = None,
-    type: str | None = None,
-    search: str | None = None,
-    status: str | None = None,
-    keywords: str | None = None,
+    page: int = Query(default=1, ge=1, le=10000),
+    limit: int = Query(default=50, ge=1, le=500),
+    severity: str | None = Query(default=None, max_length=20),
+    type: str | None = Query(default=None, max_length=20),
+    search: str | None = Query(default=None, max_length=200),
+    status: str | None = Query(default=None, max_length=20),
+    keywords: str | None = Query(default=None, max_length=500),
 ):
     db = DatabaseManager()
     kw_list = [k.strip() for k in keywords.split(",") if k.strip()] if keywords else None
@@ -234,13 +328,12 @@ async def get_stats():
 
 
 @app.get("/api/stats/trends", dependencies=[Depends(_require_api_key)])
-async def get_trends(days: int = 30):
+async def get_trends(days: int = Query(default=30, ge=1, le=90)):
     """
     Returns IOC counts grouped by day for the last N days.
     Useful for trend charts and activity monitoring.
     Max 90 days.
     """
-    days = min(days, 90)
     db = DatabaseManager()
     try:
         trends = db.get_trends(days)
@@ -369,6 +462,10 @@ async def lookup_ioc(value: str, request: Request):
             detail="Rate limit exceeded. Max 30 lookups per minute.",
         )
 
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
+
     db = DatabaseManager()
     try:
         record = db.get_ioc_by_value(value)
@@ -407,7 +504,7 @@ async def lookup_ioc(value: str, request: Request):
 
 
 @app.get("/api/alerts/latest", dependencies=[Depends(_require_api_key)])
-async def get_latest_alerts(hours: int = 24):
+async def get_latest_alerts(hours: int = Query(default=24, ge=1, le=168)):
     """
     Returns the most recent **CRITICAL** IOCs added within the last N hours.
 
@@ -415,7 +512,6 @@ async def get_latest_alerts(hours: int = 24):
     - Results sorted by `first_seen` descending; capped at 100 entries.
     - **No rate limiting** — intended for automated SIEM, Slack, and Teams integrations.
     """
-    hours = min(max(hours, 1), 168)
 
     db = DatabaseManager()
     try:
@@ -470,6 +566,9 @@ async def lookup_batch(body: BatchLookupRequest):
 @app.get("/api/iocs/{value}/score-breakdown")
 async def get_score_breakdown(value: str):
     """Returns the detailed score breakdown for a single IOC. Public — no API key required."""
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
     db = DatabaseManager()
     try:
         ioc = db.get_ioc_context(value)
@@ -491,6 +590,9 @@ async def get_score_breakdown(value: str):
 async def get_ioc_context(value: str):
     """Returns full IOC context plus correlated IOCs from the same source.
     Public — no API key required. Used by the drawer panel."""
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
     db = DatabaseManager()
     try:
         ioc = db.get_ioc_context(value)
@@ -512,6 +614,9 @@ async def get_ioc_campaign(value: str):
     Retorna contexto de campanha para um IOC — Kill Chain reconstruída
     e IOCs similares correlacionados por tipo. Público.
     """
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
     db = DatabaseManager()
     try:
         ioc = db.get_ioc_context(value)
@@ -536,6 +641,9 @@ async def mark_false_positive_endpoint(value: str, body: FalsePositiveBody):
         raise HTTPException(status_code=500, detail="AEGIS_API_KEY não configurada no servidor.")
     if not body.api_key or not hmac.compare_digest(body.api_key.encode(), configured.encode()):
         raise HTTPException(status_code=401, detail="API key inválida.")
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
     db = DatabaseManager()
     try:
         ok = db.mark_false_positive(value, body.note)
@@ -554,6 +662,9 @@ async def revert_false_positive_endpoint(value: str, body: RevertFalsePositiveBo
         raise HTTPException(status_code=500, detail="AEGIS_API_KEY não configurada no servidor.")
     if not body.api_key or not hmac.compare_digest(body.api_key.encode(), configured.encode()):
         raise HTTPException(status_code=401, detail="API key inválida.")
+    value = _sanitize_ioc_value(value)
+    if not value:
+        raise HTTPException(status_code=400, detail="Valor de IOC inválido.")
     db = DatabaseManager()
     try:
         ok = db.unmark_false_positive(value)
