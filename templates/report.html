@@ -1901,6 +1901,16 @@
 
     document.getElementById('lookup-result').innerHTML = h;
 
+    var lookupPinBtn = document.querySelector('#lookup-result [data-pin-action="pin"]');
+    if (lookupPinBtn) {
+      lookupPinBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var v = this.getAttribute('data-pin-value');
+        wbPinByValue(v);
+      });
+    }
+
     /* Wire FP button after DOM insertion */
     var fpBtn = document.getElementById('lookup-fp-btn');
     if (fpBtn) fpBtn.addEventListener('click', function() { _toggleLookupFpForm(); });
@@ -1919,9 +1929,10 @@
     h += '<div class="drawer-action-btns">';
     h += '<button class="btn-drawer-action" id="lookup-copy-btn" onclick="copyLookupIoc()">📋 Copiar valor</button>';
     var isLookupPinned = !!_wbPins[val];
-    h += '<button class="btn-drawer-action" ' +
-      (isLookupPinned ? 'disabled' : '') +
-      ' onclick="event.stopPropagation();wbPinByValue(' + JSON.stringify(val) + ')">' +
+    h += '<button class="btn-drawer-action"' +
+      (isLookupPinned ? ' disabled' : '') +
+      ' data-pin-value="' + escHtml(val) + '"' +
+      ' data-pin-action="pin">' +
       (isLookupPinned ? '📌 Pinado' : '📌 Pin') +
     '</button>';
     h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
@@ -2294,6 +2305,16 @@ function renderDrawerBody(ioc) {
 
   document.getElementById('drawer-body').innerHTML = html;
 
+  var pinBtn = document.querySelector('[data-pin-action="pin"]');
+  if (pinBtn) {
+    pinBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      var v = this.getAttribute('data-pin-value');
+      wbPinByValue(v);
+    });
+  }
+
   var fpBtn = document.getElementById('btn-drawer-fp');
   if (fpBtn) {
     fpBtn.addEventListener('click', function() { toggleFpForm(); });
@@ -2636,7 +2657,8 @@ function renderActionsSection(ioc) {
       '<button class="btn-drawer-action" onclick="copyDrawerIoc()">📋 Copiar valor</button>' +
       '<button class="btn-drawer-action" id="wb-pin-btn-' + escHtml(val) + '" ' +
         (isPinned ? 'disabled' : '') +
-        ' onclick="event.stopPropagation();wbPinByValue(' + JSON.stringify(val) + ')">' +
+        ' data-pin-value="' + escHtml(val) + '"' +
+        ' data-pin-action="pin">' +
         (isPinned ? '📌 Pinado' : '📌 Pin') +
       '</button>' +
       '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
