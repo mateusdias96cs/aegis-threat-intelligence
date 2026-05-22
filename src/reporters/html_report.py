@@ -62,6 +62,7 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
         total_in_db_fmt=f"{total_in_db:,}",
         total_displayed_fmt=f"{total_displayed:,}",
     )
+    html = html.strip()  # Remove whitespace/BOM before <!DOCTYPE html>
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     try:

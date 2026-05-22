@@ -1,4 +1,6 @@
+import json
 import requests
+from src.storage import mitre_cache
 
 FEED_URL = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
 
@@ -33,12 +35,33 @@ KEYWORD_TO_TECHNIQUE = {
 
 
 def load_techniques() -> dict:
+    # Tenta cache do banco primeiro (TTL 30 dias)
+    cached = mitre_cache.load()
+    if cached:
+        return cached
+
+    # Cache ausente ou expirado — busca do GitHub
+    print("[mitre] buscando técnicas do GitHub MITRE CTI...")
     try:
         response = requests.get(FEED_URL, timeout=60)
         response.raise_for_status()
         objects = response.json().get("objects", [])
     except requests.RequestException as e:
-        print(f"[mitre] failed to fetch ATT&CK data: {e}")
+        print(f"[mitre] falha ao buscar ATT&CK data: {e}")
+        # Tenta retornar cache expirado como fallback de emergência
+        try:
+            from sqlalchemy import text
+            from src.storage.database import engine
+            with engine.connect() as conn:
+                row = conn.execute(
+                    text("SELECT value FROM kv_cache WHERE key = 'mitre_techniques'")
+                ).fetchone()
+            if row:
+                data = json.loads(row[0])
+                print(f"[mitre] usando cache expirado como fallback ({len(data)} técnicas)")
+                return data
+        except Exception:
+            pass
         return {}
 
     techniques = {}
@@ -71,6 +94,9 @@ def load_techniques() -> dict:
             "tactic": tactic,
             "url": tech_url,
         }
+
+    if techniques:
+        mitre_cache.save(techniques)
 
     return techniques
 

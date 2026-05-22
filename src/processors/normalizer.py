@@ -10,19 +10,27 @@ LOWERCASE_TYPES = {"ip", "domain", "url"}
 def normalize(iocs: list) -> list:
     cleaned = []
     for ioc in iocs:
-        entry = {key: ioc.get(key) for key in REQUIRED_KEYS}
+        # Preserva todos os campos do collector — não descartar nada
+        entry = dict(ioc)
 
+        # Garante que required keys existem (None como fallback)
+        for key in REQUIRED_KEYS:
+            if key not in entry:
+                entry[key] = None
+
+        # Strip de strings
         for key in list(entry):
             val = entry[key]
             if isinstance(val, str):
                 entry[key] = val.strip()
 
-        value = entry.get("value")
-        if not value:
+        # value obrigatório
+        if not entry.get("value"):
             continue
 
-        if entry.get("type") in LOWERCASE_TYPES and isinstance(value, str):
-            entry["value"] = value.lower()
+        # Lowercase para tipos específicos
+        if entry.get("type") in LOWERCASE_TYPES and isinstance(entry["value"], str):
+            entry["value"] = entry["value"].lower()
 
         cleaned.append(entry)
     return cleaned
