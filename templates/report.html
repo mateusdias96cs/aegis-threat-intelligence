@@ -2173,33 +2173,58 @@
     }
 
     var headers = [
-      'indicator_type', 'indicator_value', 'severity', 'confidence_score',
-      'source', 'country_code', 'mitre_tactic', 'mitre_technique',
-      'first_seen', 'last_seen'
+      'indicator_type',
+      'indicator_value',
+      'severity',
+      'confidence_score',
+      'ioc_status',
+      'source',
+      'country_code',
+      'mitre_tactic',
+      'mitre_technique_id',
+      'mitre_technique_name',
+      'cvss_score',
+      'first_seen',
+      'last_seen'
     ];
 
     var lines = [headers.join(',')];
 
     selectedIocData.forEach(function(ioc) {
-      var confidence = ioc.abuse_score != null ? String(ioc.abuse_score) : '';
-      var mitreId    = ioc.mitre_technique_id || '';
-      var techData   = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
-      var techName   = techData ? (techData.name || '') : '';
-      var mitreTech  = mitreId ? (mitreId + (techName ? ' — ' + techName : '')) : '';
-      var country    = ioc.country   || '';
-      var mitreTac   = ioc.mitre_tactic || '';
-      var firstSeen  = (ioc.first_seen || '').substring(0, 10);
-      var lastSeen   = (ioc.last_seen  || firstSeen).substring(0, 10);
+      /* confidence_score — usa score_atual se disponível, fallback abuse_score */
+      var confidence = '';
+      if (ioc.score_atual != null)          confidence = String(Math.round(ioc.score_atual));
+      else if (ioc.confidence_score != null) confidence = String(ioc.confidence_score);
+      else if (ioc.abuse_score != null)      confidence = String(ioc.abuse_score);
+
+      /* MITRE — separa ID e nome em colunas distintas */
+      var mitreId   = ioc.mitre_technique_id || '';
+      var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
+      var mitreName = techData ? (techData.name || '') : '';
+
+      /* cvss_score — só para CVEs */
+      var cvss = (ioc.type || '').toLowerCase() === 'cve' && ioc.cvss_score != null
+        ? String(ioc.cvss_score)
+        : '';
+
+      var country   = ioc.country      || '';
+      var mitreTac  = ioc.mitre_tactic || '';
+      var iocStatus = ioc.ioc_status   || 'ACTIVE';
+      var firstSeen = (ioc.first_seen  || '').substring(0, 10);
+      var lastSeen  = (ioc.last_seen   || firstSeen).substring(0, 10);
 
       lines.push([
         csvCell(ioc.type),
         csvCell(ioc.value),
         csvCell(ioc.severity),
         csvCell(confidence),
+        csvCell(iocStatus),
         csvCell(ioc.source),
         csvCell(country),
         csvCell(mitreTac),
-        csvCell(mitreTech),
+        csvCell(mitreId),
+        csvCell(mitreName),
+        csvCell(cvss),
         csvCell(firstSeen),
         csvCell(lastSeen),
       ].join(','));
