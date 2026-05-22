@@ -3105,7 +3105,7 @@ function _wbRender() {
 
     var unpinBtn = _wbReadonly
       ? ''
-      : '<button class="btn-unpin" onclick="_wbUnpin(' + JSON.stringify(val) + ')">✕ Remover</button>';
+      : '<button class="btn-unpin" data-unpin-value="' + escHtml(val) + '">✕ Remover</button>';
 
     card.innerHTML =
       '<div class="wb-card-header">' +
@@ -3127,6 +3127,15 @@ function _wbRender() {
       '</div>';
 
     listEl.appendChild(card);
+
+    var unpinBtn = card.querySelector('[data-unpin-value]');
+    if (unpinBtn) {
+      unpinBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var v = this.getAttribute('data-unpin-value');
+        _wbUnpin(v);
+      });
+    }
 
     /* Auto-save note on input */
     if (!_wbReadonly) {
