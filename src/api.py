@@ -223,16 +223,6 @@ async def get_all_iocs(
         db.close()
 
 
-@app.get("/api/iocs/severity/{severity}")
-async def get_iocs_by_severity(severity: str):
-    db = DatabaseManager()
-    try:
-        iocs = db.get_iocs_by_severity(severity.upper())
-        return {"severity": severity, "count": len(iocs), "iocs": iocs}
-    finally:
-        db.close()
-
-
 @app.get("/api/stats", dependencies=[Depends(_require_api_key)])
 async def get_stats():
     db = DatabaseManager()
