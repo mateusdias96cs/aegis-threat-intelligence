@@ -65,12 +65,11 @@
     /* ── Sidebar */
     .sidebar { background: var(--bg-base); border-right: 1px solid #2a2a2a; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
     .sb-brand { padding: 22px 16px 14px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-    .shield-wrap { position: relative; width: 70px; height: 70px; display: grid; place-items: center; }
-    .shield-glow { position: absolute; inset: -8px; border-radius: 50%; background: radial-gradient(circle, rgba(200,169,110,.07) 0%, transparent 65%); pointer-events: none; animation: glowpulse 8s linear infinite; }
-    @keyframes glowpulse { 0%,100%{opacity:.85} 50%{opacity:.4} }
-    .shield { width: 60px; height: 60px; border-radius: 50%; border: 1px solid #333; background: #fff; overflow: hidden; display: grid; place-items: center; animation: spin3d 10s linear infinite; }
-    .shield img { width: 60px; height: 60px; display: block; object-fit: cover; border-radius: 50%; }
-    @keyframes spin3d { from { transform: rotateY(0deg); } to { transform: rotateY(360deg); } }
+    .shield-wrap { position: relative; width: 76px; height: 76px; display: grid; place-items: center; }
+    .shield-glow { position: absolute; inset: -10px; border-radius: 50%; background: radial-gradient(circle, rgba(192,57,43,.18) 0%, rgba(192,57,43,.06) 45%, transparent 70%); pointer-events: none; animation: glowpulse 3s ease-in-out infinite; }
+    @keyframes glowpulse { 0%,100%{ opacity:.5; transform:scale(1); } 50%{ opacity:1; transform:scale(1.08); } }
+    .shield { width: 66px; height: 66px; border-radius: 50%; border: 1px solid rgba(192,57,43,.35); background: #fff; overflow: hidden; display: grid; place-items: center; box-shadow: 0 0 18px rgba(192,57,43,.15); }
+    .shield img { width: 66px; height: 66px; display: block; object-fit: cover; border-radius: 50%; }
     .sb-title { font-size: 16px; font-weight: 700; letter-spacing: 5px; color: #fff; line-height: 1; padding-left: 5px; }
     .sb-sub { font-size: 9px; font-weight: 600; letter-spacing: 2.5px; color: var(--red-primary); text-transform: uppercase; }
     .sb-rule { height: 1px; background: var(--border); margin: 2px 0; flex-shrink: 0; }
@@ -374,11 +373,11 @@
     .drawer-body { flex:1; overflow-y:auto; padding-bottom:40px; }
     .drawer-section { padding:16px 20px; border-bottom:1px solid var(--border-subtle); }
     .drawer-section:last-child { border-bottom:none; }
-    .drawer-section-title { font-size:10px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:12px; }
+    .drawer-section-title { font-size:11px; font-weight:600; letter-spacing:1.5px; text-transform:uppercase; color:#666666; margin-bottom:12px; }
     .drawer-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
     .drawer-info-block { background:var(--bg-elevated); border-radius:3px; padding:9px 12px; }
-    .drawer-info-label { font-size:9.5px; color:var(--text-tertiary); margin-bottom:3px; letter-spacing:.5px; }
-    .drawer-info-value { font-size:12.5px; color:var(--text-primary); font-weight:500; word-break:break-word; }
+    .drawer-info-label { font-size:10.5px; color:#555555; margin-bottom:4px; letter-spacing:.3px; }
+    .drawer-info-value { font-size:13px; color:var(--text-primary); font-weight:500; word-break:break-word; }
 
     /* score bars */
     .score-bar-row { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
@@ -451,6 +450,29 @@
     .abuse-cat-bar-bg { height:4px; background:rgba(255,255,255,.07); border-radius:2px; overflow:hidden; }
     .abuse-cat-bar    { height:100%; border-radius:2px; transition:width .4s cubic-bezier(.25,.46,.45,.94); }
     .abuse-total-note { font-size:10px; color:var(--text-tertiary); margin-bottom:10px; }
+
+    /* ── Campaigns / Kill Chain ── */
+    .kc-track { display:flex; align-items:flex-start; gap:0; margin:16px 0; overflow-x:auto; padding-bottom:6px; }
+    .kc-phase { display:flex; flex-direction:column; align-items:center; min-width:110px; flex-shrink:0; }
+    .kc-phase-box { background:var(--bg-elevated); border:1px solid var(--border); border-radius:4px; padding:8px 10px; text-align:center; width:100px; position:relative; transition:border-color 200ms; }
+    .kc-phase-box.active { border-color:var(--red-primary); background:rgba(192,57,43,.08); }
+    .kc-phase-label { font-size:9px; text-transform:uppercase; letter-spacing:1.5px; color:var(--text-tertiary); margin-bottom:4px; }
+    .kc-phase-name { font-size:11px; font-weight:600; color:var(--text-primary); line-height:1.3; }
+    .kc-phase-tech { font-size:9px; font-family:var(--font-mono); color:#7fb1ff; margin-top:3px; }
+    .kc-phase-cats { font-size:9px; color:var(--text-secondary); margin-top:2px; line-height:1.4; }
+    .kc-arrow { display:flex; align-items:center; padding:0 2px; margin-top:20px; color:var(--text-tertiary); font-size:14px; flex-shrink:0; }
+    .camp-section { background:var(--bg-surface); border:1px solid var(--border); border-radius:4px; padding:16px 20px; margin-bottom:12px; }
+    .camp-section-title { font-size:10px; font-weight:600; letter-spacing:1.8px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:12px; }
+    .camp-ioc-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; flex-wrap:wrap; }
+    .camp-ioc-value { font-family:var(--font-mono); font-size:16px; color:#fff; font-weight:600; word-break:break-all; }
+    .camp-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:12px; }
+    .camp-info-block { background:var(--bg-elevated); border-radius:3px; padding:9px 12px; }
+    .camp-info-label { font-size:9.5px; color:var(--text-tertiary); margin-bottom:3px; }
+    .camp-info-value { font-size:12px; color:var(--text-primary); font-weight:500; }
+    .similar-pill { display:inline-flex; align-items:center; gap:6px; padding:5px 11px; border-radius:3px; border:1px solid var(--border-strong); background:rgba(255,255,255,.03); font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); cursor:pointer; margin:3px; transition:all 150ms ease; white-space:nowrap; }
+    .similar-pill:hover { background:rgba(255,255,255,.08); color:#fff; border-color:var(--red-muted); }
+    .camp-spinner { text-align:center; padding:48px 20px; }
+    .camp-no-similar { font-size:12px; color:var(--text-tertiary); font-style:italic; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -498,11 +520,19 @@
         <span>Workbench</span>
         <span id="wb-pin-count" style="display:none;margin-left:auto;background:var(--red-primary);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:999px;font-family:var(--font-mono);">0</span>
       </button>
+      <button id="btn-campaigns" class="sb-item" onclick="switchTab('campaigns')">
+        <span class="sb-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+          </svg>
+        </span>
+        <span>Campaigns</span>
+      </button>
     </nav>
     <div class="sb-rule"></div>
     <div class="sb-foot">
       <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
-      <div class="sb-meta">Generated<br /><b>2026-05-22 07:45:58</b></div>
+      <div class="sb-meta">Generated<br /><b>2026-05-23 06:48:46</b></div>
     </div>
   </aside>
 
@@ -514,12 +544,12 @@
       <div class="ticker">
         <div class="ticker-tag"><span class="live-dot"></span>Live</div>
         <div class="ticker-track">
-          <span><b>CRITICAL</b>50.16.16.211</span><span><b>CRITICAL</b>CVE-2026-20131</span><span><b>CRITICAL</b>CVE-2023-21529</span><span><b>CRITICAL</b>CVE-2023-27351</span><span><b>CRITICAL</b>CVE-2024-27199</span><span><b>CRITICAL</b>CVE-2024-57728</span><span><b>CRITICAL</b>CVE-2024-57726</span><span><b>CRITICAL</b>CVE-2024-1708</span><span><b>CRITICAL</b>CVE-2026-41940</span><span><b>CRITICAL</b>69.57.238.229</span>
-          <span><b>CRITICAL</b>50.16.16.211</span><span><b>CRITICAL</b>CVE-2026-20131</span><span><b>CRITICAL</b>CVE-2023-21529</span><span><b>CRITICAL</b>CVE-2023-27351</span><span><b>CRITICAL</b>CVE-2024-27199</span><span><b>CRITICAL</b>CVE-2024-57728</span><span><b>CRITICAL</b>CVE-2024-57726</span><span><b>CRITICAL</b>CVE-2024-1708</span><span><b>CRITICAL</b>CVE-2026-41940</span><span><b>CRITICAL</b>69.57.238.229</span>
+          <span><b>CRITICAL</b>CVE-2026-20131</span><span><b>CRITICAL</b>CVE-2023-21529</span><span><b>CRITICAL</b>CVE-2023-27351</span><span><b>CRITICAL</b>CVE-2024-27199</span><span><b>CRITICAL</b>CVE-2024-57728</span><span><b>CRITICAL</b>CVE-2024-57726</span><span><b>CRITICAL</b>CVE-2024-1708</span><span><b>CRITICAL</b>CVE-2026-41940</span><span><b>CRITICAL</b>66.240.192.82</span><span><b>CRITICAL</b>195.206.182.208</span>
+          <span><b>CRITICAL</b>CVE-2026-20131</span><span><b>CRITICAL</b>CVE-2023-21529</span><span><b>CRITICAL</b>CVE-2023-27351</span><span><b>CRITICAL</b>CVE-2024-27199</span><span><b>CRITICAL</b>CVE-2024-57728</span><span><b>CRITICAL</b>CVE-2024-57726</span><span><b>CRITICAL</b>CVE-2024-1708</span><span><b>CRITICAL</b>CVE-2026-41940</span><span><b>CRITICAL</b>66.240.192.82</span><span><b>CRITICAL</b>195.206.182.208</span>
         </div>
       </div>
       <div class="topbar-right">
-        <div class="pipeline-meta">Total IOCs<b id="topbar-total">12310</b></div>
+        <div class="pipeline-meta">Total IOCs<b id="topbar-total">12673</b></div>
         <button class="btn-run">&#9654; Run Pipeline</button>
       </div>
     </div>
@@ -529,9 +559,9 @@
       <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
       <h1>AEGIS Threat Intelligence</h1>
       <div class="page-sub">
-        <span>Generated <b>2026-05-22 07:45:58</b></span>
+        <span>Generated <b>2026-05-23 06:48:46</b></span>
         <span style="color:var(--text-tertiary)">·</span>
-        <span>Total IOCs in database <b id="stat-db-total">12310</b></span>
+        <span>Total IOCs in database <b id="stat-db-total">12673</b></span>
       </div>
     </div>
 
@@ -554,23 +584,23 @@
     <div class="stats">
       <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="num" id="stat-total">12310</div>
+        <div class="num" id="stat-total">12673</div>
       </div>
       <div class="stat s-critical">
         <div class="label">Critical</div>
-        <div class="num" id="stat-critical">10009</div>
+        <div class="num" id="stat-critical">10008</div>
       </div>
       <div class="stat s-high">
         <div class="label">High</div>
-        <div class="num" id="stat-high">1047</div>
+        <div class="num" id="stat-high">1299</div>
       </div>
       <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="num" id="stat-medium">1254</div>
+        <div class="num" id="stat-medium">1364</div>
       </div>
       <div class="stat s-low">
         <div class="label">Low</div>
-        <div class="num" id="stat-low">0</div>
+        <div class="num" id="stat-low">2</div>
       </div>
     </div>
 
@@ -934,9 +964,27 @@
 
   </section>
 
+  <!-- ══════════════════════ TAB 6: Campaigns ══════════════════════ -->
+  <section id="tab-campaigns" style="display:none">
+
+    <div style="margin-bottom:18px;">
+      <h2 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:5px;">Attacker Behaviour Profile</h2>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Kill Chain reconstruída e correlação de IOCs por campanha. Abra um IOC no drawer e clique em <strong>Ver Kill Chain</strong>.</p>
+    </div>
+
+    <div id="camp-empty" style="text-align:center;padding:60px 20px;color:var(--text-tertiary);">
+      <div style="font-size:36px;margin-bottom:10px;">🎯</div>
+      <p style="font-size:13px;color:var(--text-secondary);margin-bottom:4px;">Nenhum IOC carregado</p>
+      <p style="font-size:12px;">Abra qualquer IOC no drawer e clique em <strong>🔗 Ver Kill Chain</strong></p>
+    </div>
+
+    <div id="camp-panel" style="display:none"></div>
+
+  </section>
+
     </div><!-- /.scroller -->
 
-    <footer>AEGIS Threat Intelligence &mdash; 2026-05-22 07:45:58</footer>
+    <footer>AEGIS Threat Intelligence &mdash; 2026-05-23 06:48:46</footer>
 
   </main>
 
@@ -1244,7 +1292,7 @@
 
   /* ── Tab switching ── */
   function switchTab(tab) {
-    ['ioc','lookup','profiling','mitre','workbench'].forEach(function(t) {
+    ['ioc','lookup','profiling','mitre','workbench','campaigns'].forEach(function(t) {
       var el = document.getElementById('tab-' + t);
       if (el) el.style.display = t === tab ? '' : 'none';
       var btn = document.getElementById('btn-' + t);
@@ -1901,6 +1949,26 @@
 
     document.getElementById('lookup-result').innerHTML = h;
 
+    var lookupPinBtn = document.querySelector('#lookup-result [data-pin-action="pin"]');
+    if (lookupPinBtn) {
+      lookupPinBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var v = this.getAttribute('data-pin-value');
+        wbPinByValue(v);
+      });
+    }
+
+    var lookupCampBtn = document.querySelector('#lookup-result [data-camp-action="campaign-lookup"]');
+    if (lookupCampBtn) {
+      lookupCampBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        e.preventDefault();
+        var v = this.getAttribute('data-camp-value');
+        openCampaign(v);
+      });
+    }
+
     /* Wire FP button after DOM insertion */
     var fpBtn = document.getElementById('lookup-fp-btn');
     if (fpBtn) fpBtn.addEventListener('click', function() { _toggleLookupFpForm(); });
@@ -1919,13 +1987,15 @@
     h += '<div class="drawer-action-btns">';
     h += '<button class="btn-drawer-action" id="lookup-copy-btn" onclick="copyLookupIoc()">📋 Copiar valor</button>';
     var isLookupPinned = !!_wbPins[val];
-    h += '<button class="btn-drawer-action" ' +
-      (isLookupPinned ? 'disabled' : '') +
-      ' onclick="wbPinByValue(' + JSON.stringify(val) + ')">' +
+    h += '<button class="btn-drawer-action"' +
+      (isLookupPinned ? ' disabled' : '') +
+      ' data-pin-value="' + escHtml(val) + '"' +
+      ' data-pin-action="pin">' +
       (isLookupPinned ? '📌 Pinado' : '📌 Pin') +
     '</button>';
     h += '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
     if (type === 'ip') h += '<a href="' + escHtml(shUrl) + '" target="_blank" class="btn-drawer-action">🔗 Shodan</a>';
+    h += '<button class="btn-drawer-action" data-camp-value="' + escHtml(val) + '" data-camp-action="campaign-lookup">🔗 Ver Kill Chain</button>';
     h += '</div>';
 
     h += '<div class="drawer-fp-area">';
@@ -2102,33 +2172,58 @@
     }
 
     var headers = [
-      'indicator_type', 'indicator_value', 'severity', 'confidence_score',
-      'source', 'country_code', 'mitre_tactic', 'mitre_technique',
-      'first_seen', 'last_seen'
+      'indicator_type',
+      'indicator_value',
+      'severity',
+      'confidence_score',
+      'ioc_status',
+      'source',
+      'country_code',
+      'mitre_tactic',
+      'mitre_technique_id',
+      'mitre_technique_name',
+      'cvss_score',
+      'first_seen',
+      'last_seen'
     ];
 
     var lines = [headers.join(',')];
 
     selectedIocData.forEach(function(ioc) {
-      var confidence = ioc.abuse_score != null ? String(ioc.abuse_score) : '';
-      var mitreId    = ioc.mitre_technique_id || '';
-      var techData   = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
-      var techName   = techData ? (techData.name || '') : '';
-      var mitreTech  = mitreId ? (mitreId + (techName ? ' — ' + techName : '')) : '';
-      var country    = ioc.country   || '';
-      var mitreTac   = ioc.mitre_tactic || '';
-      var firstSeen  = (ioc.first_seen || '').substring(0, 10);
-      var lastSeen   = (ioc.last_seen  || firstSeen).substring(0, 10);
+      /* confidence_score — usa score_atual se disponível, fallback abuse_score */
+      var confidence = '';
+      if (ioc.score_atual != null)          confidence = String(Math.round(ioc.score_atual));
+      else if (ioc.confidence_score != null) confidence = String(ioc.confidence_score);
+      else if (ioc.abuse_score != null)      confidence = String(ioc.abuse_score);
+
+      /* MITRE — separa ID e nome em colunas distintas */
+      var mitreId   = ioc.mitre_technique_id || '';
+      var techData  = mitreId ? (MITRE_TECHNIQUES[mitreId] || null) : null;
+      var mitreName = techData ? (techData.name || '') : '';
+
+      /* cvss_score — só para CVEs */
+      var cvss = (ioc.type || '').toLowerCase() === 'cve' && ioc.cvss_score != null
+        ? String(ioc.cvss_score)
+        : '';
+
+      var country   = ioc.country      || '';
+      var mitreTac  = ioc.mitre_tactic || '';
+      var iocStatus = ioc.ioc_status   || 'ACTIVE';
+      var firstSeen = (ioc.first_seen  || '').substring(0, 10);
+      var lastSeen  = (ioc.last_seen   || firstSeen).substring(0, 10);
 
       lines.push([
         csvCell(ioc.type),
         csvCell(ioc.value),
         csvCell(ioc.severity),
         csvCell(confidence),
+        csvCell(iocStatus),
         csvCell(ioc.source),
         csvCell(country),
         csvCell(mitreTac),
-        csvCell(mitreTech),
+        csvCell(mitreId),
+        csvCell(mitreName),
+        csvCell(cvss),
         csvCell(firstSeen),
         csvCell(lastSeen),
       ].join(','));
@@ -2160,7 +2255,7 @@
 </div>
 
 <script>
-const TREND_DATA = [{"critical": 0, "date": "2026-04-23", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 2, "date": "2026-04-24", "high": 2, "low": 0, "medium": 0, "total": 4}, {"critical": 1, "date": "2026-04-28", "high": 1, "low": 0, "medium": 0, "total": 2}, {"critical": 1, "date": "2026-04-30", "high": 0, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-01", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-06", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-07", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-08", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-14", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-15", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-18", "high": 8, "low": 0, "medium": 73, "total": 81}, {"critical": 0, "date": "2026-05-19", "high": 129, "low": 0, "medium": 403, "total": 532}, {"critical": 0, "date": "2026-05-20", "high": 379, "low": 0, "medium": 475, "total": 854}, {"critical": 0, "date": "2026-05-21", "high": 316, "low": 0, "medium": 227, "total": 543}, {"critical": 10000, "date": "2026-05-22", "high": 127, "low": 0, "medium": 76, "total": 10203}];
+const TREND_DATA = [{"critical": 2, "date": "2026-04-24", "high": 2, "low": 0, "medium": 0, "total": 4}, {"critical": 1, "date": "2026-04-28", "high": 1, "low": 0, "medium": 0, "total": 2}, {"critical": 1, "date": "2026-04-30", "high": 0, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-01", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-06", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-07", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-08", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-14", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-15", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-19", "high": 62, "low": 0, "medium": 194, "total": 256}, {"critical": 0, "date": "2026-05-20", "high": 279, "low": 0, "medium": 526, "total": 805}, {"critical": 0, "date": "2026-05-21", "high": 116, "low": 1, "medium": 316, "total": 433}, {"critical": 0, "date": "2026-05-22", "high": 124, "low": 0, "medium": 259, "total": 383}, {"critical": 10000, "date": "2026-05-23", "high": 106, "low": 0, "medium": 69, "total": 10175}];
 
 (function () {
   var container = document.getElementById('trendsChartContainer');
@@ -2293,6 +2388,27 @@ function renderDrawerBody(ioc) {
   html += renderActionsSection(ioc);
 
   document.getElementById('drawer-body').innerHTML = html;
+
+  var pinBtn = document.querySelector('[data-pin-action="pin"]');
+  if (pinBtn) {
+    pinBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      var v = this.getAttribute('data-pin-value');
+      wbPinByValue(v);
+    });
+  }
+
+  var campBtn = document.querySelector('[data-camp-action="campaign"]');
+  if (campBtn) {
+    campBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      var v = this.getAttribute('data-camp-value');
+      closeDrawer();
+      openCampaign(v);
+    });
+  }
 
   var fpBtn = document.getElementById('btn-drawer-fp');
   if (fpBtn) {
@@ -2636,10 +2752,12 @@ function renderActionsSection(ioc) {
       '<button class="btn-drawer-action" onclick="copyDrawerIoc()">📋 Copiar valor</button>' +
       '<button class="btn-drawer-action" id="wb-pin-btn-' + escHtml(val) + '" ' +
         (isPinned ? 'disabled' : '') +
-        ' onclick="wbPinByValue(' + JSON.stringify(val) + ')">' +
+        ' data-pin-value="' + escHtml(val) + '"' +
+        ' data-pin-action="pin">' +
         (isPinned ? '📌 Pinado' : '📌 Pin') +
       '</button>' +
-      '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>';
+      '<a href="' + escHtml(vtUrl) + '" target="_blank" class="btn-drawer-action">🔗 VirusTotal</a>' +
+      '<button class="btn-drawer-action" data-camp-value="' + escHtml(val) + '" data-camp-action="campaign">🔗 Ver Kill Chain</button>';
   if (type === 'ip') html += '<a href="' + escHtml(shUrl) + '" target="_blank" class="btn-drawer-action">🔗 Shodan</a>';
   html += '</div>';
 
@@ -2921,10 +3039,15 @@ function wbPin(ioc) {
     pinned_at:  new Date().toISOString(),
   };
   _wbSave();
-  /* Visual feedback */
+  /* Visual feedback no botão em vez de alert */
   var btn = document.getElementById('wb-pin-btn-' + CSS.escape(val));
-  if (btn) { btn.textContent = '📌 Pinado'; btn.disabled = true; }
-  alert('IOC adicionado ao Workbench.');
+  if (btn) {
+    btn.textContent = '✓ Adicionado';
+    btn.disabled = true;
+    setTimeout(function() {
+      if (btn) btn.textContent = '📌 Pinado';
+    }, 2000);
+  }
 }
 
 /* ── Pin by value (safe onclick helper — avoids JSON.stringify(ioc) in HTML attrs) ── */
@@ -2982,7 +3105,7 @@ function _wbRender() {
 
     var unpinBtn = _wbReadonly
       ? ''
-      : '<button class="btn-unpin" onclick="_wbUnpin(' + JSON.stringify(val) + ')">✕ Remover</button>';
+      : '<button class="btn-unpin" data-unpin-value="' + escHtml(val) + '">✕ Remover</button>';
 
     card.innerHTML =
       '<div class="wb-card-header">' +
@@ -3004,6 +3127,15 @@ function _wbRender() {
       '</div>';
 
     listEl.appendChild(card);
+
+    var unpinBtn = card.querySelector('[data-unpin-value]');
+    if (unpinBtn) {
+      unpinBtn.addEventListener('click', function(e) {
+        e.stopPropagation();
+        var v = this.getAttribute('data-unpin-value');
+        _wbUnpin(v);
+      });
+    }
 
     /* Auto-save note on input */
     if (!_wbReadonly) {
@@ -3091,6 +3223,278 @@ function _wbExitReadonly() {
   if (banner) banner.style.display = 'none';
   _wbRender();
   _wbUpdateCount();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   Campaigns — Attacker Behaviour Profile + Kill Chain
+══════════════════════════════════════════════════════════════ */
+
+var KC_PHASES = [
+  { id: "Reconnaissance",       color: "#6366f1", icon: "🔍" },
+  { id: "Resource Development", color: "#8b5cf6", icon: "🛠" },
+  { id: "Initial Access",       color: "#ef4444", icon: "🚪" },
+  { id: "Execution",            color: "#f97316", icon: "⚡" },
+  { id: "Persistence",          color: "#eab308", icon: "🔒" },
+  { id: "Privilege Escalation", color: "#84cc16", icon: "⬆" },
+  { id: "Defense Evasion",      color: "#06b6d4", icon: "🛡" },
+  { id: "Credential Access",    color: "#f59e0b", icon: "🔑" },
+  { id: "Discovery",            color: "#a78bfa", icon: "🗺" },
+  { id: "Lateral Movement",     color: "#8b5cf6", icon: "↔" },
+  { id: "Collection",           color: "#10b981", icon: "📦" },
+  { id: "Command And Control",  color: "#dc2626", icon: "📡" },
+  { id: "Exfiltration",         color: "#f43f5e", icon: "📤" },
+  { id: "Impact",               color: "#7f1d1d", icon: "💥" },
+];
+
+var ABUSE_TO_KC = {
+  14: "Reconnaissance",
+  1:  "Reconnaissance",
+  2:  "Reconnaissance",
+  7:  "Initial Access",
+  11: "Initial Access",
+  15: "Initial Access",
+  16: "Initial Access",
+  21: "Initial Access",
+  18: "Credential Access",
+  5:  "Credential Access",
+  22: "Lateral Movement",
+  20: "Lateral Movement",
+  17: "Defense Evasion",
+  19: "Defense Evasion",
+  9:  "Defense Evasion",
+  13: "Defense Evasion",
+  4:  "Impact",
+  6:  "Impact",
+  8:  "Impact",
+  3:  "Impact",
+  23: "Initial Access",
+  10: "Initial Access",
+  12: "Initial Access",
+};
+
+var _campCurrentValue = null;
+
+function openCampaign(value) {
+  _campCurrentValue = value;
+  switchTab('campaigns');
+  _campLoad(value);
+}
+
+function _campLoad(value) {
+  var panelEl = document.getElementById('camp-panel');
+  var emptyEl = document.getElementById('camp-empty');
+  if (!panelEl || !emptyEl) return;
+
+  emptyEl.style.display = 'none';
+  panelEl.style.display = '';
+  panelEl.innerHTML =
+    '<div class="camp-spinner"><span class="enrich-spinner" style="width:22px;height:22px;border-width:2.5px;display:inline-block;"></span>' +
+    '<p style="font-size:12px;color:var(--text-tertiary);margin-top:14px;">Reconstruindo Kill Chain…</p></div>';
+
+  fetch('/api/iocs/' + encodeURIComponent(value) + '/campaign')
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(function(data) { _campRender(data); })
+    .catch(function(e) {
+      panelEl.innerHTML =
+        '<div class="camp-section" style="color:var(--text-secondary);font-size:12px;">Erro ao carregar campanha: ' + escHtml(String(e)) + '</div>';
+    });
+}
+
+function _campRender(data) {
+  var panelEl = document.getElementById('camp-panel');
+  if (!panelEl) return;
+
+  var ioc     = data.ioc || {};
+  var type    = (ioc.type || '').toLowerCase();
+  var similar = data.similar || [];
+  var html    = '';
+
+  var sev    = (ioc.severity   || 'LOW').toUpperCase();
+  var status = (ioc.ioc_status || 'ACTIVE').toUpperCase();
+  var chipColor = ({REACTIVATED:'#4a90e2',DECAYED:'#d4a017',HISTORICAL:'#555',
+                    FALSE_POSITIVE:'#e74c3c',ACTIVE:'#2e9b3e'})[status]||'#2e9b3e';
+
+  html += '<div class="camp-section">';
+  html += '<div class="camp-ioc-header">';
+  html += '<span class="type-pill type-pill-' + escHtml(type) + '">' + escHtml(type) + '</span>';
+  html += '<span class="badge badge-' + escHtml(sev) + '">' + escHtml(sev) + '</span>';
+  html += '<span class="drawer-status-chip" style="color:' + chipColor + ';border-color:' + chipColor + '">' + escHtml(status) + '</span>';
+  html += '<span class="camp-ioc-value">' + escHtml(ioc.value || '') + '</span>';
+  html += '</div>';
+
+  html += '<div class="camp-grid">';
+  if (type === 'ip') {
+    html += _campInfoBlock('País', escHtml(ioc.country || '—'));
+    html += _campInfoBlock('Fonte', escHtml(ioc.source || '—'));
+    html += _campInfoBlock('Reativações', String(ioc.reactivation_count || 0));
+    html += _campInfoBlock('Primeiro visto', escHtml((ioc.first_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Último visto', escHtml((ioc.last_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Janela', escHtml(data.window ? data.window.from + ' → ' + data.window.to : '—'));
+  } else if (type === 'cve') {
+    html += _campInfoBlock('CVSS', ioc.cvss_score != null ? String(ioc.cvss_score) + '/10' : '—');
+    html += _campInfoBlock('Fonte', escHtml(ioc.source || '—'));
+    html += _campInfoBlock('Produto', escHtml((ioc.description||'').split(' - ')[0]||'—'));
+    html += _campInfoBlock('Adicionado em', escHtml((ioc.first_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Janela', escHtml(data.window ? data.window.from + ' → ' + data.window.to : '—'));
+    html += _campInfoBlock('CVEs similares', String(data.similar_count || 0));
+  } else if (type === 'hash') {
+    var family = (ioc.description||'').split(':').pop().trim().split(' ')[0] || '—';
+    html += _campInfoBlock('Família', escHtml(family));
+    html += _campInfoBlock('Fonte', escHtml(ioc.source || '—'));
+    html += _campInfoBlock('Hashes similares', String(data.similar_count || 0));
+    html += _campInfoBlock('Primeiro visto', escHtml((ioc.first_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Tática', escHtml(ioc.mitre_tactic || '—'));
+    html += _campInfoBlock('Técnica', escHtml(ioc.mitre_technique_id || '—'));
+  } else if (type === 'url') {
+    html += _campInfoBlock('Status', (ioc.description||'').includes('online') ? '🔴 Online' : '⚫ Offline');
+    html += _campInfoBlock('Fonte', escHtml(ioc.source || '—'));
+    html += _campInfoBlock('URLs similares', String(data.similar_count || 0));
+    html += _campInfoBlock('Primeiro visto', escHtml((ioc.first_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Tática', escHtml(ioc.mitre_tactic || '—'));
+    html += _campInfoBlock('Janela', escHtml(data.window ? data.window.from + ' → ' + data.window.to : '—'));
+  } else if (type === 'domain') {
+    html += _campInfoBlock('Fonte', escHtml(ioc.source || '—'));
+    html += _campInfoBlock('Domínios similares', String(data.similar_count || 0));
+    html += _campInfoBlock('Tática', escHtml(ioc.mitre_tactic || '—'));
+    html += _campInfoBlock('Técnica', escHtml(ioc.mitre_technique_id || '—'));
+    html += _campInfoBlock('Primeiro visto', escHtml((ioc.first_seen||'').substring(0,10)||'—'));
+    html += _campInfoBlock('Janela', escHtml(data.window ? data.window.from + ' → ' + data.window.to : '—'));
+  }
+  html += '</div>';
+  html += '</div>';
+
+  html += _campBuildKillChain(ioc, type, similar);
+  html += _campBuildSimilar(similar, type);
+
+  panelEl.innerHTML = html;
+
+  /* Event delegation para pills de IOCs similares — evita JSON.stringify em onclick */
+  panelEl.querySelectorAll('[data-lookup-value]').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.stopPropagation();
+      var v = this.getAttribute('data-lookup-value');
+      if (v) runLookupDirect(v);
+    });
+  });
+}
+
+function _campBuildKillChain(ioc, type, similar) {
+  var activePhasesMap = {};
+
+  var tactic = (ioc.mitre_tactic || '').trim();
+  if (tactic) {
+    var techId = ioc.mitre_technique_id || '';
+    activePhasesMap[tactic] = activePhasesMap[tactic] || { techs: [], cats: [] };
+    if (techId && activePhasesMap[tactic].techs.indexOf(techId) === -1)
+      activePhasesMap[tactic].techs.push(techId);
+  }
+
+  var cats = ioc.abuse_categories || {};
+  if (typeof cats === 'string') { try { cats = JSON.parse(cats); } catch(e) { cats = {}; } }
+  Object.keys(cats).forEach(function(catId) {
+    var phase = ABUSE_TO_KC[parseInt(catId)];
+    if (phase) {
+      activePhasesMap[phase] = activePhasesMap[phase] || { techs: [], cats: [] };
+      var catName = (ABUSEIPDB_CATEGORIES[parseInt(catId)] || {}).name || ('Cat ' + catId);
+      if (activePhasesMap[phase].cats.indexOf(catName) === -1)
+        activePhasesMap[phase].cats.push(catName);
+    }
+  });
+
+  (similar || []).forEach(function(s) {
+    var st = (s.mitre_tactic || '').trim();
+    if (st) {
+      activePhasesMap[st] = activePhasesMap[st] || { techs: [], cats: [] };
+      var sid = s.mitre_technique_id || '';
+      if (sid && activePhasesMap[st].techs.indexOf(sid) === -1)
+        activePhasesMap[st].techs.push(sid);
+    }
+    var scats = s.abuse_categories || {};
+    if (typeof scats === 'string') { try { scats = JSON.parse(scats); } catch(e) { scats = {}; } }
+    Object.keys(scats).forEach(function(catId) {
+      var phase = ABUSE_TO_KC[parseInt(catId)];
+      if (phase) {
+        activePhasesMap[phase] = activePhasesMap[phase] || { techs: [], cats: [] };
+        var catName = (ABUSEIPDB_CATEGORIES[parseInt(catId)] || {}).name || ('Cat ' + catId);
+        if (activePhasesMap[phase].cats.indexOf(catName) === -1)
+          activePhasesMap[phase].cats.push(catName);
+      }
+    });
+  });
+
+  var activePhases = KC_PHASES.filter(function(p) { return activePhasesMap[p.id]; });
+
+  if (!activePhases.length) {
+    return '<div class="camp-section"><div class="camp-section-title">Kill Chain</div>' +
+      '<div class="camp-no-similar">Kill Chain não disponível — IOC sem tática MITRE ou categorias de abuso mapeadas.</div></div>';
+  }
+
+  var html = '<div class="camp-section"><div class="camp-section-title">Kill Chain Reconstruída</div>';
+
+  if (similar && similar.length > 0) {
+    html += '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:12px;">Fases enriquecidas com ' +
+      similar.length + ' IOC(s) correlacionado(s) na mesma janela temporal</div>';
+  }
+
+  html += '<div class="kc-track">';
+  activePhases.forEach(function(phase, idx) {
+    var info  = activePhasesMap[phase.id];
+    var color = phase.color;
+    html += '<div class="kc-phase">';
+    html += '<div class="kc-phase-box active" style="border-color:' + color + ';background:' + color + '15">';
+    html += '<div class="kc-phase-label">' + phase.icon + '</div>';
+    html += '<div class="kc-phase-name" style="color:' + color + '">' + escHtml(phase.id) + '</div>';
+    if (info.techs.length)
+      html += '<div class="kc-phase-tech">' + escHtml(info.techs.slice(0,2).join(' · ')) + '</div>';
+    if (info.cats.length)
+      html += '<div class="kc-phase-cats">' + escHtml(info.cats.slice(0,2).join(', ')) + '</div>';
+    html += '</div></div>';
+    if (idx < activePhases.length - 1)
+      html += '<div class="kc-arrow">→</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function _campBuildSimilar(similar, type) {
+  var titles = {
+    ip:     'IPs Correlacionados — Mesmo Padrão de Ataque',
+    cve:    'CVEs Relacionados — Mesmo Vendor / Produto',
+    hash:   'Hashes da Mesma Campanha de Malware',
+    url:    'URLs da Mesma Infraestrutura',
+    domain: 'Domínios da Mesma Campanha',
+  };
+  var html = '<div class="camp-section"><div class="camp-section-title">' +
+    escHtml(titles[type] || 'IOCs Correlacionados') + '</div>';
+
+  if (!similar || !similar.length) {
+    html += '<div class="camp-no-similar">Nenhum IOC correlacionado encontrado na janela de ±7 dias.</div>';
+    return html + '</div>';
+  }
+
+  html += '<div style="display:flex;flex-wrap:wrap;gap:4px;">';
+  similar.forEach(function(s) {
+    var val  = s.value || '';
+    var sev  = (s.severity || 'LOW').toUpperCase();
+    var disp = val.length > 28 ? val.substring(0, 28) + '…' : val;
+    var sevColor = ({CRITICAL:'#c0392b',HIGH:'#c06010',MEDIUM:'#8a7000',LOW:'#1e6b1e'})[sev]||'#555';
+    /* data-lookup-value em vez de onclick com JSON.stringify */
+    html += '<span class="similar-pill" data-lookup-value="' + escHtml(val) + '" title="' + escHtml(val) + '">';
+    html += '<span style="width:6px;height:6px;border-radius:50%;background:' + sevColor + ';flex-shrink:0;display:inline-block;"></span>';
+    html += escHtml(disp);
+    html += '</span>';
+  });
+  html += '</div>';
+  html += '<div style="font-size:10px;color:var(--text-tertiary);margin-top:8px;">Clique para abrir no IOC Lookup</div>';
+  html += '</div>';
+  return html;
+}
+
+function _campInfoBlock(label, value) {
+  return '<div class="camp-info-block">' +
+    '<div class="camp-info-label">' + escHtml(label) + '</div>' +
+    '<div class="camp-info-value">' + value + '</div>' +
+    '</div>';
 }
 </script>
 </body>
