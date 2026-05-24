@@ -170,31 +170,35 @@ class DatabaseManager:
         )
         self._session.commit()
 
-    def insert_many(self, iocs: list[dict]):
+    def insert_many(self, iocs: list[dict], existing: set[str] | None = None):
         if not iocs:
             return
-        existing = self.get_existing_values()
-        seen: set = set()
-        rows = []
+        if existing is None:
+            existing = self.get_existing_values()
+
+        seen: set[str] = set()
+        BATCH_SIZE = 500
+        batch: list[dict] = []
+
         for ioc in iocs:
             val = ioc.get("value")
-            if val in existing or val in seen:
+            if not val or val in existing or val in seen:
                 continue
             seen.add(val)
             cs = ioc.get("confidence_score")
-            rows.append({
-                "type": ioc.get("type"),
-                "value": val,
-                "source": ioc.get("source"),
-                "severity": ioc.get("severity"),
-                "country": ioc.get("country"),
-                "abuse_score": ioc.get("abuse_score"),
-                "description": ioc.get("description"),
-                "first_seen": ioc.get("first_seen"),
-                "last_seen": ioc.get("last_seen"),
+            batch.append({
+                "type":               ioc.get("type"),
+                "value":              val,
+                "source":             ioc.get("source"),
+                "severity":           ioc.get("severity"),
+                "country":            ioc.get("country"),
+                "abuse_score":        ioc.get("abuse_score"),
+                "description":        ioc.get("description"),
+                "first_seen":         ioc.get("first_seen"),
+                "last_seen":          ioc.get("last_seen"),
                 "mitre_technique_id": ioc.get("mitre_technique_id"),
-                "mitre_tactic": ioc.get("mitre_tactic"),
-                "confidence_score": cs,
+                "mitre_tactic":       ioc.get("mitre_tactic"),
+                "confidence_score":   cs,
                 "score_original":     float(cs) if cs is not None else None,
                 "score_atual":        float(cs) if cs is not None else None,
                 "ioc_status":         ioc.get("ioc_status", "ACTIVE"),
@@ -203,8 +207,14 @@ class DatabaseManager:
                 "cvss_score":         ioc.get("cvss_score"),
                 "abuse_categories":   json.dumps(ioc.get("abuse_categories")) if ioc.get("abuse_categories") else None,
             })
-        if rows:
-            self._session.execute(IOC.__table__.insert(), rows)
+
+            if len(batch) >= BATCH_SIZE:
+                self._session.execute(IOC.__table__.insert(), batch)
+                self._session.commit()
+                batch.clear()
+
+        if batch:
+            self._session.execute(IOC.__table__.insert(), batch)
             self._session.commit()
 
     # ── reads ─────────────────────────────────────────────────────────────────
@@ -318,8 +328,15 @@ class DatabaseManager:
         }
 
     def get_existing_values(self) -> set[str]:
-        rows = self._session.execute(text("SELECT value FROM iocs")).all()
-        return {row[0] for row in rows}
+        result = self._session.execute(text("SELECT value FROM iocs"))
+        seen: set[str] = set()
+        while True:
+            chunk = result.fetchmany(2000)
+            if not chunk:
+                break
+            for row in chunk:
+                seen.add(row[0])
+        return seen
 
     def get_iocs_by_severity(self, severity: str) -> list[dict]:
         rows = self._session.execute(

@@ -117,7 +117,7 @@ def run():
                             ioc["mitre_tactic"] = None
 
                     print("[pipeline] saving to database ...")
-                    db.insert_many(new_iocs)
+                    db.insert_many(new_iocs, existing=existing_values)
                 else:
                     print("[pipeline] loading MITRE ATT&CK techniques for report ...")
                     techniques = mitre.load_techniques()
