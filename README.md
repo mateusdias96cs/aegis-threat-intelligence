@@ -1,3 +1,7 @@
+
+https://github.com/user-attachments/assets/786e04cd-4229-4063-966a-e25c1241c92b
+
+
 # AEGIS Threat Intelligence
 
 > Plataforma open source de Cyber Threat Intelligence (CTI) com pipeline automatizado, scoring auditável e Kill Chain reconstruída por atacante — acessível via browser, sem instalação.
