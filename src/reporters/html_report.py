@@ -94,3 +94,50 @@ def generate(iocs: list, stats: dict, techniques: dict = None):
     except Exception as e:
         print(f"[html_report] database save failed: {e}")
         raise
+
+
+def generate_from_parts(iocs: list, stats: dict, techniques: dict, trends: list, total_in_db: int):
+    """Versão otimizada: recebe IOCs já paginados e trends pré-calculados do banco.
+    Não carrega todos os IOCs na memória."""
+    template_dir = Path(__file__).resolve().parents[2] / "templates"
+    output_path = Path(__file__).resolve().parents[2] / "output" / "index.html"
+    env = Environment(loader=FileSystemLoader(str(template_dir)), autoescape=True)
+    template = env.get_template("report.html")
+
+    iocs = sorted(
+        iocs,
+        key=lambda x: (
+            SEVERITY_ORDER.get((x.get("severity") or "LOW").upper(), 3),
+            x.get("first_seen") or "",
+        ),
+    )
+
+    total_displayed = len(iocs)
+    html = template.render(
+        iocs=iocs,
+        stats=stats,
+        techniques=techniques or {},
+        trends=trends,
+        generated_at=datetime.now(timezone(timedelta(hours=-3))).strftime("%Y-%m-%d %H:%M:%S"),
+        total=total_displayed,
+        total_in_db=total_in_db,
+        total_displayed=total_displayed,
+        total_in_db_fmt=f"{total_in_db:,}",
+        total_displayed_fmt=f"{total_displayed:,}",
+    )
+    html = html.strip()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        output_path.write_text(html, encoding="utf-8")
+    except OSError as e:
+        print(f"[html_report] disk write failed (non-fatal): {e}")
+    try:
+        from src.storage.database import DatabaseManager
+        db = DatabaseManager()
+        try:
+            db.save_report(html)
+            print("[html_report] relatório salvo no banco de dados")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[html_report] falha ao salvar relatório no banco (non-fatal): {e}")

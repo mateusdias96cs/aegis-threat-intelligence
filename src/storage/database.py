@@ -361,6 +361,9 @@ class DatabaseManager:
             "by_status":   {(row[0] or "UNKNOWN"): row[1] for row in by_status},
         }
 
+    def get_total_count(self) -> int:
+        return self._session.execute(text("SELECT COUNT(*) FROM iocs")).fetchone()[0]
+
     def get_ioc_by_value(self, value: str) -> dict | None:
         """Case-insensitive exact lookup; returns a single IOC dict or None."""
         row = self._session.execute(
@@ -511,6 +514,33 @@ class DatabaseManager:
             },
         )
         self._session.commit()
+
+    def reactivate_many(self, values: list[str]) -> None:
+        """Reativação em lote: substitui N commits individuais por batches de 500."""
+        if not values:
+            return
+        today = datetime.utcnow().strftime("%Y-%m-%d")
+        BATCH_SIZE = 500
+        for i in range(0, len(values), BATCH_SIZE):
+            batch = values[i:i + BATCH_SIZE]
+            placeholders = ",".join(f":v{j}" for j in range(len(batch)))
+            params = {f"v{j}": v for j, v in enumerate(batch)}
+            self._session.execute(
+                text(f"""
+                    UPDATE iocs
+                    SET last_seen = '{today}',
+                        reactivation_count = COALESCE(reactivation_count, 0) + 1,
+                        ioc_status = CASE
+                            WHEN ioc_status IN ('DECAYED', 'HISTORICAL') THEN 'REACTIVATED'
+                            ELSE COALESCE(ioc_status, 'ACTIVE')
+                        END
+                    WHERE value IN ({placeholders})
+                      AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
+                """),
+                params,
+            )
+            self._session.commit()
+            print(f"[reactivate_many] batch {i//BATCH_SIZE + 1}: {len(batch)} IOCs reativados")
 
     def get_decay_stats(self) -> dict:
         """Returns IOC count grouped by ioc_status for health checks."""

@@ -80,10 +80,8 @@ def run():
                 seen_again    = [ioc for ioc in raw_iocs if ioc.get("value") in existing_values]
                 print(f"[pipeline] new indicators to process: {len(new_iocs)}")
                 print(f"[pipeline] existing IOCs to reactivate: {len(seen_again)}")
-                for _ioc in seen_again:
-                    _val = _ioc.get("value")
-                    if _val:
-                        db.reactivate_ioc(_val)
+                seen_again_values = [ioc.get("value") for ioc in seen_again if ioc.get("value")]
+                db.reactivate_many(seen_again_values)
 
                 # Process new IOCs
                 if new_iocs:
@@ -136,14 +134,16 @@ def run():
             # ── Phase 2: report (always runs regardless of phase 1 outcome) ──
             print("[pipeline] generating report ...")
             stats = db.get_stats()
-            all_iocs = db.get_all_iocs()
-            html_report.generate(all_iocs, stats, techniques)
+            trends = db.get_trends(days=30)
+            top_iocs = db.get_iocs_paginated(page=1, limit=1000)["iocs"]
+            html_report.generate_from_parts(top_iocs, stats, techniques, trends, db.get_total_count())
 
             # Summary
+            total_in_db = db.get_total_count()
             by_severity = stats.get("by_severity", {})
             print("\n── Pipeline complete ──────────────────────────")
             print(f"  New IOCs added:       {len(new_iocs)}")
-            print(f"  Total in DB:          {len(all_iocs)}")
+            print(f"  Total in DB:          {total_in_db}")
             print("  Breakdown by severity (Total):")
             for level in ("CRITICAL", "HIGH", "MEDIUM", "LOW"):
                 count = by_severity.get(level, 0)
