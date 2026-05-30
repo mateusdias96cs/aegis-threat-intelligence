@@ -9,11 +9,11 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
-from src.collectors import abuseipdb
-from src.collectors import urlhaus, feodo
+from src.collectors import urlhaus, feodo, greynoise, emerging_threats
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
+from src.enrichers import ip_enricher
 
 
 def run():
@@ -63,11 +63,23 @@ def run():
                 feodo_iocs = feodo.collect()
                 print(f"[pipeline] FeodoTracker: {len(feodo_iocs)} indicators")
 
-                print("[pipeline] collecting AbuseIPDB blacklist ...")
-                blacklist_iocs = abuseipdb.fetch_blacklist()
-                print(f"[pipeline] AbuseIPDB blacklist: {len(blacklist_iocs)} IPs")
+                print("[pipeline] collecting from GreyNoise ...")
+                greynoise_iocs = greynoise.collect()
+                print(f"[pipeline] GreyNoise: {len(greynoise_iocs)} IPs")
 
-                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + blacklist_iocs
+                print("[pipeline] collecting from Emerging Threats ...")
+                et_iocs = emerging_threats.collect()
+                print(f"[pipeline] EmergingThreats: {len(et_iocs)} IPs")
+
+                # Preserve IP-focused feeds for cross-source enrichment (before dedup)
+                ip_collected_iocs = (
+                    feodo_iocs
+                    + [i for i in tf_iocs if i.get("type") == "ip"]
+                    + greynoise_iocs
+                    + et_iocs
+                )
+
+                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs
                 print(f"[pipeline] total collected: {len(raw_iocs)}")
 
                 # Deduplicate internally first
@@ -92,11 +104,10 @@ def run():
                     print("[pipeline] normalizing ...")
                     new_iocs = normalizer.normalize(new_iocs)
 
-                    # Enriquecer IPs novos com AbuseIPDB (quota: 900/dia)
                     ip_new = [i for i in new_iocs if i.get("type") == "ip"]
                     if ip_new:
-                        print(f"[pipeline] enriquecendo {len(ip_new)} IPs novos com AbuseIPDB ...")
-                        new_iocs = abuseipdb.enrich_batch(new_iocs)
+                        print(f"[pipeline] enriquecendo {len(ip_new)} IPs novos ...")
+                        new_iocs = ip_enricher.enrich_batch(new_iocs, ip_collected_iocs)
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)
@@ -125,6 +136,8 @@ def run():
                     print("[pipeline] loading MITRE ATT&CK techniques for report ...")
                     techniques = mitre.load_techniques()
                     print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
+
+                del ip_collected_iocs
 
                 print("[pipeline] applying BioSec decay ...")
                 db.apply_decay()
