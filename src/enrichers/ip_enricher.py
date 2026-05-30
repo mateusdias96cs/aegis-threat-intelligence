@@ -1,12 +1,29 @@
 import os
 from collections import defaultdict
 
-# Points per severity source; capped at 100
-_SEVERITY_WEIGHTS = {"CRITICAL": 40, "HIGH": 25, "MEDIUM": 15, "LOW": 5}
+# Score-base por severidade da fonte mais forte (alinhado aos limiares do
+# classifier: >=90 CRITICAL, >=70 HIGH, >=40 MEDIUM). Preserva a severidade
+# da fonte para IPs de fonte única em vez de rebaixá-los.
+_SEVERITY_WEIGHTS = {"CRITICAL": 90, "HIGH": 70, "MEDIUM": 45, "LOW": 25}
+# Bônus por fonte adicional que reporta o mesmo IP (corroboração).
+_CORROBORATION_BONUS = 10
+
+# Categorias de abuso sintéticas por fonte de IP (chave = source.lower()).
+# IDs seguem o padrão AbuseIPDB que o Kill Chain do frontend já mapeia (ABUSE_TO_KC):
+#   14 = Port Scan → Reconnaissance.
+# Reacende a fase do Kill Chain de IP que dependia das categorias do AbuseIPDB.
+_SOURCE_ABUSE_CATEGORIES: dict[str, dict[int, int]] = {
+    "greynoise":       {14: 1},
+    "emergingthreats": {14: 1},
+}
 
 
 def _compute_abuse_score(severities: list[str]) -> int:
-    return min(100, sum(_SEVERITY_WEIGHTS.get(s, 10) for s in severities))
+    if not severities:
+        return 0
+    base = max(_SEVERITY_WEIGHTS.get(s, 40) for s in severities)
+    bonus = _CORROBORATION_BONUS * (len(severities) - 1)
+    return min(100, base + bonus)
 
 
 def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]:
@@ -16,11 +33,12 @@ def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]
     new_iocs      — IOCs novos a enriquecer (modifica in-place).
     collected_iocs — todos os IOCs IP coletados nesta execução (base de cruzamento).
     """
-    # index: ip -> [severity, ...] de todas as fontes que o reportaram
+    # index: ip (sem porta) -> [severity, ...] de todas as fontes que o reportaram
     ip_severity_index: dict[str, list[str]] = defaultdict(list)
     for ioc in collected_iocs:
         if ioc.get("type") == "ip" and ioc.get("value"):
-            ip_severity_index[ioc["value"]].append(ioc.get("severity", "LOW"))
+            ip_key = ioc["value"].split(":")[0]
+            ip_severity_index[ip_key].append(ioc.get("severity", "LOW"))
 
     ip_iocs = [ioc for ioc in new_iocs if ioc.get("type") == "ip" and ioc.get("value")]
     print(f"[ip_enricher] enriching {len(ip_iocs)} new IPs via cross-source + GeoIP2")
@@ -48,6 +66,12 @@ def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]
                     ioc["country"] = reader.country(ip).country.iso_code
                 except Exception:
                     pass
+
+            # Categorias sintéticas a partir da fonte — alimenta o Kill Chain de IP.
+            if not ioc.get("abuse_categories"):
+                cats = _SOURCE_ABUSE_CATEGORIES.get((ioc.get("source") or "").lower())
+                if cats:
+                    ioc["abuse_categories"] = dict(cats)
     finally:
         if reader:
             reader.close()

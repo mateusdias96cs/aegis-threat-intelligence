@@ -33,6 +33,16 @@ KEYWORD_TO_TECHNIQUE = {
     "trojan":      "T1059",
 }
 
+# Fallback determinístico por fonte (chave = source.lower()).
+# Feeds de IP trazem descrição genérica e não casam nenhum keyword acima, mas a
+# própria fonte já indica a TTP do indicador. Usado só quando o texto não casa.
+SOURCE_TO_TECHNIQUE = {
+    "greynoise":       "T1595",  # Active Scanning — scanners observados na internet
+    "emergingthreats": "T1595",  # Active Scanning — hosts hostis conhecidos
+    "feodotracker":    "T1071",  # Application Layer Protocol — C2 de botnet
+    "feodo-tracker":   "T1071",
+}
+
 
 def load_techniques() -> dict:
     # Tenta cache do banco primeiro (TTL 30 dias)
@@ -110,5 +120,11 @@ def map_ioc_to_technique(ioc: dict, techniques: dict) -> dict | None:
     for keyword, tech_id in KEYWORD_TO_TECHNIQUE.items():
         if keyword in haystack:
             return techniques.get(tech_id)
+
+    # Fallback: nenhum keyword casou — usa a TTP característica da fonte.
+    source_key = (ioc.get("source") or "").lower()
+    tech_id = SOURCE_TO_TECHNIQUE.get(source_key)
+    if tech_id:
+        return techniques.get(tech_id)
 
     return None
