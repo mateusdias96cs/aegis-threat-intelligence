@@ -82,6 +82,15 @@ def run():
                 raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs
                 print(f"[pipeline] total collected: {len(raw_iocs)}")
 
+                # Corroboração entre fontes: mapeia value -> {fontes distintas} ANTES do
+                # dedup, que colapsaria as duplicatas e zeraria a diversidade de fontes
+                # (sem isto o C do score fica sempre em 33).
+                value_sources: dict[str, set] = {}
+                for _i in raw_iocs:
+                    _v = _i.get("value")
+                    if _v:
+                        value_sources.setdefault(_v, set()).add(_i.get("source") or "")
+
                 # Deduplicate internally first
                 raw_iocs = deduplicator.deduplicate(raw_iocs)
                 print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
@@ -111,7 +120,7 @@ def run():
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)
-                    new_iocs = classifier.apply_confidence(new_iocs)
+                    new_iocs = classifier.apply_confidence(new_iocs, value_sources)
                     print("[pipeline] confidence scores calculated")
 
                     # Load MITRE ATT&CK technique index once before processing
@@ -138,6 +147,12 @@ def run():
                     print(f"[pipeline] MITRE: {len(techniques)} techniques loaded")
 
                 del ip_collected_iocs
+
+                # Corrobora IOCs já no banco que reapareceram hoje por uma fonte nova
+                # (roda antes do decay para que score_atual seja re-derivado).
+                print("[pipeline] corroborating existing IOCs ...")
+                db.corroborate_existing(value_sources)
+                del value_sources
 
                 print("[pipeline] applying BioSec decay ...")
                 db.apply_decay()

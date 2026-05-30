@@ -63,6 +63,8 @@ class IOC(Base):
     cvss_score          = Column(Float)
     # AbuseIPDB abuse categories
     abuse_categories    = Column(Text)   # JSON: {"18": 45, "14": 12}
+    # GeoLite2-ASN enrichment — número do AS para correlação por infraestrutura
+    asn                 = Column(Integer)
 
 
 class Report(Base):
@@ -119,6 +121,8 @@ _DECAY_COLUMNS = [
     ("cvss_score",          "FLOAT"),
     # AbuseIPDB abuse categories
     ("abuse_categories",    "TEXT"),
+    # GeoLite2-ASN enrichment
+    ("asn",                 "INTEGER"),
 ]
 _dialect = engine.dialect.name
 
@@ -134,6 +138,14 @@ for _col_name, _col_def in _DECAY_COLUMNS:
             _conn.commit()
     except Exception:
         pass
+
+# Índice de ASN criado após a migração da coluna (existe em bancos legados só agora).
+try:
+    with engine.connect() as _conn:
+        _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_iocs_asn ON iocs (asn)"))
+        _conn.commit()
+except Exception:
+    pass
 
 
 class DatabaseManager:
@@ -206,6 +218,8 @@ class DatabaseManager:
                 "score_breakdown":    ioc.get("score_breakdown"),
                 "cvss_score":         ioc.get("cvss_score"),
                 "abuse_categories":   json.dumps(ioc.get("abuse_categories")) if ioc.get("abuse_categories") else None,
+                "correlated_sources": ioc.get("correlated_sources"),
+                "asn":                ioc.get("asn"),
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -572,6 +586,88 @@ class DatabaseManager:
             self._session.commit()
             print(f"[reactivate_many] batch {i//BATCH_SIZE + 1}: {len(batch)} IOCs reativados")
 
+    def corroborate_existing(self, value_sources: dict[str, set]) -> int:
+        """Corrobora IOCs já no banco com as fontes observadas na coleta de hoje.
+
+        Um IP listado hoje pelo GreyNoise que já estava no banco via Feodo deixa de
+        contar como "1 fonte": funde as fontes em `correlated_sources` e recalcula o
+        score (C sobe de 33 → 66/100). `score_atual` é re-derivado em seguida por
+        `apply_decay`, então só gravamos `score_original`/breakdown aqui.
+
+        Idempotente: só atualiza quando há uma fonte realmente nova; reexecutar com o
+        mesmo lote não altera nada.
+        """
+        if not value_sources:
+            return 0
+        from src.processors.classifier import calculate_score_breakdown
+
+        values  = list(value_sources.keys())
+        BATCH   = 500
+        updated = 0
+        update_stmt = text("""
+            UPDATE iocs SET
+                correlated_sources = :correlated_sources,
+                confidence_score   = :confidence_score,
+                score_original     = :score_original,
+                score_breakdown    = :score_breakdown
+            WHERE id = :id
+        """)
+
+        for i in range(0, len(values), BATCH):
+            batch = values[i:i + BATCH]
+            ph     = ",".join(f":v{j}" for j in range(len(batch)))
+            params = {f"v{j}": v for j, v in enumerate(batch)}
+            rows = self._session.execute(text(f"""
+                SELECT id, type, value, source, abuse_score, cvss_score, correlated_sources
+                FROM iocs
+                WHERE value IN ({ph})
+                  AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
+            """), params).mappings().all()
+
+            updates = []
+            for row in rows:
+                today_sources = value_sources.get(row["value"], set())
+                existing: set = set()
+                raw = row["correlated_sources"]
+                if raw:
+                    try:
+                        existing = set(json.loads(raw))
+                    except (json.JSONDecodeError, TypeError):
+                        existing = set()
+                if row["source"]:
+                    existing.add(row["source"])
+
+                merged = {s for s in (existing | today_sources) if s}
+                # Só recalcula se uma fonte nova entrou e há corroboração real (>=2).
+                if len(merged) <= len(existing) or len(merged) < 2:
+                    continue
+
+                breakdown = calculate_score_breakdown({
+                    "type":        row["type"],
+                    "value":       row["value"],
+                    "source":      row["source"],
+                    "abuse_score": row["abuse_score"],
+                    "cvss_score":  row["cvss_score"],
+                }, source_count=len(merged))
+                score = float(breakdown["score_arredondado"])
+                updates.append({
+                    "id":                 row["id"],
+                    "correlated_sources": json.dumps(sorted(merged), ensure_ascii=False),
+                    "confidence_score":   breakdown["score_arredondado"],
+                    "score_original":     score,
+                    "score_breakdown":    json.dumps(breakdown, ensure_ascii=False),
+                })
+
+            if updates:
+                self._session.execute(update_stmt, updates)
+                self._session.commit()
+                updated += len(updates)
+            del rows, updates
+
+        if updated:
+            print(f"[corroborate] {updated} IOCs existentes corroborados por nova fonte")
+        return updated
+
     def get_decay_stats(self) -> dict:
         """Returns IOC count grouped by ioc_status for health checks."""
         rows = self._session.execute(
@@ -735,7 +831,15 @@ class DatabaseManager:
                     "abuse_score": row["abuse_score"],
                     "cvss_score":  row["cvss_score"],
                 }
-                breakdown = calculate_score_breakdown(ioc_dict, source_count=1)
+                # Preserva a corroboração já registrada (C consistente após reativação).
+                source_count = 1
+                raw_cs = row.get("correlated_sources")
+                if raw_cs:
+                    try:
+                        source_count = max(1, len(json.loads(raw_cs)))
+                    except (json.JSONDecodeError, TypeError):
+                        source_count = 1
+                breakdown = calculate_score_breakdown(ioc_dict, source_count=source_count)
                 score     = float(breakdown["score_arredondado"])
                 result.append({
                     "id":               row["id"],
@@ -767,7 +871,8 @@ class DatabaseManager:
             while True:
                 rows = self._session.execute(
                     text(f"""
-                        SELECT id, type, value, source, abuse_score, cvss_score
+                        SELECT id, type, value, source, abuse_score, cvss_score,
+                               correlated_sources
                         FROM iocs
                         WHERE {where_clause} AND id > :last_id
                         ORDER BY id
@@ -1025,24 +1130,45 @@ class DatabaseManager:
         similar = []
 
         if ioc_type == "ip":
+            # Sinais fortes de "mesma infraestrutura do atacante": mesmo /24 (IPv4)
+            # e mesmo ASN. Têm prioridade sobre país/fonte (ruidosos: país agrupa
+            # milhões de IPs; "mesma fonte" agrupa o feed inteiro).
+            anchor_ip  = (value or "").split(":")[0]
+            net_prefix = ""
+            if anchor_ip.count(".") == 3 and ":" not in anchor_ip:
+                net_prefix = anchor_ip.rsplit(".", 1)[0] + "."
+            net_like   = (net_prefix + "%") if net_prefix else ""
+            # Sentinela -1 (nenhum AS real é negativo) mantém o operando tipado —
+            # evita "could not determine data type" no PostgreSQL com asn ausente.
+            anchor_asn = ioc_data.get("asn")
+            anchor_asn = anchor_asn if anchor_asn is not None else -1
+
             rows = self._session.execute(text("""
                 SELECT value, severity, source, mitre_tactic, country, abuse_categories,
-                       first_seen, ioc_status, reactivation_count
+                       first_seen, ioc_status, reactivation_count, asn
                 FROM iocs
                 WHERE type = 'ip'
                   AND LOWER(value) != LOWER(:value)
                   AND (
-                    (country = :country AND country IS NOT NULL AND country != '')
+                    (:net_prefix != '' AND value LIKE :net_like)
+                    OR (asn = :asn)
+                    OR (country = :country AND country IS NOT NULL AND country != '')
                     OR source = :source
                   )
                   AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
                   AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE', 'HISTORICAL'))
                 ORDER BY
+                    CASE
+                        WHEN :net_prefix != '' AND value LIKE :net_like THEN 0
+                        WHEN asn = :asn THEN 1
+                        ELSE 2
+                    END,
                     CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END,
                     first_seen DESC
                 LIMIT 8
             """), {
                 "value": value, "country": country, "source": source,
+                "net_prefix": net_prefix, "net_like": net_like, "asn": anchor_asn,
                 "win_from": win_from, "win_to": win_to
             }).mappings().all()
             similar = [dict(r) for r in rows]

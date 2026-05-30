@@ -179,21 +179,35 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1) -> dict:
     }
 
 
-def apply_confidence(iocs: list) -> list:
-    """Applies the new 3-component scoring formula to each IOC in the batch."""
+def apply_confidence(iocs: list, value_sources: dict[str, set] | None = None) -> list:
+    """Applies the new 3-component scoring formula to each IOC in the batch.
+
+    `value_sources` (value -> set of distinct sources observed for that value)
+    carries cross-source corroboration captured BEFORE deduplication. Without it,
+    the deduplicator would have already collapsed multi-source sightings into a
+    single record and the corroboration count (C) would always be 1.
+    """
     today = datetime.utcnow().strftime("%Y-%m-%d")
 
-    # Count sightings per value within this collection batch (corroboration)
+    # Fallback: count sightings within this batch only (pre-corroboration behaviour)
     value_counts: dict[str, int] = {}
-    for ioc in iocs:
-        val = ioc.get("value", "")
-        value_counts[val] = value_counts.get(val, 0) + 1
+    if value_sources is None:
+        for ioc in iocs:
+            val = ioc.get("value", "")
+            value_counts[val] = value_counts.get(val, 0) + 1
 
     for ioc in iocs:
-        val          = ioc.get("value", "")
-        source_count = value_counts.get(val, 1)
-        breakdown    = calculate_score_breakdown(ioc, source_count)
-        score        = breakdown["score_arredondado"]
+        val = ioc.get("value", "")
+
+        if value_sources is not None:
+            sources      = {s for s in (value_sources.get(val) or {ioc.get("source", "")}) if s}
+            source_count = max(1, len(sources))
+        else:
+            sources      = {ioc.get("source", "")}
+            source_count = value_counts.get(val, 1)
+
+        breakdown = calculate_score_breakdown(ioc, source_count)
+        score     = breakdown["score_arredondado"]
 
         ioc["confidence_score"]   = score
         ioc["score_original"]     = float(score)
@@ -201,6 +215,10 @@ def apply_confidence(iocs: list) -> list:
         ioc["score_breakdown"]    = json.dumps(breakdown, ensure_ascii=False)
         ioc["ioc_status"]         = "ACTIVE"
         ioc["reactivation_count"] = 0
+        # Persiste as fontes corroborantes (apenas quando há mais de uma) — alimenta
+        # o painel de contexto e mantém o C do score consistente após decay/recalc.
+        if len(sources) > 1:
+            ioc["correlated_sources"] = json.dumps(sorted(sources), ensure_ascii=False)
         if not ioc.get("last_seen"):
             ioc["last_seen"] = today
 
