@@ -429,9 +429,20 @@ class DatabaseManager:
         last_id = 0
         total = 0
 
-        update_stmt = text(
-            "UPDATE iocs SET score_atual = :score_atual, ioc_status = :ioc_status WHERE id = :id"
-        )
+        # Ao decair para DECAYED/HISTORICAL, libera o score_breakdown (~782 bytes/IOC,
+        # ~70% do tamanho de cada registro). O CASE preserva o breakdown dos IOCs que
+        # continuam ACTIVE/REACTIVATED sem precisar lê-lo de volta para a memória.
+        # Para ACTIVE/REACTIVATED, score_breakdown = score_breakdown (no-op).
+        update_stmt = text("""
+            UPDATE iocs SET
+                score_atual = :score_atual,
+                ioc_status = :ioc_status,
+                score_breakdown = CASE
+                    WHEN :ioc_status IN ('DECAYED', 'HISTORICAL') THEN NULL
+                    ELSE score_breakdown
+                END
+            WHERE id = :id
+        """)
 
         # Keyset pagination por id: o pico de memória fica limitado a um lote
         # (não O(total do banco)), evitando OOM no Render conforme o banco cresce.
@@ -672,10 +683,19 @@ class DatabaseManager:
         ).mappings().all()
         return [dict(row) for row in rows]
 
+    # IOCs que DEVEM ter score_breakdown: ativos, reativados ou legados sem status.
+    # IOCs DECAYED/HISTORICAL têm o breakdown liberado de propósito (apply_decay) —
+    # este filtro impede que recalculate o reconstrua e desfaça a compactação.
+    _NEEDS_BREAKDOWN = (
+        "score_breakdown IS NULL "
+        "AND (ioc_status IS NULL OR ioc_status IN ('ACTIVE', 'REACTIVATED'))"
+    )
+
     def recalculate_all_scores(self) -> int:
         """Recalculates score_original, score_atual, confidence_score, and score_breakdown
         for two groups:
-          1. IOCs with score_breakdown IS NULL (first-run migration).
+          1. ACTIVE/REACTIVATED/legacy IOCs without score_breakdown (first-run migration
+             + IOCs reativados que tiveram o breakdown liberado enquanto decaídos).
           2. CVEs that already have a score_breakdown using the default T=80 placeholder
              but now have a real cvss_score from NVD.
         Processes in batches of 500 to avoid locking the database."""
@@ -685,7 +705,7 @@ class DatabaseManager:
             text("SELECT COUNT(*) FROM iocs")
         ).fetchone()[0]
         null_count = self._session.execute(
-            text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NULL")
+            text(f"SELECT COUNT(*) FROM iocs WHERE {self._NEEDS_BREAKDOWN}")
         ).fetchone()[0]
         stale_cvss_count = self._session.execute(
             text("""
@@ -773,9 +793,9 @@ class DatabaseManager:
 
         total_updated = 0
 
-        # --- Grupo 1: IOCs sem score_breakdown ---
+        # --- Grupo 1: IOCs ativos/reativados/legados sem score_breakdown ---
         if null_count > 0:
-            count_null = _stream_recalc("score_breakdown IS NULL", "sem_breakdown")
+            count_null = _stream_recalc(self._NEEDS_BREAKDOWN, "sem_breakdown")
             total_updated += count_null
             print(f"[recalculate] {count_null} IOCs sem score_breakdown recalculados")
 
@@ -788,19 +808,20 @@ class DatabaseManager:
             total_updated += count_stale
             print(f"[recalculate] {count_stale} CVEs com CVSS atualizado")
 
-        # Post-update verification
+        # Post-update verification — conta apenas os que DEVERIAM ter breakdown.
+        # DECAYED/HISTORICAL com breakdown NULL são esperados (compactação), não erro.
         still_null = self._session.execute(
-            text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NULL")
+            text(f"SELECT COUNT(*) FROM iocs WHERE {self._NEEDS_BREAKDOWN}")
         ).fetchone()[0]
         now_populated = self._session.execute(
             text("SELECT COUNT(*) FROM iocs WHERE score_breakdown IS NOT NULL")
         ).fetchone()[0]
         print(
             f"[recalculate] DONE — populados: {now_populated} | "
-            f"ainda NULL: {still_null} | total submetidos: {total_updated}"
+            f"ativos ainda NULL: {still_null} | total submetidos: {total_updated}"
         )
         if still_null > 0:
-            print(f"[recalculate] WARNING: {still_null} IOCs ainda têm score_breakdown NULL após atualização")
+            print(f"[recalculate] WARNING: {still_null} IOCs ativos ainda têm score_breakdown NULL após atualização")
         return total_updated
 
     def cleanup_old_iocs(self) -> int:
@@ -811,10 +832,12 @@ class DatabaseManager:
                 return (today - timedelta(days=days)).strftime("%Y-%m-%d")
 
             # Python-computed date strings make DELETE dialect-agnostic.
+            # AbuseIPDB é 58% do banco e seus IPs rotacionam rápido — reter 5 dias
+            # mantém a blacklist atual sem acumular IPs já inativos.
             d1 = self._session.execute(text(
                 "DELETE FROM iocs WHERE source = 'AbuseIPDB-Blacklist'"
                 " AND SUBSTR(first_seen, 1, 10) < :c"
-            ), {"c": _cutoff(7)}).rowcount
+            ), {"c": _cutoff(5)}).rowcount
             self._session.commit()
 
             d2 = self._session.execute(text(
@@ -861,7 +884,17 @@ class DatabaseManager:
             ), {"c": _cutoff(90)}).rowcount
             self._session.commit()
 
-            total_deleted = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8
+            # IOCs já decaídos a HISTORICAL (score < 5% do original) e sem reaparecer
+            # há 90+ dias não têm valor operacional — removidos para dar teto ao banco.
+            # CISA-KEV é preservado (CVEs institucionais com validade regulatória longa).
+            d9 = self._session.execute(text(
+                "DELETE FROM iocs WHERE ioc_status = 'HISTORICAL'"
+                " AND source != 'CISA-KEV'"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
+            ), {"c": _cutoff(90)}).rowcount
+            self._session.commit()
+
+            total_deleted = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9
             print(f"[cleanup] AbuseIPDB-BL: {d1} removed")
             print(f"[cleanup] ThreatFox IPs: {d2} removed")
             print(f"[cleanup] Feodo IPs: {d3} removed")
@@ -870,6 +903,7 @@ class DatabaseManager:
             print(f"[cleanup] Domains: {d6} removed")
             print(f"[cleanup] Other IPs: {d7} removed")
             print(f"[cleanup] Other: {d8} removed")
+            print(f"[cleanup] HISTORICAL (90d+): {d9} removed")
             print(f"[cleanup] Total removed: {total_deleted}")
             return total_deleted
         except Exception as e:
