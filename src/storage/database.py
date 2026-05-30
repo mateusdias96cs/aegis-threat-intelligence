@@ -425,49 +425,68 @@ class DatabaseManager:
         IOCs seen today with reactivation_count>0 keep REACTIVATED status.
         """
         today = datetime.utcnow().date()
-        rows = self._session.execute(
-            text("""
-                SELECT id, type, score_original, last_seen, ioc_status, reactivation_count
-                FROM iocs
-                WHERE score_original IS NOT NULL
-                  AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
-            """)
-        ).mappings().all()
+        BATCH_SIZE = 1000
+        last_id = 0
+        total = 0
 
-        updates = []
-        for row in rows:
-            half_life = self._HALF_LIVES.get(row["type"] or "", 30)
-            last_seen_raw = str(row["last_seen"] or "")[:10]
-            try:
-                last_seen = datetime.strptime(last_seen_raw, "%Y-%m-%d").date()
-            except (ValueError, TypeError):
-                last_seen = today
+        update_stmt = text(
+            "UPDATE iocs SET score_atual = :score_atual, ioc_status = :ioc_status WHERE id = :id"
+        )
 
-            dias = max(0, (today - last_seen).days)
-            score_orig = float(row["score_original"])
-            score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
+        # Keyset pagination por id: o pico de memória fica limitado a um lote
+        # (não O(total do banco)), evitando OOM no Render conforme o banco cresce.
+        # O UPDATE nunca define FALSE_POSITIVE e a varredura é por id crescente,
+        # então nenhuma linha é relida nem perdida — resultado idêntico ao anterior.
+        while True:
+            rows = self._session.execute(
+                text("""
+                    SELECT id, type, score_original, last_seen, ioc_status, reactivation_count
+                    FROM iocs
+                    WHERE score_original IS NOT NULL
+                      AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
+                      AND id > :last_id
+                    ORDER BY id
+                    LIMIT :batch
+                """),
+                {"last_id": last_id, "batch": BATCH_SIZE},
+            ).mappings().all()
+            if not rows:
+                break
+            last_id = rows[-1]["id"]
 
-            reactivation_count = row["reactivation_count"] or 0
-            if last_seen == today and reactivation_count > 0:
-                ioc_status = "REACTIVATED"
-            elif score_atual >= 0.20 * score_orig:
-                ioc_status = "ACTIVE"
-            elif score_atual >= 0.05 * score_orig:
-                ioc_status = "DECAYED"
-            else:
-                ioc_status = "HISTORICAL"
+            updates = []
+            for row in rows:
+                half_life = self._HALF_LIVES.get(row["type"] or "", 30)
+                last_seen_raw = str(row["last_seen"] or "")[:10]
+                try:
+                    last_seen = datetime.strptime(last_seen_raw, "%Y-%m-%d").date()
+                except (ValueError, TypeError):
+                    last_seen = today
 
-            updates.append({"id": row["id"], "score_atual": score_atual, "ioc_status": ioc_status})
+                dias = max(0, (today - last_seen).days)
+                score_orig = float(row["score_original"])
+                score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
 
-        if updates:
-            self._session.execute(
-                text("UPDATE iocs SET score_atual = :score_atual, ioc_status = :ioc_status WHERE id = :id"),
-                updates,
-            )
-            self._session.commit()
+                reactivation_count = row["reactivation_count"] or 0
+                if last_seen == today and reactivation_count > 0:
+                    ioc_status = "REACTIVATED"
+                elif score_atual >= 0.20 * score_orig:
+                    ioc_status = "ACTIVE"
+                elif score_atual >= 0.05 * score_orig:
+                    ioc_status = "DECAYED"
+                else:
+                    ioc_status = "HISTORICAL"
 
-        print(f"[decay] applied decay to {len(updates)} IOCs")
-        return len(updates)
+                updates.append({"id": row["id"], "score_atual": score_atual, "ioc_status": ioc_status})
+
+            if updates:
+                self._session.execute(update_stmt, updates)
+                self._session.commit()
+                total += len(updates)
+            del rows, updates
+
+        print(f"[decay] applied decay to {total} IOCs")
+        return total
 
     def reactivate_ioc(self, value: str) -> None:
         """Updates last_seen, reactivation_count, score_atual, and ioc_status for a known IOC.
@@ -707,60 +726,65 @@ class DatabaseManager:
                 })
             return result
 
-        def _flush_batches(updates, label):
+        update_stmt = text("""
+            UPDATE iocs
+            SET confidence_score = :confidence_score,
+                score_original   = :score_original,
+                score_atual      = :score_atual,
+                score_breakdown  = :score_breakdown
+            WHERE id = :id
+        """)
+
+        def _stream_recalc(where_clause: str, label: str) -> int:
+            """Keyset pagination por id: lê E grava em lotes, mantendo o pico de
+            memória limitado a um lote (não O(total)). Cada lote processado tem
+            score_breakdown preenchido, saindo do filtro; a varredura por id
+            crescente garante cobertura completa sem reler nem entrar em loop."""
             BATCH_SIZE = 500
-            submitted = 0
-            for i in range(0, len(updates), BATCH_SIZE):
-                batch = updates[i : i + BATCH_SIZE]
-                res = self._session.execute(
-                    text("""
-                        UPDATE iocs
-                        SET confidence_score = :confidence_score,
-                            score_original   = :score_original,
-                            score_atual      = :score_atual,
-                            score_breakdown  = :score_breakdown
-                        WHERE id = :id
+            last_id = 0
+            processed = 0
+            batch_no = 0
+            while True:
+                rows = self._session.execute(
+                    text(f"""
+                        SELECT id, type, value, source, abuse_score, cvss_score
+                        FROM iocs
+                        WHERE {where_clause} AND id > :last_id
+                        ORDER BY id
+                        LIMIT :batch
                     """),
-                    batch,
-                )
-                self._session.commit()
-                submitted += len(batch)
-                print(
-                    f"[recalculate:{label}] batch "
-                    f"{i // BATCH_SIZE + 1}/{-(-len(updates) // BATCH_SIZE)}: "
-                    f"{len(batch)} submetidos, rowcount={res.rowcount}"
-                )
-            return submitted
+                    {"last_id": last_id, "batch": BATCH_SIZE},
+                ).mappings().all()
+                if not rows:
+                    break
+                last_id = rows[-1]["id"]
+                updates = _build_updates(rows)
+                if updates:
+                    res = self._session.execute(update_stmt, updates)
+                    self._session.commit()
+                    batch_no += 1
+                    processed += len(updates)
+                    print(
+                        f"[recalculate:{label}] batch {batch_no}: "
+                        f"{len(updates)} submetidos, rowcount={res.rowcount}"
+                    )
+                del rows, updates
+            return processed
 
         total_updated = 0
 
         # --- Grupo 1: IOCs sem score_breakdown ---
         if null_count > 0:
-            null_rows = self._session.execute(
-                text("""
-                    SELECT id, type, value, source, abuse_score, cvss_score
-                    FROM iocs
-                    WHERE score_breakdown IS NULL
-                """)
-            ).mappings().all()
-            updates_null = _build_updates(null_rows)
-            count_null = _flush_batches(updates_null, "sem_breakdown")
+            count_null = _stream_recalc("score_breakdown IS NULL", "sem_breakdown")
             total_updated += count_null
             print(f"[recalculate] {count_null} IOCs sem score_breakdown recalculados")
 
         # --- Grupo 2: CVEs com CVSS real mas breakdown com placeholder padrão ---
         if stale_cvss_count > 0:
-            stale_rows = self._session.execute(
-                text("""
-                    SELECT id, type, value, source, abuse_score, cvss_score
-                    FROM iocs
-                    WHERE type = 'cve'
-                      AND cvss_score IS NOT NULL
-                      AND score_breakdown LIKE '%padrão CVE%'
-                """)
-            ).mappings().all()
-            updates_stale = _build_updates(stale_rows)
-            count_stale = _flush_batches(updates_stale, "cvss_atualizado")
+            count_stale = _stream_recalc(
+                "type = 'cve' AND cvss_score IS NOT NULL AND score_breakdown LIKE '%padrão CVE%'",
+                "cvss_atualizado",
+            )
             total_updated += count_stale
             print(f"[recalculate] {count_stale} CVEs com CVSS atualizado")
 

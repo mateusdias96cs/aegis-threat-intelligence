@@ -83,6 +83,10 @@ def run():
                 seen_again_values = [ioc.get("value") for ioc in seen_again if ioc.get("value")]
                 db.reactivate_many(seen_again_values)
 
+                # Libera as estruturas de coleta já consumidas antes das fases de
+                # normalização/enriquecimento (que criam cópias) — reduz o pico de RAM.
+                del raw_iocs, seen_again, seen_again_values
+
                 # Process new IOCs
                 if new_iocs:
                     print("[pipeline] normalizing ...")
@@ -116,6 +120,7 @@ def run():
 
                     print("[pipeline] saving to database ...")
                     db.insert_many(new_iocs, existing=existing_values)
+                    del existing_values
                 else:
                     print("[pipeline] loading MITRE ATT&CK techniques for report ...")
                     techniques = mitre.load_techniques()
