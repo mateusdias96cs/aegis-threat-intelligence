@@ -49,6 +49,40 @@ _SOURCE_ALIASES: dict[str, str] = {
     "feodotracker": "feodo-tracker",
 }
 
+# ── Famílias de telemetria INDEPENDENTE ───────────────────────────────────────
+# Corroboração só é forte quando vem de fontes independentes. Vários feeds da MESMA
+# organização/telemetria (ex.: ThreatFox + URLhaus + Feodo são todos abuse.ch) NÃO
+# são confirmações independentes — somá-los infla a confiança com redundância.
+# A corroboração (C) passa a contar FAMÍLIAS distintas, não nomes de feed.
+_SOURCE_FAMILY: dict[str, str] = {
+    # abuse.ch — mesma organização, telemetria sobreposta
+    "threatfox":           "abuse.ch",
+    "urlhaus":             "abuse.ch",
+    "feodo-tracker":       "abuse.ch",
+    # telemetria honeypot / firewall (sensores de borda)
+    "dshield":             "honeypot",
+    "greynoise":           "honeypot",
+    "emergingthreats":     "honeypot",
+    # catálogo autoritativo
+    "cisa-kev":            "autoritativa",
+    # reputação de IP
+    "abuseipdb-blacklist": "reputacao",
+    # comunidade / feed colaborativo
+    "alienvault-otx":      "comunidade",
+}
+
+
+def _independent_families(sources) -> list[str]:
+    """Reduz um conjunto de nomes de feed às FAMÍLIAS independentes que representam.
+    Feeds sem família mapeada contam como família própria (são independentes)."""
+    fams: set[str] = set()
+    for s in sources:
+        key = _resolve_source(s)
+        if not key:
+            continue
+        fams.add(_SOURCE_FAMILY.get(key, key))
+    return sorted(fams)
+
 # Type-specific reference URL templates
 _TYPE_REFS: dict[str, str] = {
     "cve":    "https://nvd.nist.gov/vuln/detail/{value}",
@@ -87,11 +121,16 @@ def _get_interpretation(score: float) -> str:
     return "MUITO BAIXA confiança — usar apenas como referência"
 
 
-def calculate_score_breakdown(ioc: dict, source_count: int = 1) -> dict:
+def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) -> dict:
     """
     Score = (S × 0.40) + (C × 0.30) + (T × 0.30)
 
     S = Source Reliability, C = Corroboration (sightings), T = Type Severity.
+
+    `sources` (conjunto de nomes de feed que reportaram o IOC) é a entrada
+    preferida: C é derivado das FAMÍLIAS independentes, não da contagem bruta de
+    feeds — feeds redundantes da mesma organização não inflam a confiança.
+    `source_count` é mantido como fallback para chamadas legadas sem `sources`.
     Returns a full audit dict (score_breakdown).
     """
     source   = ioc.get("source", "")
@@ -101,16 +140,37 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1) -> dict:
     # S — Source Reliability
     S, source_ref, source_justification = _get_source_info(source, value)
 
-    # C — Corroboration (STIX 2.1 Sightings model)
-    if source_count >= 3:
+    # C — Corroboração por FAMÍLIAS de fonte independente (STIX 2.1 Sightings).
+    # Garante que a fonte âncora sempre entre na contagem.
+    if sources is None:
+        all_sources = {source} if source else set()
+        # Sem a lista de feeds, respeita a contagem legada como nº de famílias.
+        fam_count = max(source_count, len(all_sources), 1)
+        families  = _independent_families(all_sources) or ["desconhecida"]
+        feed_count = source_count
+    else:
+        all_sources = {s for s in set(sources) | ({source} if source else set()) if s}
+        families    = _independent_families(all_sources) or ["desconhecida"]
+        fam_count   = len(families)
+        feed_count  = len(all_sources)
+
+    if fam_count >= 3:
         C = 100
-        corroboration_justification = f"IOC confirmado por {source_count} fontes distintas"
-    elif source_count == 2:
+        corroboration_justification = f"IOC confirmado por {fam_count} famílias de fontes independentes"
+    elif fam_count == 2:
         C = 66
-        corroboration_justification = "IOC confirmado por 2 fontes distintas"
+        corroboration_justification = "IOC confirmado por 2 famílias de fontes independentes"
     else:
         C = 33
-        corroboration_justification = "IOC observado em 1 fonte"
+        corroboration_justification = f"IOC observado em 1 família de fonte ({families[0]})"
+
+    # Transparência sobre redundância: mais feeds que famílias = feeds da mesma
+    # organização que NÃO somam corroboração independente.
+    if feed_count > fam_count:
+        corroboration_justification += (
+            f" — {feed_count} feeds, mas {fam_count} família(s) independente(s) "
+            f"(feeds redundantes não elevam o C)"
+        )
 
     # T — Type Severity
     cvss  = ioc.get("cvss_score")
@@ -163,10 +223,12 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1) -> dict:
             "justificativa": source_justification,
         },
         "corroboration": {
-            "fontes_count": source_count,
-            "score":        C,
-            "peso":         0.30,
-            "contribuicao": round(C * 0.30, 2),
+            "fontes_count":  feed_count,
+            "familias":      families,
+            "familias_count": fam_count,
+            "score":         C,
+            "peso":          0.30,
+            "contribuicao":  round(C * 0.30, 2),
             "justificativa": corroboration_justification,
         },
         "type_severity": {
@@ -211,7 +273,7 @@ def apply_confidence(iocs: list, value_sources: dict[str, set] | None = None) ->
             sources      = {ioc.get("source", "")}
             source_count = value_counts.get(val, 1)
 
-        breakdown = calculate_score_breakdown(ioc, source_count)
+        breakdown = calculate_score_breakdown(ioc, source_count, sources=sources)
         score     = breakdown["score_arredondado"]
 
         ioc["confidence_score"]   = score

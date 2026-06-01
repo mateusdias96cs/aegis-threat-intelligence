@@ -666,7 +666,7 @@ class DatabaseManager:
                     "source":      row["source"],
                     "abuse_score": row["abuse_score"],
                     "cvss_score":  row["cvss_score"],
-                }, source_count=len(merged))
+                }, sources=merged)
                 score = float(breakdown["score_arredondado"])
                 updates.append({
                     "id":                 row["id"],
@@ -685,6 +685,79 @@ class DatabaseManager:
         if updated:
             print(f"[corroborate] {updated} IOCs existentes corroborados por nova fonte")
         return updated
+
+    def backfill_corroboration_families(self) -> int:
+        """Recalcula o C dos IOCs multi-fonte existentes com a regra de FAMÍLIAS
+        independentes (feeds redundantes da mesma organização não somam).
+
+        Corrige registros pontuados antes da mudança de modelo — ex.: um IOC visto
+        por ThreatFox+URLhaus (ambos abuse.ch) tinha C=66 pela contagem antiga e
+        passa a C=33. Conjunto é pequeno (só IOCs com correlated_sources) e o write
+        só acontece quando o C realmente muda — idempotente e barato.
+
+        Roda ANTES do decay (que re-deriva score_atual a partir do score_original).
+        """
+        from src.processors.classifier import calculate_score_breakdown
+
+        rows = self._session.execute(text("""
+            SELECT id, type, value, source, abuse_score, cvss_score,
+                   correlated_sources, score_breakdown
+            FROM iocs
+            WHERE correlated_sources IS NOT NULL
+              AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
+        """)).mappings().all()
+
+        update_stmt = text("""
+            UPDATE iocs SET
+                confidence_score = :confidence_score,
+                score_original   = :score_original,
+                score_breakdown  = :score_breakdown
+            WHERE id = :id
+        """)
+
+        updates = []
+        for row in rows:
+            src_set = {row["source"]} if row["source"] else set()
+            try:
+                src_set |= set(json.loads(row["correlated_sources"]))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+            breakdown = calculate_score_breakdown({
+                "type":        row["type"],
+                "value":       row["value"],
+                "source":      row["source"],
+                "abuse_score": row["abuse_score"],
+                "cvss_score":  row["cvss_score"],
+            }, sources=src_set)
+            new_score = breakdown["score_arredondado"]
+
+            # Grava se o score mudou OU se o breakdown ainda está no formato antigo
+            # (sem o campo `familias`) — assim o drawer fica consistente. Pula só
+            # quando nada muda, evitando reescrever à toa.
+            old_score, old_has_families = None, False
+            if row["score_breakdown"]:
+                try:
+                    old_bd = json.loads(row["score_breakdown"])
+                    old_score = old_bd.get("score_arredondado")
+                    old_has_families = "familias" in old_bd.get("corroboration", {})
+                except (json.JSONDecodeError, TypeError):
+                    pass
+            if old_score == new_score and old_has_families:
+                continue
+
+            updates.append({
+                "id":               row["id"],
+                "confidence_score": new_score,
+                "score_original":   float(new_score),
+                "score_breakdown":  json.dumps(breakdown, ensure_ascii=False),
+            })
+
+        if updates:
+            self._session.execute(update_stmt, updates)
+            self._session.commit()
+            print(f"[backfill] {len(updates)} IOCs multi-fonte recalculados por família independente")
+        return len(updates)
 
     def get_decay_stats(self) -> dict:
         """Returns IOC count grouped by ioc_status for health checks."""
@@ -850,14 +923,15 @@ class DatabaseManager:
                     "cvss_score":  row["cvss_score"],
                 }
                 # Preserva a corroboração já registrada (C consistente após reativação).
-                source_count = 1
+                # Reconstrói o conjunto de feeds para recalcular C por família.
+                src_set = {row["source"]} if row["source"] else set()
                 raw_cs = row.get("correlated_sources")
                 if raw_cs:
                     try:
-                        source_count = max(1, len(json.loads(raw_cs)))
+                        src_set |= set(json.loads(raw_cs))
                     except (json.JSONDecodeError, TypeError):
-                        source_count = 1
-                breakdown = calculate_score_breakdown(ioc_dict, source_count=source_count)
+                        pass
+                breakdown = calculate_score_breakdown(ioc_dict, sources=src_set)
                 score     = float(breakdown["score_arredondado"])
                 result.append({
                     "id":               row["id"],

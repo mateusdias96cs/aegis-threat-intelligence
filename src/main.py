@@ -159,6 +159,9 @@ def run():
                 db.corroborate_existing(value_sources)
                 del value_sources
 
+                print("[pipeline] backfilling corroboration by independent family ...")
+                db.backfill_corroboration_families()
+
                 print("[pipeline] applying BioSec decay ...")
                 db.apply_decay()
 
