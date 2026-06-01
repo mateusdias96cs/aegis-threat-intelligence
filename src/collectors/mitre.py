@@ -39,6 +39,7 @@ KEYWORD_TO_TECHNIQUE = {
 SOURCE_TO_TECHNIQUE = {
     "greynoise":       "T1595",  # Active Scanning — scanners observados na internet
     "emergingthreats": "T1595",  # Active Scanning — hosts hostis conhecidos
+    "dshield":         "T1595",  # Active Scanning — atacantes observados por sensores ISC
     "feodotracker":    "T1071",  # Application Layer Protocol — C2 de botnet
     "feodo-tracker":   "T1071",
 }
@@ -111,7 +112,40 @@ def load_techniques() -> dict:
     return techniques
 
 
+def _resolve(tech_id: str, techniques: dict) -> dict | None:
+    """Resolve uma técnica; cai para a técnica-pai se a sub-técnica não existir
+    no índice (ex.: T1003.002 → T1003)."""
+    t = techniques.get(tech_id)
+    if t:
+        return t
+    if "." in tech_id:
+        return techniques.get(tech_id.split(".")[0])
+    return None
+
+
 def map_ioc_to_technique(ioc: dict, techniques: dict) -> dict | None:
+    # 1) Técnicas ATT&CK REAIS atribuídas pela fonte (OTX attack_ids) — prioridade
+    #    máxima. É atribuição feita por um analista, não inferência por substring.
+    attack_ids = ioc.get("attack_ids") or []
+    if attack_ids:
+        resolved: list[dict] = []
+        for tid in attack_ids:
+            t = _resolve(tid, techniques)
+            if t and t not in resolved:
+                resolved.append(t)
+        if resolved:
+            # Persiste a Kill Chain completa (todas as técnicas da campanha).
+            ioc["mitre_techniques"] = [
+                {"id": t["id"], "name": t["name"], "tactic": t["tactic"]}
+                for t in resolved
+            ]
+            # Técnica primária = a primeira com tática conhecida (para o card resumo).
+            for t in resolved:
+                if t.get("tactic"):
+                    return t
+            return resolved[0]
+
+    # 2) Keyword matching em texto livre — fallback para fontes sem attack_ids.
     haystack = " ".join(filter(None, [
         ioc.get("description", "") or "",
         ioc.get("value", "") or "",
@@ -121,7 +155,7 @@ def map_ioc_to_technique(ioc: dict, techniques: dict) -> dict | None:
         if keyword in haystack:
             return techniques.get(tech_id)
 
-    # Fallback: nenhum keyword casou — usa a TTP característica da fonte.
+    # 3) Fallback: nenhum keyword casou — usa a TTP característica da fonte.
     source_key = (ioc.get("source") or "").lower()
     tech_id = SOURCE_TO_TECHNIQUE.get(source_key)
     if tech_id:

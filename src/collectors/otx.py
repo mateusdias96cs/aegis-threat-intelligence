@@ -6,12 +6,50 @@ BASE_URL = "https://otx.alienvault.com/api/v1/pulses/subscribed"
 
 TYPE_MAP = {
     "IPv4": "ip",
+    "IPv6": "ip",
     "domain": "domain",
     "hostname": "domain",
     "FileHash-MD5": "hash",
+    "FileHash-SHA1": "hash",
     "FileHash-SHA256": "hash",
     "URL": "url",
+    "CVE": "cve",
 }
+
+
+def _pulse_meta(pulse: dict) -> dict:
+    """Extrai os metadados estruturados de um pulse OTX.
+
+    Um pulse JÁ É uma campanha real reportada por um analista: traz o ator
+    (`adversary`), as técnicas ATT&CK atribuídas (`attack_ids`) e a família de
+    malware. Esses sinais valem muito mais que o keyword-matching do mapeador —
+    são atribuição humana, não inferência por substring.
+    """
+    adversary = (pulse.get("adversary") or "").strip()
+    malware   = [m for m in (pulse.get("malware_families") or []) if m]
+    # attack_ids vem como lista de strings ("T1190") ou de dicts {"id": "T1190"}.
+    raw_attack = pulse.get("attack_ids") or []
+    attack_ids = []
+    for a in raw_attack:
+        tid = a.get("id") if isinstance(a, dict) else a
+        if tid:
+            attack_ids.append(str(tid).upper())
+
+    # Descrição enriquecida com atribuição — vira contexto acionável no drawer.
+    parts = [pulse.get("name") or ""]
+    if adversary:
+        parts.append(f"Ator: {adversary}")
+    if malware:
+        parts.append(f"Malware: {', '.join(malware[:3])}")
+    description = " | ".join(p for p in parts if p)
+
+    return {
+        "campaign_id":      pulse.get("id"),
+        "adversary":        adversary or None,
+        "attack_ids":       attack_ids,
+        "description":      description,
+        "created":          (pulse.get("created") or "")[:10] or None,
+    }
 
 
 def collect() -> list[dict]:
@@ -37,8 +75,7 @@ def collect() -> list[dict]:
             break
 
         for pulse in data.get("results", []):
-            pulse_name = pulse.get("name") or ""
-            pulse_created = (pulse.get("created") or "")[:10] or None
+            meta = _pulse_meta(pulse)
 
             for indicator in pulse.get("indicators", []):
                 otx_type = indicator.get("type")
@@ -54,12 +91,16 @@ def collect() -> list[dict]:
                     "type": mapped_type,
                     "value": value,
                     "source": "AlienVault-OTX",
-                    "description": pulse_name,
-                    "first_seen": pulse_created,
+                    "description": meta["description"],
+                    "first_seen": meta["created"],
                     "last_seen": today,
                     "severity": "HIGH",
                     "country": None,
                     "abuse_score": None,
+                    # ── sinais estruturados da campanha ──────────────────────
+                    "campaign_id":  meta["campaign_id"],
+                    "adversary":    meta["adversary"],
+                    "attack_ids":   meta["attack_ids"],
                 })
 
         url = data.get("next")

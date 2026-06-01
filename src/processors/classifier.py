@@ -22,6 +22,11 @@ _SOURCE_DATA: dict[str, dict] = {
         "referencia": "https://threatfox.abuse.ch",
         "justificativa": "Plataforma crowdsourced de IOCs verificados pela abuse.ch",
     },
+    "dshield": {
+        "score": 78,
+        "referencia": "https://isc.sans.edu/ipinfo.html?ip={value}",
+        "justificativa": "Telemetria de ataque do SANS ISC — milhares de sensores de firewall globais",
+    },
     "abuseipdb-blacklist": {
         "score": 75,
         "referencia": "https://www.abuseipdb.com/check/{value}",

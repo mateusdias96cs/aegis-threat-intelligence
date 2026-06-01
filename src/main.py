@@ -9,7 +9,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
-from src.collectors import urlhaus, feodo, greynoise, emerging_threats
+from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
@@ -71,15 +71,20 @@ def run():
                 et_iocs = emerging_threats.collect()
                 print(f"[pipeline] EmergingThreats: {len(et_iocs)} IPs")
 
+                print("[pipeline] collecting from DShield/ISC ...")
+                dshield_iocs = dshield.collect()
+                print(f"[pipeline] DShield: {len(dshield_iocs)} IPs")
+
                 # Preserve IP-focused feeds for cross-source enrichment (before dedup)
                 ip_collected_iocs = (
                     feodo_iocs
                     + [i for i in tf_iocs if i.get("type") == "ip"]
                     + greynoise_iocs
                     + et_iocs
+                    + dshield_iocs
                 )
 
-                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs
+                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs + dshield_iocs
                 print(f"[pipeline] total collected: {len(raw_iocs)}")
 
                 # Corroboração entre fontes: mapeia value -> {fontes distintas} ANTES do

@@ -65,6 +65,13 @@ class IOC(Base):
     abuse_categories    = Column(Text)   # JSON: {"18": 45, "14": 12}
     # GeoLite2-ASN enrichment — número do AS para correlação por infraestrutura
     asn                 = Column(Integer)
+    # Campanha real reportada (OTX pulse id / ThreatFox malware) — espinha dorsal
+    # de correlação por co-ocorrência verdadeira, não heurística de /24.
+    campaign_id         = Column(Text)
+    # Ator/grupo atribuído pela fonte (OTX adversary) — "ataque que de fato ocorreu".
+    adversary           = Column(Text)
+    # Lista JSON de técnicas ATT&CK reais (OTX attack_ids) — Kill Chain confiável.
+    mitre_techniques    = Column(Text)
 
 
 class Report(Base):
@@ -123,6 +130,10 @@ _DECAY_COLUMNS = [
     ("abuse_categories",    "TEXT"),
     # GeoLite2-ASN enrichment
     ("asn",                 "INTEGER"),
+    # Campanha real / atribuição / técnicas ATT&CK estruturadas (OTX)
+    ("campaign_id",         "TEXT"),
+    ("adversary",           "TEXT"),
+    ("mitre_techniques",    "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -139,13 +150,17 @@ for _col_name, _col_def in _DECAY_COLUMNS:
     except Exception:
         pass
 
-# Índice de ASN criado após a migração da coluna (existe em bancos legados só agora).
-try:
-    with engine.connect() as _conn:
-        _conn.execute(text("CREATE INDEX IF NOT EXISTS idx_iocs_asn ON iocs (asn)"))
-        _conn.commit()
-except Exception:
-    pass
+# Índices criados após a migração das colunas (existem em bancos legados só agora).
+for _post_idx in (
+    "CREATE INDEX IF NOT EXISTS idx_iocs_asn         ON iocs (asn)",
+    "CREATE INDEX IF NOT EXISTS idx_iocs_campaign_id ON iocs (campaign_id)",
+):
+    try:
+        with engine.connect() as _conn:
+            _conn.execute(text(_post_idx))
+            _conn.commit()
+    except Exception:
+        pass
 
 
 class DatabaseManager:
@@ -220,6 +235,9 @@ class DatabaseManager:
                 "abuse_categories":   json.dumps(ioc.get("abuse_categories")) if ioc.get("abuse_categories") else None,
                 "correlated_sources": ioc.get("correlated_sources"),
                 "asn":                ioc.get("asn"),
+                "campaign_id":        ioc.get("campaign_id"),
+                "adversary":          ioc.get("adversary"),
+                "mitre_techniques":   json.dumps(ioc["mitre_techniques"]) if ioc.get("mitre_techniques") else None,
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -1129,6 +1147,26 @@ class DatabaseManager:
 
         similar = []
 
+        # ── Correlação por campanha REAL (OTX pulse) — prioridade máxima ─────────
+        # IOCs que compartilham campaign_id co-ocorreram num MESMO ataque reportado
+        # por um analista (adversário + técnicas ATT&CK atribuídos), não por
+        # heurística de /24. É o sinal de correlação mais confiável do sistema.
+        campaign_id   = ioc_data.get("campaign_id")
+        campaign_peers: list[dict] = []
+        if campaign_id:
+            rows = self._session.execute(text("""
+                SELECT value, type, severity, source, mitre_tactic, description,
+                       first_seen, ioc_status, adversary, country, abuse_categories
+                FROM iocs
+                WHERE campaign_id = :cid
+                  AND LOWER(value) != LOWER(:value)
+                  AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE', 'HISTORICAL'))
+                ORDER BY CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END,
+                         first_seen DESC
+                LIMIT 10
+            """), {"cid": campaign_id, "value": value}).mappings().all()
+            campaign_peers = [dict(r) | {"correlation": "campaign"} for r in rows]
+
         if ioc_type == "ip":
             # Sinais fortes de "mesma infraestrutura do atacante": mesmo /24 (IPv4)
             # e mesmo ASN. Têm prioridade sobre país/fonte (ruidosos: país agrupa
@@ -1298,6 +1336,12 @@ class DatabaseManager:
             }).mappings().all()
             similar = [dict(r) for r in rows]
 
+        # Peers de campanha real têm prioridade; heurísticas preenchem o restante
+        # sem duplicar valores já trazidos pela campanha.
+        if campaign_peers:
+            seen_vals = {c["value"] for c in campaign_peers}
+            similar = campaign_peers + [s for s in similar if s.get("value") not in seen_vals]
+
         # Parse abuse_categories para similar IPs
         import json as _json
         for s in similar:
@@ -1312,6 +1356,8 @@ class DatabaseManager:
             "ioc_type":      ioc_type,
             "value":         value,
             "window":        {"from": win_from, "to": win_to},
+            "campaign_id":   campaign_id,
+            "adversary":     ioc_data.get("adversary"),
             "similar":       similar,
             "similar_count": len(similar),
         }

@@ -68,7 +68,11 @@ def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]
 
             matches = ip_severity_index.get(ip, [])
             if matches:
-                ioc["abuse_score"] = _compute_abuse_score(matches)
+                computed = _compute_abuse_score(matches)
+                # Não rebaixa um abuse_score REAL (ex.: volume de ataques do DShield):
+                # a corroboração entre fontes só pode reforçar, nunca apagar evidência.
+                existing = ioc.get("abuse_score")
+                ioc["abuse_score"] = max(computed, existing) if existing is not None else computed
 
             if ioc.get("country") is None and reader:
                 try:
