@@ -566,6 +566,32 @@
     .gdp-btn-drawer:hover { background:rgba(192,57,43,.16); border-color:rgba(192,57,43,.4); }
     .gdp-btn-graph { background:rgba(255,255,255,.04); border:1px solid #222; border-radius:6px; color:#555; font-family:var(--font-mono); font-size:11px; padding:9px 11px; cursor:pointer; transition:background .15s,color .15s; white-space:nowrap; }
     .gdp-btn-graph:hover { background:rgba(255,255,255,.08); color:#aaa; }
+
+    /* ── Drawer: Completude de Contexto (D3) ── */
+    .ctx-head { display:flex; align-items:center; gap:12px; margin-bottom:12px; }
+    .ctx-score { font-size:22px; font-weight:700; font-family:var(--font-mono); color:var(--text-primary); line-height:1; }
+    .ctx-score small { font-size:13px; color:var(--text-tertiary); font-weight:500; }
+    .ctx-pct { font-size:11px; font-family:var(--font-mono); padding:3px 8px; border-radius:999px; font-weight:600; }
+    .ctx-pct.lvl-hi { color:#3fb950; background:rgba(63,185,80,.12); border:1px solid rgba(63,185,80,.3); }
+    .ctx-pct.lvl-mid { color:#e3b341; background:rgba(227,179,65,.12); border:1px solid rgba(227,179,65,.3); }
+    .ctx-pct.lvl-lo { color:#e05a4b; background:rgba(224,90,75,.12); border:1px solid rgba(224,90,75,.3); }
+    .ctx-bar { flex:1; height:6px; background:rgba(255,255,255,.06); border-radius:999px; overflow:hidden; }
+    .ctx-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,var(--red-primary),var(--accent-gold)); transition:width .5s ease; }
+    .ctx-dims { display:flex; flex-wrap:wrap; gap:6px; }
+    .ctx-dim { font-size:10.5px; font-family:var(--font-mono); padding:4px 9px; border-radius:4px; display:flex; align-items:center; gap:5px; letter-spacing:.2px; }
+    .ctx-dim.on { color:#9fd4a8; background:rgba(63,185,80,.08); border:1px solid rgba(63,185,80,.18); }
+    .ctx-dim.off { color:#4a4a4a; background:rgba(255,255,255,.02); border:1px solid var(--border); }
+    .ctx-dim .ck { font-weight:700; }
+
+    /* ── Drawer: Contexto de Malware (MalwareBazaar) ── */
+    .mw-family { display:flex; align-items:center; gap:9px; margin-bottom:14px; }
+    .mw-family-name { font-size:16px; font-weight:700; color:var(--accent-gold); font-family:var(--font-mono); }
+    .mw-family-tag { font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--accent-gold); border:1px solid rgba(200,169,110,.35); background:rgba(200,169,110,.08); border-radius:3px; padding:2px 6px; }
+    .mw-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+    .mw-cell label { display:block; font-size:9px; font-weight:600; letter-spacing:1.2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:3px; }
+    .mw-cell span { font-size:12px; color:var(--text-primary); font-family:var(--font-mono); }
+    .mw-tags { display:flex; flex-wrap:wrap; gap:5px; }
+    .mw-tag { font-size:10px; font-family:var(--font-mono); color:#cdb892; background:rgba(200,169,110,.07); border:1px solid rgba(200,169,110,.2); border-radius:3px; padding:2px 7px; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -2617,7 +2643,9 @@ function renderDrawerBody(ioc) {
 
   var html = '';
   if (hasScore || ioc.ioc_status === 'FALSE_POSITIVE') html += renderScoreSection(ioc);
+  html += renderContextSection(ioc);
   html += renderOriginSection(ioc);
+  if (type === 'hash') html += renderMalwareSection(ioc);
   if (hasMitre) html += renderMitreSection(ioc);
   if (type === 'ip') html += '<div id="drawer-enrichment">' + renderEnrichLoading() + '</div>';
   html += renderHistorySection(ioc);
@@ -2651,6 +2679,67 @@ function renderDrawerBody(ioc) {
   if (fpBtn) {
     fpBtn.addEventListener('click', function() { toggleFpForm(); });
   }
+}
+
+/* ── Section: Completude de Contexto (D3) ───────────────────── */
+function renderContextSection(ioc) {
+  var cb = ioc.context_breakdown || null;
+  if (!cb || !cb.dimensions || !cb.total) return '';
+  var pct = cb.score != null ? cb.score : Math.round((cb.filled / cb.total) * 100);
+  var lvl = pct >= 70 ? 'lvl-hi' : (pct >= 40 ? 'lvl-mid' : 'lvl-lo');
+
+  var dims = cb.dimensions.map(function(d) {
+    var on = d.present;
+    return '<span class="ctx-dim ' + (on ? 'on' : 'off') + '">' +
+      '<span class="ck">' + (on ? '✓' : '✗') + '</span>' + escHtml(d.label) + '</span>';
+  }).join('');
+
+  return '<div class="drawer-section">' +
+    '<div class="drawer-section-title">Completude de Contexto</div>' +
+    '<div class="ctx-head">' +
+      '<span class="ctx-score">' + cb.filled + '<small>/' + cb.total + '</small></span>' +
+      '<span class="ctx-pct ' + lvl + '">' + pct + '%</span>' +
+      '<div class="ctx-bar"><div class="ctx-fill" style="width:' + pct + '%"></div></div>' +
+    '</div>' +
+    '<div class="ctx-dims">' + dims + '</div>' +
+    '</div>';
+}
+
+/* ── Section: Contexto de Malware (MalwareBazaar) ───────────── */
+function renderMalwareSection(ioc) {
+  var mc = ioc.malware_context || null;
+  if (!mc || (!mc.family && !mc.file_type && !(mc.tags && mc.tags.length))) return '';
+
+  var html = '<div class="drawer-section">' +
+    '<div class="drawer-section-title">Contexto de Malware</div>';
+
+  if (mc.family) {
+    html += '<div class="mw-family">' +
+      '<span class="mw-family-name">' + escHtml(mc.family) + '</span>' +
+      '<span class="mw-family-tag">Família</span></div>';
+  }
+
+  var cells = [];
+  if (mc.file_type)  cells.push(['Tipo de arquivo', mc.file_type]);
+  if (mc.delivery)   cells.push(['Entrega', mc.delivery]);
+  if (mc.first_seen) cells.push(['Visto pela 1ª vez', mc.first_seen]);
+  if (mc.mime)       cells.push(['MIME', mc.mime]);
+  if (cells.length) {
+    html += '<div class="mw-grid">' + cells.map(function(c) {
+      return '<div class="mw-cell"><label>' + escHtml(c[0]) + '</label><span>' + escHtml(String(c[1])) + '</span></div>';
+    }).join('') + '</div>';
+  }
+
+  if (mc.tags && mc.tags.length) {
+    html += '<div class="mw-tags">' + mc.tags.slice(0, 12).map(function(t) {
+      return '<span class="mw-tag">' + escHtml(String(t)) + '</span>';
+    }).join('') + '</div>';
+  }
+
+  html += '<div style="margin-top:12px;font-size:10px;color:var(--text-tertiary)">' +
+    '<a href="https://bazaar.abuse.ch/sample/' + encodeURIComponent(ioc.value || '') + '/" target="_blank" rel="noopener" style="color:#58a6ff;text-decoration:none">Ver no MalwareBazaar ↗</a></div>';
+
+  return html + '</div>';
 }
 
 /* ── Section: Score ─────────────────────────────────────────── */

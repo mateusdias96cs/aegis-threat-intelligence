@@ -13,7 +13,7 @@ from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
-from src.enrichers import ip_enricher, epss_enricher, shodan_enricher
+from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher
 
 
 def run():
@@ -130,6 +130,11 @@ def run():
                         print(f"[pipeline] enriquecendo {len(cve_new)} CVEs novos com EPSS ...")
                         new_iocs = epss_enricher.enrich_batch(new_iocs)
 
+                    hash_new = [i for i in new_iocs if i.get("type") == "hash"]
+                    if hash_new:
+                        print(f"[pipeline] enriquecendo {len(hash_new)} hashes novas com MalwareBazaar ...")
+                        new_iocs = malwarebazaar_enricher.enrich_batch(new_iocs)
+
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)
                     new_iocs = classifier.apply_confidence(new_iocs, value_sources)
@@ -149,6 +154,14 @@ def run():
                         else:
                             ioc["mitre_technique_id"] = None
                             ioc["mitre_tactic"] = None
+
+                    # Completude de contexto (D3) — depois de TODO enriquecimento +
+                    # MITRE, mede quantas dimensões o IOC tem preenchidas.
+                    print("[pipeline] computing context completeness ...")
+                    for ioc in new_iocs:
+                        cc = classifier.compute_context_completeness(ioc)
+                        ioc["context_score"] = cc["score"]
+                        ioc["context_breakdown"] = cc   # dict; insert_many serializa
 
                     print("[pipeline] saving to database ...")
                     db.insert_many(new_iocs, existing=existing_values)
@@ -174,6 +187,11 @@ def run():
 
                 print("[pipeline] recalculating scores (skips if already done) ...")
                 db.recalculate_all_scores()
+
+                # Completude de contexto dos IOCs já no banco (corroboração/enrich
+                # podem ter mudado as dimensões preenchidas desde o último run).
+                print("[pipeline] backfilling context completeness ...")
+                db.backfill_context_completeness()
 
             except Exception as e:
                 print(f"[pipeline] collection/processing error (continuing to report): {e}")

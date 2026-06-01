@@ -121,6 +121,64 @@ def _get_interpretation(score: float) -> str:
     return "MUITO BAIXA confiança — usar apenas como referência"
 
 
+# ── Completude de Contexto (D3) ───────────────────────────────────────────────
+# Quantifica QUANTAS dimensões de contexto um IOC tem preenchidas, relativo ao
+# que é alcançável para o seu TIPO (uma hash não tem geo; um CVE não tem ASN).
+# Materializa o diferencial do AEGIS — "IOC bruto" vs. "IOC refinado" vira métrica.
+_CONTEXT_DIMS: dict[str, list[str]] = {
+    "ip":     ["geo", "network", "reputation", "surface", "ttp", "attribution", "corroboration"],
+    "domain": ["geo", "ttp", "attribution", "corroboration"],
+    "url":    ["geo", "ttp", "attribution", "corroboration"],
+    "hash":   ["malware", "ttp", "attribution", "corroboration"],
+    "cve":    ["severity", "exploitability", "ttp", "attribution", "corroboration"],
+}
+
+_DIM_LABEL: dict[str, str] = {
+    "geo":            "Geolocalização",
+    "network":        "ASN / Rede",
+    "reputation":     "Reputação (AbuseIPDB)",
+    "surface":        "Superfície (Shodan)",
+    "malware":        "Família de Malware",
+    "severity":       "Severidade (CVSS)",
+    "exploitability": "Exploração (EPSS)",
+    "ttp":            "Tática MITRE",
+    "attribution":    "Atribuição (campanha/ator)",
+    "corroboration":  "Corroboração multi-fonte",
+}
+
+
+def _dim_present(dim: str, ioc: dict) -> bool:
+    if dim == "geo":            return bool(ioc.get("country"))
+    if dim == "network":        return ioc.get("asn") is not None
+    if dim == "reputation":     return ioc.get("abuse_score") is not None
+    if dim == "surface":        return bool(ioc.get("shodan_data"))
+    if dim == "malware":        return bool(ioc.get("malware_context"))
+    if dim == "severity":       return ioc.get("cvss_score") is not None
+    if dim == "exploitability": return ioc.get("epss_score") is not None or ioc.get("epss_percentile") is not None
+    if dim == "ttp":            return bool(ioc.get("mitre_tactic") or ioc.get("mitre_technique_id"))
+    if dim == "attribution":    return bool(ioc.get("campaign_id") or ioc.get("adversary"))
+    if dim == "corroboration":  return bool(ioc.get("correlated_sources"))
+    return False
+
+
+def compute_context_completeness(ioc: dict) -> dict:
+    """Mede a completude de contexto de um IOC (0–100) sobre as dimensões
+    aplicáveis ao seu tipo. Funciona tanto com o dict do pipeline quanto com uma
+    linha do banco (mesmas chaves)."""
+    ioc_type = (ioc.get("type") or "").lower()
+    dims = _CONTEXT_DIMS.get(ioc_type, ["ttp", "attribution", "corroboration"])
+    detail = []
+    filled = 0
+    for d in dims:
+        present = _dim_present(d, ioc)
+        if present:
+            filled += 1
+        detail.append({"key": d, "label": _DIM_LABEL.get(d, d), "present": present})
+    total = len(dims)
+    score = round(filled / total * 100) if total else 0
+    return {"score": score, "filled": filled, "total": total, "dimensions": detail}
+
+
 def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) -> dict:
     """
     Score = (S × 0.40) + (C × 0.30) + (T × 0.30)

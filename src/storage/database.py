@@ -77,6 +77,11 @@ class IOC(Base):
     epss_percentile     = Column(Float)
     # Shodan InternetDB — superfície do IP: {ports, tags, vulns, hostnames} (JSON).
     shodan_data         = Column(Text)
+    # MalwareBazaar — contexto da hash: {family, file_type, tags, delivery...} (JSON).
+    malware_context     = Column(Text)
+    # Completude de Contexto (D3) — quantas dimensões de contexto estão preenchidas.
+    context_score       = Column(Integer)
+    context_breakdown   = Column(Text)   # JSON: {score, filled, total, dimensions[]}
 
 
 class Report(Base):
@@ -144,6 +149,11 @@ _DECAY_COLUMNS = [
     ("epss_percentile",     "FLOAT"),
     # Shodan InternetDB — superfície do IP (JSON)
     ("shodan_data",         "TEXT"),
+    # MalwareBazaar — contexto da hash (JSON)
+    ("malware_context",     "TEXT"),
+    # Completude de Contexto (D3)
+    ("context_score",       "INTEGER"),
+    ("context_breakdown",   "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -251,6 +261,9 @@ class DatabaseManager:
                 "epss_score":         ioc.get("epss_score"),
                 "epss_percentile":    ioc.get("epss_percentile"),
                 "shodan_data":        json.dumps(ioc["shodan_data"]) if ioc.get("shodan_data") else None,
+                "malware_context":    json.dumps(ioc["malware_context"]) if ioc.get("malware_context") else None,
+                "context_score":      ioc.get("context_score"),
+                "context_breakdown":  json.dumps(ioc["context_breakdown"]) if ioc.get("context_breakdown") else None,
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -284,7 +297,7 @@ class DatabaseManager:
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         # shodan_data e mitre_techniques: JSON → estrutura, para o drawer/API.
-        for _json_field in ("shodan_data", "mitre_techniques"):
+        for _json_field in ("shodan_data", "mitre_techniques", "malware_context", "context_breakdown"):
             _raw = row.get(_json_field)
             if _raw and isinstance(_raw, str):
                 try:
@@ -1001,6 +1014,41 @@ class DatabaseManager:
             self._session.commit()
             print(f"[backfill] {len(updates)} IOCs multi-fonte recalculados por família independente")
         return len(updates)
+
+    def backfill_context_completeness(self) -> int:
+        """(Re)calcula a Completude de Contexto (D3) de todos os IOCs a partir das
+        colunas já no banco. Streaming por id para não carregar tudo na memória."""
+        from src.processors.classifier import compute_context_completeness
+
+        BATCH = 1000
+        last_id = 0
+        total = 0
+        upd = text("UPDATE iocs SET context_score = :cs, context_breakdown = :cb WHERE id = :id")
+        while True:
+            rows = self._session.execute(text("""
+                SELECT id, type, country, asn, abuse_score, shodan_data, malware_context,
+                       cvss_score, epss_score, epss_percentile, mitre_tactic, mitre_technique_id,
+                       campaign_id, adversary, correlated_sources
+                FROM iocs WHERE id > :last ORDER BY id LIMIT :batch
+            """), {"last": last_id, "batch": BATCH}).mappings().all()
+            if not rows:
+                break
+            last_id = rows[-1]["id"]
+            updates = []
+            for row in rows:
+                cc = compute_context_completeness(dict(row))
+                updates.append({
+                    "cs": cc["score"],
+                    "cb": json.dumps(cc, ensure_ascii=False),
+                    "id": row["id"],
+                })
+            if updates:
+                self._session.execute(upd, updates)
+                self._session.commit()
+                total += len(updates)
+            del rows, updates
+        print(f"[context] completude de contexto calculada para {total} IOCs")
+        return total
 
     def get_decay_stats(self) -> dict:
         """Returns IOC count grouped by ioc_status for health checks."""
