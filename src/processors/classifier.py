@@ -137,22 +137,33 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
     value    = ioc.get("value", "")
     ioc_type = (ioc.get("type") or "").lower()
 
-    # S — Source Reliability
-    S, source_ref, source_justification = _get_source_info(source, value)
-
-    # C — Corroboração por FAMÍLIAS de fonte independente (STIX 2.1 Sightings).
-    # Garante que a fonte âncora sempre entre na contagem.
+    # Conjunto de fontes que confirmaram o IOC (inclui a âncora). Base tanto do S
+    # (confiabilidade da fonte mais confiável) quanto do C (famílias independentes).
     if sources is None:
         all_sources = {source} if source else set()
-        # Sem a lista de feeds, respeita a contagem legada como nº de famílias.
-        fam_count = max(source_count, len(all_sources), 1)
-        families  = _independent_families(all_sources) or ["desconhecida"]
-        feed_count = source_count
+        feed_count  = source_count
     else:
         all_sources = {s for s in set(sources) | ({source} if source else set()) if s}
-        families    = _independent_families(all_sources) or ["desconhecida"]
-        fam_count   = len(families)
         feed_count  = len(all_sources)
+
+    # S — Source Reliability. Com múltiplas fontes, a confiabilidade do IOC é a da
+    # fonte MAIS confiável que o reportou — não a âncora (a primeira a ver o IOC).
+    # Sem isto, um IOC confirmado pela CISA (S=100) mas visto antes pelo OTX (S=55)
+    # ficaria preso em S=55: o score passaria a depender da ordem de ingestão.
+    best_source, best_S = source, (_get_source_info(source, value)[0] if source else 0)
+    for s in all_sources:
+        s_score = _get_source_info(s, value)[0]
+        if s_score > best_S:
+            best_S, best_source = s_score, s
+    S, source_ref, source_justification = _get_source_info(best_source, value)
+
+    # C — Corroboração por FAMÍLIAS de fonte independente (STIX 2.1 Sightings).
+    families = _independent_families(all_sources) or ["desconhecida"]
+    if sources is None:
+        # Sem a lista de feeds, respeita a contagem legada como nº de famílias.
+        fam_count = max(source_count, len(families), 1)
+    else:
+        fam_count = len(families)
 
     if fam_count >= 3:
         C = 100
@@ -222,7 +233,7 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
     return {
         "formula": "Score = (S × 0.40) + (C × 0.30) + (T × 0.30)",
         "source_reliability": {
-            "fonte":        source,
+            "fonte":        best_source,
             "score":        S,
             "peso":         0.40,
             "contribuicao": round(S * 0.40, 2),

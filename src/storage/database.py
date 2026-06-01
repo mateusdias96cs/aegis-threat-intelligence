@@ -1283,6 +1283,11 @@ class DatabaseManager:
             anchor_asn = ioc_data.get("asn")
             anchor_asn = anchor_asn if anchor_asn is not None else -1
 
+            # Só os sinais ESTRUTURAIS (mesmo /24, mesmo ASN) indicam infraestrutura
+            # comum do atacante. País e "mesma fonte" eram ruído: a maioria das
+            # blocklists grava first_seen = data de ingestão, então a janela temporal
+            # não discrimina e dois IPs sem relação real, ingeridos no mesmo dia,
+            # apareciam "correlacionados" só por compartilhar país/feed.
             rows = self._session.execute(text("""
                 SELECT value, severity, source, mitre_tactic, country, abuse_categories,
                        first_seen, ioc_status, reactivation_count, asn
@@ -1292,22 +1297,19 @@ class DatabaseManager:
                   AND (
                     (:net_prefix != '' AND value LIKE :net_like)
                     OR (asn = :asn)
-                    OR (country = :country AND country IS NOT NULL AND country != '')
-                    OR source = :source
                   )
                   AND SUBSTR(first_seen, 1, 10) BETWEEN :win_from AND :win_to
                   AND (ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE', 'HISTORICAL'))
                 ORDER BY
                     CASE
                         WHEN :net_prefix != '' AND value LIKE :net_like THEN 0
-                        WHEN asn = :asn THEN 1
-                        ELSE 2
+                        ELSE 1
                     END,
                     CASE severity WHEN 'CRITICAL' THEN 0 WHEN 'HIGH' THEN 1 ELSE 2 END,
                     first_seen DESC
                 LIMIT 8
             """), {
-                "value": value, "country": country, "source": source,
+                "value": value,
                 "net_prefix": net_prefix, "net_like": net_like, "asn": anchor_asn,
                 "win_from": win_from, "win_to": win_to
             }).mappings().all()

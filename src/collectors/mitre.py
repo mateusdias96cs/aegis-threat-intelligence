@@ -1,37 +1,47 @@
 import json
+import re
 import requests
 from src.storage import mitre_cache
 
 FEED_URL = "https://raw.githubusercontent.com/mitre/cti/master/enterprise-attack/enterprise-attack.json"
 
+# Raízes de palavra → técnica ATT&CK. Removidos os termos ambíguos que casavam
+# substrings espúrias e contaminavam a Kill Chain:
+#   "cve"  → casava o ID de TODO CVE ("CVE-2023-...") → T1190 fixo p/ qualquer CVE
+#   "command"/"control" → casavam "command injection", "access control",
+#                         "controller" → T1071 (C2) indevido
+#   "auth" → casava "author"; "rat" → casava "operate"/"generated"
+# C2 agora exige termo inequívoco (c2 / botnet / "command and control").
 KEYWORD_TO_TECHNIQUE = {
-    "brute":       "T1110",
-    "ssh":         "T1110",
-    "password":    "T1110",
-    "phishing":    "T1566",
-    "phish":       "T1566",
-    "sql":         "T1190",
-    "sqli":        "T1190",
-    "xss":         "T1190",
-    "cross-site":  "T1190",
-    "ransomware":  "T1486",
-    "c2":          "T1071",
-    "command":     "T1071",
-    "control":     "T1071",
-    "botnet":      "T1071",
-    "scan":        "T1046",
-    "recon":       "T1046",
-    "enumerat":    "T1046",
-    "exploit":     "T1190",
-    "cve":         "T1190",
-    "rce":         "T1190",
-    "credential":  "T1078",
-    "login":       "T1078",
-    "auth":        "T1078",
-    "backdoor":    "T1059",
-    "rat":         "T1059",
-    "trojan":      "T1059",
+    "brute":               "T1110",
+    "ssh":                 "T1110",
+    "password":            "T1110",
+    "phish":               "T1566",
+    "sql":                 "T1190",
+    "xss":                 "T1190",
+    "cross-site":          "T1190",
+    "ransomware":          "T1486",
+    "c2":                  "T1071",
+    "command and control": "T1071",
+    "command-and-control": "T1071",
+    "botnet":              "T1071",
+    "scan":                "T1046",
+    "recon":               "T1046",
+    "enumerat":            "T1046",
+    "exploit":             "T1190",
+    "rce":                 "T1190",
+    "credential":          "T1078",
+    "login":               "T1078",
+    "backdoor":            "T1059",
+    "trojan":              "T1059",
 }
+
+# Casamento por raiz de palavra (\b) — evita os falsos positivos de substring acima
+# (ex.: "\bscan" casa "scanner"/"scanning", mas "\bauth" não casa "author").
+_KEYWORD_PATTERNS = [
+    (re.compile(r"\b" + re.escape(kw)), tech_id)
+    for kw, tech_id in KEYWORD_TO_TECHNIQUE.items()
+]
 
 # Fallback determinístico por fonte (chave = source.lower()).
 # Feeds de IP trazem descrição genérica e não casam nenhum keyword acima, mas a
@@ -146,13 +156,12 @@ def map_ioc_to_technique(ioc: dict, techniques: dict) -> dict | None:
             return resolved[0]
 
     # 2) Keyword matching em texto livre — fallback para fontes sem attack_ids.
-    haystack = " ".join(filter(None, [
-        ioc.get("description", "") or "",
-        ioc.get("value", "") or "",
-    ])).lower()
+    #    Usa SÓ a descrição: o `value` é um identificador (IP/hash/CVE-id) e casaria
+    #    keywords espúrios — em especial "CVE-..." sempre contém "cve".
+    haystack = (ioc.get("description") or "").lower()
 
-    for keyword, tech_id in KEYWORD_TO_TECHNIQUE.items():
-        if keyword in haystack:
+    for pattern, tech_id in _KEYWORD_PATTERNS:
+        if pattern.search(haystack):
             return techniques.get(tech_id)
 
     # 3) Fallback: nenhum keyword casou — usa a TTP característica da fonte.
