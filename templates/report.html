@@ -477,41 +477,95 @@
     .camp-no-similar { font-size:12px; color:var(--text-tertiary); font-style:italic; }
 
     /* ── Threat Overview ── */
-    .ov-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:16px; }
-    .ov-kpi { background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:16px 14px; }
-    .ov-kpi-val { font-size:26px; font-weight:700; color:var(--text-primary); font-family:var(--font-mono); line-height:1; }
-    .ov-kpi-lbl { font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-secondary); margin-top:7px; }
+    .ov-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:14px; }
+    .ov-kpi { background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:16px 16px 14px; position:relative; overflow:hidden; transition:border-color 180ms; }
+    .ov-kpi::before { content:''; position:absolute; inset:0; background:linear-gradient(135deg,rgba(255,255,255,.02) 0%,transparent 60%); pointer-events:none; }
+    .ov-kpi:hover { border-color:var(--border-strong); }
+    .ov-kpi-val { font-size:28px; font-weight:700; color:var(--text-primary); font-family:var(--font-mono); line-height:1; letter-spacing:-1px; }
+    .ov-kpi-lbl { font-size:9.5px; letter-spacing:1.6px; text-transform:uppercase; color:var(--text-tertiary); margin-top:8px; font-weight:500; }
     .ov-kpi-crit { border-top:2px solid #c0392b; } .ov-kpi-crit .ov-kpi-val { color:#e05a4b; }
     .ov-kpi-high { border-top:2px solid #c06010; } .ov-kpi-high .ov-kpi-val { color:#d98030; }
-    .ov-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
-    .ov-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; min-width:0; }
+    .ov-kpi-icon { position:absolute; right:14px; top:14px; font-size:18px; opacity:.12; }
+    .ov-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-bottom:10px; }
+    .ov-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:10px; padding:16px 18px; min-width:0; box-shadow:0 2px 12px rgba(0,0,0,.3); }
     .ov-span2 { grid-column:span 2; }
-    .ov-card-title { font-size:11px; font-weight:600; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-secondary); margin-bottom:12px; }
-    .ov-rank { display:flex; flex-direction:column; gap:2px; }
-    .ov-rank-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:4px; cursor:pointer; transition:background 140ms ease; }
-    .ov-rank-row:hover { background:rgba(255,255,255,.05); }
+    .ov-card-title { font-size:10px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text-tertiary); margin-bottom:14px; display:flex; align-items:center; gap:8px; }
+    .ov-card-title::before { content:''; width:3px; height:12px; background:var(--red-primary); border-radius:2px; display:inline-block; }
+    .ov-rank { display:flex; flex-direction:column; gap:1px; }
+    .ov-rank-row { display:flex; align-items:center; gap:10px; padding:8px 6px; border-radius:6px; cursor:pointer; transition:background 140ms ease; }
+    .ov-rank-row:hover { background:rgba(255,255,255,.04); }
     .ov-rank-row.nolink { cursor:default; } .ov-rank-row.nolink:hover { background:transparent; }
+    .ov-rank-idx { font-size:10px; color:var(--text-tertiary); font-family:var(--font-mono); min-width:16px; }
     .ov-rank-name { font-size:12px; color:var(--text-primary); font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
-    .ov-rank-sub { font-size:10px; color:var(--text-tertiary); }
-    .ov-rank-bar { height:5px; border-radius:3px; background:var(--red-primary); opacity:.55; flex-shrink:0; }
-    .ov-rank-count { font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); min-width:34px; text-align:right; }
+    .ov-rank-track { flex:0 0 80px; height:4px; background:rgba(255,255,255,.05); border-radius:2px; overflow:hidden; }
+    .ov-rank-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,var(--red-primary),rgba(192,57,43,.4)); transition:width .4s ease; }
+    .ov-rank-count { font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); min-width:32px; text-align:right; }
     @media (max-width:900px){ .ov-kpis{grid-template-columns:repeat(2,1fr);} .ov-grid{grid-template-columns:1fr;} .ov-span2{grid-column:span 1;} }
 
-    /* ── Correlation Graph ── */
-    .graph-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
-    .graph-input { flex:0 1 320px; background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:5px; padding:8px 11px; color:var(--text-primary); font-size:12px; font-family:var(--font-mono); }
-    .graph-input:focus { outline:none; border-color:var(--red-muted); }
-    .graph-btn { background:var(--red-primary); color:#fff; border:none; border-radius:5px; padding:8px 14px; font-size:11px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; transition:opacity 140ms ease; }
-    .graph-btn:hover { opacity:.86; }
-    .graph-btn-ghost { background:transparent; border:1px solid var(--border-strong); color:var(--text-secondary); }
-    .graph-btn-ghost:hover { color:#fff; border-color:var(--red-muted); }
-    .graph-chip { font-size:11px; font-family:var(--font-mono); color:var(--accent-gold); background:rgba(200,169,110,.10); border:1px solid rgba(200,169,110,.35); border-radius:999px; padding:4px 11px; }
-    .graph-legend { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px; padding:8px 12px; background:var(--bg-surface); border:1px solid var(--border); border-radius:6px; }
-    .gl-item { display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-secondary); letter-spacing:.4px; }
-    .gl-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
-    .gl-hub { width:11px; height:11px; border:2px solid; border-radius:3px; display:inline-block; }
-    .gl-sep { width:1px; height:16px; background:var(--border-strong); }
-    #graph-canvas { height:560px; background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; }
+    /* ── Correlation Graph — Dark Analytics ── */
+    .graph-surface { background:#0d0d0d; border:1px solid #1c1c1c; border-radius:12px; overflow:hidden; box-shadow:0 8px 40px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.03); }
+    .graph-topbar { display:flex; align-items:center; gap:10px; padding:12px 16px; background:linear-gradient(180deg,#131313 0%,#0f0f0f 100%); border-bottom:1px solid #1a1a1a; flex-wrap:wrap; }
+    .graph-topbar-left { display:flex; align-items:center; gap:8px; flex:1; min-width:0; flex-wrap:wrap; }
+    .graph-input { flex:0 1 300px; background:rgba(255,255,255,.05); border:1px solid #222; border-radius:7px; color:#e0e0e0; font-family:var(--font-mono); font-size:12px; padding:8px 12px 8px 36px; outline:none; transition:border-color .2s,background .2s,box-shadow .2s; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23555' stroke-width='2'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:10px center; }
+    .graph-input:focus { background-color:rgba(255,255,255,.07); border-color:#c0392b; box-shadow:0 0 0 3px rgba(192,57,43,.12); }
+    .graph-input::placeholder { color:#3a3a3a; }
+    .graph-btn { background:linear-gradient(180deg,#c0392b,#a93226); border:none; border-radius:7px; color:#fff; font-size:12px; font-weight:600; padding:8px 16px; cursor:pointer; transition:opacity .15s,transform .1s; letter-spacing:.2px; white-space:nowrap; }
+    .graph-btn:hover { opacity:.88; transform:translateY(-1px); }
+    .graph-btn:active { transform:translateY(0); opacity:1; }
+    .graph-btn-ghost { background:rgba(255,255,255,.05); border:1px solid #252525; border-radius:7px; color:#777; font-size:12px; padding:8px 14px; cursor:pointer; transition:background .15s,border-color .15s,color .15s; white-space:nowrap; }
+    .graph-btn-ghost:hover { background:rgba(255,255,255,.09); border-color:#333; color:#ccc; }
+    .graph-chip { font-size:11px; font-family:var(--font-mono); color:var(--accent-gold); background:rgba(200,169,110,.10); border:1px solid rgba(200,169,110,.28); border-radius:999px; padding:4px 12px; white-space:nowrap; display:flex; align-items:center; gap:6px; }
+    .graph-chip-x { cursor:pointer; opacity:.6; font-size:13px; line-height:1; } .graph-chip-x:hover { opacity:1; }
+
+    /* Barra de legenda + stats */
+    .graph-statusbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 16px; background:rgba(255,255,255,.015); border-bottom:1px solid #161616; flex-wrap:wrap; }
+    .graph-legend-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
+    .gl-item { display:flex; align-items:center; gap:6px; font-size:10.5px; color:#484848; letter-spacing:.3px; white-space:nowrap; }
+    .gl-dot { width:9px; height:9px; border-radius:50%; display:inline-block; box-shadow:0 0 5px currentColor; opacity:.9; }
+    .gl-hub { width:9px; height:9px; border:2px solid; border-radius:2px; display:inline-block; }
+    .gl-sep { width:1px; height:14px; background:#1e1e1e; }
+    .graph-stats-pill { font-size:10.5px; color:#444; font-family:var(--font-mono); letter-spacing:.5px; white-space:nowrap; }
+
+    /* Canvas + painel lateral */
+    .graph-body { display:grid; grid-template-columns:1fr 260px; height:540px; }
+    .graph-canvas-wrap { position:relative; overflow:hidden; border-right:1px solid #181818; }
+    #graph-canvas { height:100%; width:100%; background-image:radial-gradient(circle,#1d1d1d 1px,transparent 1px); background-size:26px 26px; }
+
+    /* Loading overlay */
+    .graph-loading-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:18px; background:rgba(13,13,13,.85); backdrop-filter:blur(6px); z-index:10; }
+    .graph-spinner { width:34px; height:34px; border-radius:50%; border:2px solid #1e1e1e; border-top-color:#c0392b; animation:gSpin .85s linear infinite; }
+    @keyframes gSpin { to { transform:rotate(360deg); } }
+    .graph-spinner-label { font-size:10.5px; letter-spacing:2px; text-transform:uppercase; color:#383838; font-family:var(--font-mono); }
+
+    /* Empty state */
+    .graph-empty-state { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; }
+    .graph-empty-icon { width:48px; height:48px; border-radius:50%; border:1px solid #1e1e1e; display:flex; align-items:center; justify-content:center; color:#282828; font-size:20px; position:relative; }
+    .graph-empty-icon::after { content:''; position:absolute; inset:-6px; border-radius:50%; border:1px solid #161616; }
+    .graph-empty-msg { font-size:12px; color:#333; letter-spacing:.5px; font-family:var(--font-mono); text-align:center; }
+
+    /* Painel de detalhes do nó */
+    .graph-detail-panel { display:flex; flex-direction:column; background:#0a0a0a; overflow:hidden; }
+    .gdp-header { padding:13px 14px 10px; border-bottom:1px solid #161616; }
+    .gdp-title { font-size:9.5px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#383838; font-family:var(--font-mono); }
+    .gdp-sev-bar { height:2px; border-radius:999px; margin-top:8px; background:#1e1e1e; transition:background .25s; }
+    .gdp-empty { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:30px 20px; text-align:center; }
+    .gdp-pulse { width:38px; height:38px; border-radius:50%; border:1px solid #1a1a1a; display:flex; align-items:center; justify-content:center; color:#1e1e1e; font-size:17px; position:relative; }
+    .gdp-pulse::before { content:''; position:absolute; inset:-5px; border-radius:50%; border:1px solid #141414; animation:gdpRipple 2.4s ease-out infinite; }
+    .gdp-pulse::after { content:''; position:absolute; inset:-11px; border-radius:50%; border:1px solid #111; animation:gdpRipple 2.4s .6s ease-out infinite; }
+    @keyframes gdpRipple { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.5)} }
+    .gdp-hint { font-size:11px; color:#282828; font-family:var(--font-mono); letter-spacing:.5px; line-height:1.5; }
+    .gdp-fields { flex:1; overflow-y:auto; }
+    .gdp-field { padding:9px 14px; border-bottom:1px solid rgba(255,255,255,.03); display:grid; grid-template-columns:56px 1fr; gap:8px; align-items:baseline; }
+    .gdp-key { font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#303030; font-family:var(--font-mono); padding-top:2px; }
+    .gdp-val { font-size:11.5px; color:#c0c0c0; font-family:var(--font-mono); word-break:break-all; line-height:1.4; }
+    .gdp-val.sev-critical { color:#e05a4b; } .gdp-val.sev-high { color:#d98030; } .gdp-val.sev-medium { color:#c8a030; } .gdp-val.sev-low { color:#3aaa50; }
+    .gdp-score-bar { height:3px; border-radius:999px; background:rgba(255,255,255,.06); margin-top:5px; overflow:hidden; }
+    .gdp-score-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#c0392b,#c8a96e); }
+    .gdp-footer { padding:12px 14px; border-top:1px solid #161616; display:flex; gap:8px; }
+    .gdp-btn-drawer { flex:1; background:rgba(192,57,43,.09); border:1px solid rgba(192,57,43,.22); border-radius:6px; color:#c0392b; font-family:var(--font-mono); font-size:11px; font-weight:600; letter-spacing:.3px; padding:9px 10px; cursor:pointer; transition:background .15s,border-color .15s; display:flex; align-items:center; justify-content:center; gap:6px; }
+    .gdp-btn-drawer:hover { background:rgba(192,57,43,.16); border-color:rgba(192,57,43,.4); }
+    .gdp-btn-graph { background:rgba(255,255,255,.04); border:1px solid #222; border-radius:6px; color:#555; font-family:var(--font-mono); font-size:11px; padding:9px 11px; cursor:pointer; transition:background .15s,color .15s; white-space:nowrap; }
+    .gdp-btn-graph:hover { background:rgba(255,255,255,.08); color:#aaa; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -1036,44 +1090,44 @@
 
   <!-- ═══ THREAT OVERVIEW ═══ -->
   <section id="tab-overview" style="display:none">
-    <div style="margin-bottom:16px;">
-      <h2 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:5px;">Threat Overview</h2>
-      <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Panorama operacional — distribuição de ameaças, infraestrutura atacante e atividade recente. Clique numa campanha, ator ou ASN para investigar no grafo de correlação.</p>
+    <div style="margin-bottom:20px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--red-primary);margin-bottom:6px;font-family:var(--font-mono);">AEGIS / SOC OVERVIEW</div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0;letter-spacing:-.3px;">Threat Overview</h2>
+      </div>
+      <div id="ov-ts" style="font-size:10px;color:var(--text-tertiary);font-family:var(--font-mono);text-align:right;line-height:1.7;"></div>
     </div>
 
-    <div id="ov-loading" style="text-align:center;padding:50px;color:var(--text-tertiary);font-size:13px;">Carregando panorama…</div>
+    <div id="ov-loading" style="text-align:center;padding:60px;color:var(--text-tertiary);font-size:12px;font-family:var(--font-mono);letter-spacing:1.5px;">CARREGANDO PANORAMA…</div>
 
     <div id="ov-content" style="display:none">
-      <!-- KPIs -->
       <div class="ov-kpis">
-        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-active">—</div><div class="ov-kpi-lbl">IOCs Ativos</div></div>
-        <div class="ov-kpi ov-kpi-crit"><div class="ov-kpi-val" id="ov-kpi-critical">—</div><div class="ov-kpi-lbl">Critical</div></div>
-        <div class="ov-kpi ov-kpi-high"><div class="ov-kpi-val" id="ov-kpi-high">—</div><div class="ov-kpi-lbl">High</div></div>
-        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-campaigns">—</div><div class="ov-kpi-lbl">Campanhas</div></div>
-        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-adversaries">—</div><div class="ov-kpi-lbl">Atores</div></div>
+        <div class="ov-kpi"><span class="ov-kpi-icon">◉</span><div class="ov-kpi-val" id="ov-kpi-active">—</div><div class="ov-kpi-lbl">IOCs Ativos</div></div>
+        <div class="ov-kpi ov-kpi-crit"><span class="ov-kpi-icon" style="color:#c0392b">⬛</span><div class="ov-kpi-val" id="ov-kpi-critical">—</div><div class="ov-kpi-lbl">Critical</div></div>
+        <div class="ov-kpi ov-kpi-high"><span class="ov-kpi-icon" style="color:#c06010">⬛</span><div class="ov-kpi-val" id="ov-kpi-high">—</div><div class="ov-kpi-lbl">High</div></div>
+        <div class="ov-kpi"><span class="ov-kpi-icon">⬡</span><div class="ov-kpi-val" id="ov-kpi-campaigns">—</div><div class="ov-kpi-lbl">Campanhas</div></div>
+        <div class="ov-kpi"><span class="ov-kpi-icon">◈</span><div class="ov-kpi-val" id="ov-kpi-adversaries">—</div><div class="ov-kpi-lbl">Atores</div></div>
       </div>
 
-      <!-- Charts -->
       <div class="ov-grid">
         <div class="ov-card ov-span2">
           <div class="ov-card-title">Atividade — últimos 30 dias</div>
-          <div style="height:200px"><canvas id="ov-timeline"></canvas></div>
+          <div style="height:190px"><canvas id="ov-timeline"></canvas></div>
         </div>
         <div class="ov-card">
-          <div class="ov-card-title">Por severidade</div>
-          <div style="height:200px"><canvas id="ov-severity"></canvas></div>
+          <div class="ov-card-title">Distribuição por severidade</div>
+          <div style="height:195px"><canvas id="ov-severity"></canvas></div>
         </div>
         <div class="ov-card">
-          <div class="ov-card-title">Por tipo</div>
-          <div style="height:200px"><canvas id="ov-type"></canvas></div>
+          <div class="ov-card-title">Distribuição por tipo</div>
+          <div style="height:195px"><canvas id="ov-type"></canvas></div>
         </div>
         <div class="ov-card ov-span2">
           <div class="ov-card-title">Táticas MITRE ATT&amp;CK</div>
-          <div style="height:210px"><canvas id="ov-tactics"></canvas></div>
+          <div style="height:200px"><canvas id="ov-tactics"></canvas></div>
         </div>
       </div>
 
-      <!-- Rankings -->
       <div class="ov-grid">
         <div class="ov-card"><div class="ov-card-title">Top Campanhas</div><div id="ov-campaigns" class="ov-rank"></div></div>
         <div class="ov-card"><div class="ov-card-title">Top Atores</div><div id="ov-adversaries" class="ov-rank"></div></div>
@@ -1085,32 +1139,82 @@
 
   <!-- ═══ CORRELATION GRAPH ═══ -->
   <section id="tab-graph" style="display:none">
-    <div style="margin-bottom:14px;">
-      <h2 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:5px;">Correlation Graph</h2>
-      <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Entrelaçamento de IOCs por infraestrutura comum do atacante. Os hubs (campanha, ASN, /24) revelam quais indicadores co-ocorrem. Clique num IOC para abrir o contexto completo.</p>
+    <div style="margin-bottom:16px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;">
+      <div>
+        <div style="font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--red-primary);margin-bottom:6px;font-family:var(--font-mono);">AEGIS / LINK ANALYSIS</div>
+        <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0;letter-spacing:-.3px;">Correlation Graph</h2>
+        <p style="font-size:12px;color:var(--text-tertiary);margin:6px 0 0;line-height:1.5;">Clique num hub para expandir o cluster · Clique num IOC para ver detalhes · Scroll para zoom</p>
+      </div>
     </div>
 
-    <div class="graph-toolbar">
-      <input id="graph-seed" class="graph-input" placeholder="Investigar um IOC (IP/domínio/hash)…" />
-      <button class="graph-btn" onclick="_graphSeedSearch()">Investigar</button>
-      <button class="graph-btn graph-btn-ghost" onclick="_graphLoad({})">Top campanhas</button>
-      <span id="graph-filter-chip" class="graph-chip" style="display:none"></span>
-      <span id="graph-stats" style="margin-left:auto;font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);"></span>
-    </div>
+    <div class="graph-surface">
+      <!-- Toolbar -->
+      <div class="graph-topbar">
+        <div class="graph-topbar-left">
+          <input id="graph-seed" class="graph-input" placeholder="Investigar IOC (IP · domínio · hash · CVE)…" />
+          <button class="graph-btn" onclick="_graphSeedSearch()">Investigar</button>
+          <button class="graph-btn graph-btn-ghost" onclick="_graphLoad({})">Top campanhas</button>
+          <span id="graph-filter-chip" class="graph-chip" style="display:none">
+            <span id="graph-chip-label"></span>
+            <span class="graph-chip-x" onclick="_graphClearFilter()">×</span>
+          </span>
+        </div>
+      </div>
 
-    <div class="graph-legend">
-      <span class="gl-item"><i class="gl-dot" style="background:#c0392b"></i>Critical</span>
-      <span class="gl-item"><i class="gl-dot" style="background:#c06010"></i>High</span>
-      <span class="gl-item"><i class="gl-dot" style="background:#8a7000"></i>Medium</span>
-      <span class="gl-item"><i class="gl-dot" style="background:#1e6b1e"></i>Low</span>
-      <span class="gl-sep"></span>
-      <span class="gl-item"><i class="gl-hub" style="border-color:#c8a96e"></i>Campanha</span>
-      <span class="gl-item"><i class="gl-hub" style="border-color:#58a6ff"></i>ASN</span>
-      <span class="gl-item"><i class="gl-hub" style="border-color:#888"></i>Sub-rede /24</span>
-    </div>
+      <!-- Status bar + legenda -->
+      <div class="graph-statusbar">
+        <div class="graph-legend-row">
+          <span style="font-size:9.5px;font-weight:700;letter-spacing:1.5px;color:#2e2e2e;text-transform:uppercase;font-family:var(--font-mono);">IOC</span>
+          <span class="gl-item"><i class="gl-dot" style="background:#c0392b;color:#c0392b"></i>Critical</span>
+          <span class="gl-item"><i class="gl-dot" style="background:#c06010;color:#c06010"></i>High</span>
+          <span class="gl-item"><i class="gl-dot" style="background:#8a7000;color:#8a7000"></i>Medium</span>
+          <span class="gl-item"><i class="gl-dot" style="background:#1e6b1e;color:#1e6b1e"></i>Low</span>
+          <span class="gl-sep"></span>
+          <span style="font-size:9.5px;font-weight:700;letter-spacing:1.5px;color:#2e2e2e;text-transform:uppercase;font-family:var(--font-mono);">HUB</span>
+          <span class="gl-item"><i class="gl-hub" style="border-color:#c8a96e;background:rgba(200,169,110,.06)"></i>Campanha</span>
+          <span class="gl-item"><i class="gl-hub" style="border-color:#58a6ff;background:rgba(88,166,255,.06)"></i>ASN</span>
+          <span class="gl-item"><i class="gl-hub" style="border-color:#444"></i>Sub-rede /24</span>
+        </div>
+        <span id="graph-stats" class="graph-stats-pill"></span>
+      </div>
 
-    <div id="graph-canvas"></div>
-    <div id="graph-empty" style="display:none;text-align:center;padding:50px;color:var(--text-tertiary);font-size:13px;"></div>
+      <!-- Canvas + painel -->
+      <div class="graph-body">
+        <div class="graph-canvas-wrap">
+          <div id="graph-canvas"></div>
+          <!-- Loading overlay -->
+          <div id="graph-loading" class="graph-loading-overlay" style="display:none">
+            <div class="graph-spinner"></div>
+            <div class="graph-spinner-label">Computando correlações</div>
+          </div>
+          <!-- Empty state -->
+          <div id="graph-empty" class="graph-empty-state" style="display:none">
+            <div class="graph-empty-icon">⬡</div>
+            <div class="graph-empty-msg" id="graph-empty-msg">Nenhum IOC encontrado</div>
+          </div>
+        </div>
+
+        <!-- Painel de detalhes do nó -->
+        <div class="graph-detail-panel" id="graph-detail-panel">
+          <div class="gdp-header">
+            <div class="gdp-title">Nó selecionado</div>
+            <div class="gdp-sev-bar" id="gdp-sev-bar"></div>
+          </div>
+          <div id="gdp-body">
+            <div class="gdp-empty">
+              <div class="gdp-pulse">◎</div>
+              <div class="gdp-hint">Clique em um nó<br>para ver os detalhes</div>
+            </div>
+          </div>
+          <div class="gdp-footer" id="gdp-footer" style="display:none">
+            <button class="gdp-btn-drawer" onclick="_graphOpenDrawer()">
+              <span>Contexto completo</span><span>→</span>
+            </button>
+            <button class="gdp-btn-graph" onclick="_graphFromPanel()">↗ grafo</button>
+          </div>
+        </div>
+      </div>
+    </div>
   </section>
 
     </div><!-- /.scroller -->
@@ -3640,13 +3744,15 @@ function _apiHeaders() { return { 'X-API-Key': window.AEGIS_PUBLIC_KEY || '' }; 
 function _overviewInit() {
   if (_ovLoaded) return;
   _ovLoaded = true;
+  var ts = document.getElementById('ov-ts');
+  if (ts) ts.innerHTML = 'Última atualização<br>' + new Date().toLocaleTimeString('pt-BR');
   fetch('/api/overview', { headers: _apiHeaders() })
     .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(_overviewRender)
     .catch(function(e) {
       _ovLoaded = false;
       var l = document.getElementById('ov-loading');
-      if (l) l.textContent = 'Falha ao carregar o panorama (' + e.message + ').';
+      if (l) { l.textContent = 'Falha ao carregar (' + e.message + ')'; l.style.color = '#c0392b'; }
     });
 }
 
@@ -3661,86 +3767,83 @@ function _overviewRender(d) {
   document.getElementById('ov-kpi-campaigns').textContent   = fmt(t.campaigns);
   document.getElementById('ov-kpi-adversaries').textContent = fmt(t.adversaries);
 
-  var gridColor = 'rgba(255,255,255,.05)', tickColor = '#888';
-  Chart.defaults.color = tickColor;
+  var grid = 'rgba(255,255,255,.04)';
+  Chart.defaults.color = '#484848';
   Chart.defaults.font.family = "'JetBrains Mono', monospace";
+  Chart.defaults.font.size = 11;
 
-  /* Timeline — barras empilhadas por severidade */
   var tl = d.timeline || [];
   new Chart(document.getElementById('ov-timeline'), {
-    type: 'bar',
-    data: {
-      labels: tl.map(function(x){ return (x.date||'').slice(5); }),
-      datasets: [
-        { label:'Critical', data: tl.map(function(x){return x.critical;}), backgroundColor:'#c0392b' },
-        { label:'High',     data: tl.map(function(x){return x.high;}),     backgroundColor:'#c06010' },
-        { label:'Medium',   data: tl.map(function(x){return x.medium;}),   backgroundColor:'#8a7000' },
-        { label:'Low',      data: tl.map(function(x){return x.low;}),      backgroundColor:'#1e6b1e' }
-      ]
-    },
-    options: { responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ boxWidth:10, font:{size:10} } } },
-      scales:{ x:{ stacked:true, grid:{display:false} }, y:{ stacked:true, grid:{color:gridColor} } } }
+    type:'bar',
+    data:{ labels: tl.map(function(x){ return (x.date||'').slice(5); }),
+      datasets:[
+        { label:'Critical', data:tl.map(function(x){return x.critical;}), backgroundColor:'#c0392b', borderRadius:2 },
+        { label:'High',     data:tl.map(function(x){return x.high;}),     backgroundColor:'#c06010', borderRadius:2 },
+        { label:'Medium',   data:tl.map(function(x){return x.medium;}),   backgroundColor:'#5a4a00', borderRadius:2 },
+        { label:'Low',      data:tl.map(function(x){return x.low;}),      backgroundColor:'#1a4a1a', borderRadius:2 }
+      ]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ boxWidth:8, padding:14 } } },
+      scales:{ x:{ stacked:true, grid:{display:false}, border:{display:false} },
+               y:{ stacked:true, grid:{color:grid}, border:{display:false} } } }
   });
 
-  /* Severidade — doughnut */
   var sv = d.by_severity || {};
   new Chart(document.getElementById('ov-severity'), {
     type:'doughnut',
     data:{ labels:['Critical','High','Medium','Low'],
-      datasets:[{ data:[sv.CRITICAL||0, sv.HIGH||0, sv.MEDIUM||0, sv.LOW||0],
-        backgroundColor:['#c0392b','#c06010','#8a7000','#1e6b1e'], borderColor:'#0f0f0f', borderWidth:2 }] },
-    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
-      plugins:{ legend:{ position:'right', labels:{ boxWidth:10, font:{size:10} } } } }
+      datasets:[{ data:[sv.CRITICAL||0,sv.HIGH||0,sv.MEDIUM||0,sv.LOW||0],
+        backgroundColor:['#c0392b','#c06010','#5a4a00','#1a4a1a'],
+        borderColor:'#0d0d0d', borderWidth:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'66%',
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:9, padding:12 } } } }
   });
 
-  /* Tipo — doughnut */
   var ty = d.by_type || {}; var tyKeys = Object.keys(ty);
-  var tyPalette = ['#58a6ff','#c8a96e','#c0392b','#2e9b3e','#9b59b6','#e67e22','#16a085'];
+  var tyP = ['#58a6ff','#c8a96e','#c0392b','#3aaa50','#a78bfa','#f59e0b','#06b6d4'];
   new Chart(document.getElementById('ov-type'), {
     type:'doughnut',
     data:{ labels:tyKeys, datasets:[{ data:tyKeys.map(function(k){return ty[k];}),
-      backgroundColor:tyKeys.map(function(_,i){return tyPalette[i%tyPalette.length];}), borderColor:'#0f0f0f', borderWidth:2 }] },
-    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
-      plugins:{ legend:{ position:'right', labels:{ boxWidth:10, font:{size:10} } } } }
+      backgroundColor:tyKeys.map(function(_,i){return tyP[i%tyP.length];}),
+      borderColor:'#0d0d0d', borderWidth:3 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'66%',
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:9, padding:12 } } } }
   });
 
-  /* Táticas MITRE — barras horizontais */
-  var mt = (d.mitre_tactics || []).slice(0, 9);
+  var mt = (d.mitre_tactics || []).slice(0, 8);
   new Chart(document.getElementById('ov-tactics'), {
     type:'bar',
-    data:{ labels: mt.map(function(x){return x.tactic;}),
-      datasets:[{ data: mt.map(function(x){return x.count;}), backgroundColor:'#c8a96e', borderRadius:3 }] },
+    data:{ labels:mt.map(function(x){return x.tactic;}),
+      datasets:[{ data:mt.map(function(x){return x.count;}),
+        backgroundColor: mt.map(function(_,i){ return i===0?'#c8a96e':'rgba(200,169,110,.35)'; }),
+        borderRadius:3 }] },
     options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{ legend:{ display:false } },
-      scales:{ x:{ grid:{color:gridColor} }, y:{ grid:{display:false}, ticks:{font:{size:10}} } } }
+      scales:{ x:{ grid:{color:grid}, border:{display:false} },
+               y:{ grid:{display:false}, border:{display:false}, ticks:{font:{size:11}} } } }
   });
 
-  /* Rankings */
-  _ovRank('ov-campaigns', d.top_campaigns, function(c){ return c.adversary || ('Campanha ' + (c.campaign_id||'').slice(0,8)); },
-    function(c){ return c.count; }, function(c){ _graphFromOverview({ campaign_id: c.campaign_id }); });
-  _ovRank('ov-adversaries', d.top_adversaries, function(c){ return c.adversary; },
-    function(c){ return c.count; }, function(c){ _graphFromOverview({ adversary: c.adversary }); });
-  _ovRank('ov-asns', d.top_asns, function(c){ return 'AS' + c.asn + (c.country ? ' · ' + c.country : ''); },
-    function(c){ return c.count; }, function(c){ _graphFromOverview({ asn: c.asn }); });
-  _ovRank('ov-countries', d.top_countries, function(c){ return c.country; },
-    function(c){ return c.count; }, function(c){ _graphFromOverview({ country: c.country }); });
+  _ovRank('ov-campaigns',   d.top_campaigns,  function(c){ return c.adversary||('Campanha '+String(c.campaign_id||'').slice(0,8)); }, function(c){return c.count;}, function(c){ _graphFromOverview({campaign_id:c.campaign_id}); });
+  _ovRank('ov-adversaries', d.top_adversaries, function(c){ return c.adversary; }, function(c){return c.count;}, function(c){ _graphFromOverview({adversary:c.adversary}); });
+  _ovRank('ov-asns',        d.top_asns,       function(c){ return 'AS'+c.asn+(c.country?' · '+c.country:''); }, function(c){return c.count;}, function(c){ _graphFromOverview({asn:c.asn}); });
+  _ovRank('ov-countries',   d.top_countries,  function(c){ return c.country; }, function(c){return c.count;}, function(c){ _graphFromOverview({country:c.country}); });
 }
 
 function _ovRank(elId, items, nameFn, countFn, onClick) {
   var el = document.getElementById(elId);
   if (!el) return;
   items = items || [];
-  if (!items.length) { el.innerHTML = '<div class="ov-rank-sub" style="padding:8px;">Sem dados</div>'; return; }
+  if (!items.length) { el.innerHTML = '<div style="padding:12px 6px;font-size:11px;color:#2a2a2a;font-family:var(--font-mono)">Sem dados</div>'; return; }
   var max = Math.max.apply(null, items.map(countFn));
   el.innerHTML = '';
-  items.forEach(function(it) {
+  items.forEach(function(it, idx) {
     var row = document.createElement('div');
     row.className = 'ov-rank-row' + (onClick ? '' : ' nolink');
-    var pct = max ? Math.max(8, Math.round(countFn(it) / max * 70)) : 8;
+    var pct = max ? Math.max(6, Math.round(countFn(it) / max * 100)) : 6;
     row.innerHTML =
-      '<span class="ov-rank-name">' + escHtml(String(nameFn(it) || '—')) + '</span>' +
-      '<span class="ov-rank-bar" style="width:' + pct + 'px"></span>' +
+      '<span class="ov-rank-idx">' + (idx+1) + '</span>' +
+      '<span class="ov-rank-name">' + escHtml(String(nameFn(it)||'—')) + '</span>' +
+      '<span class="ov-rank-track"><span class="ov-rank-fill" style="width:' + pct + '%"></span></span>' +
       '<span class="ov-rank-count">' + countFn(it) + '</span>';
     if (onClick) row.addEventListener('click', function(){ onClick(it); });
     el.appendChild(row);
@@ -3753,11 +3856,11 @@ function _graphFromOverview(params) {
 }
 
 /* ════════════════════════════════════════════════════════════════
-   CORRELATION GRAPH (vis-network)
+   CORRELATION GRAPH — Dark Analytics (vis-network)
    ════════════════════════════════════════════════════════════════ */
-var _graphNet = null, _graphInited = false, _graphMeta = {};
-var HUB_COLOR = { campaign:'#c8a96e', asn:'#58a6ff', subnet:'#888888' };
-var EDGE_COLOR = { campaign:'rgba(200,169,110,.55)', asn:'rgba(88,166,255,.45)', subnet:'rgba(136,136,136,.4)' };
+var _graphNet = null, _graphInited = false, _graphMeta = {}, _graphSelectedMeta = null;
+var HUB_COLOR = { campaign:'#c8a96e', asn:'#58a6ff', subnet:'#666666' };
+var EDGE_COLOR = { campaign:'rgba(200,169,110,.4)', asn:'rgba(88,166,255,.35)', subnet:'rgba(100,100,100,.3)' };
 
 function _graphInit() {
   if (_graphInited) return;
@@ -3765,96 +3868,187 @@ function _graphInit() {
   _graphLoad({});
 }
 
+function _graphClearFilter() {
+  document.getElementById('graph-filter-chip').style.display = 'none';
+  _graphLoad({});
+}
+
 function _graphLoad(params) {
   params = params || {};
   var qs = Object.keys(params).filter(function(k){ return params[k] != null && params[k] !== ''; })
     .map(function(k){ return k + '=' + encodeURIComponent(params[k]); }).join('&');
+
+  /* chip de filtro */
   var chip = document.getElementById('graph-filter-chip');
-  var labelMap = { campaign_id:'Campanha', asn:'ASN', country:'País', adversary:'Ator', tactic:'Tática', seed:'IOC' };
+  var chipLabel = document.getElementById('graph-chip-label');
+  var labelMap = { campaign_id:'Campanha', asn:'ASN', country:'País', adversary:'Ator', tactic:'Tática', seed:'Seed' };
   var key = Object.keys(params)[0];
   if (key && params[key]) {
-    chip.style.display = ''; chip.textContent = labelMap[key] + ': ' + params[key];
+    chip.style.display = 'flex';
+    chipLabel.textContent = (labelMap[key] || key) + ': ' + params[key];
   } else { chip.style.display = 'none'; }
 
-  var stats = document.getElementById('graph-stats');
-  stats.textContent = 'carregando…';
+  /* loading state */
+  document.getElementById('graph-stats').textContent = '';
+  document.getElementById('graph-loading').style.display = 'flex';
+  document.getElementById('graph-empty').style.display = 'none';
+  _gdpReset();
+
   fetch('/api/graph' + (qs ? '?' + qs : ''), { headers: _apiHeaders() })
     .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
     .then(_graphRender)
     .catch(function(e){
-      stats.textContent = '';
-      _graphShowEmpty('Falha ao carregar o grafo (' + e.message + ').');
+      document.getElementById('graph-loading').style.display = 'none';
+      document.getElementById('graph-empty').style.display = 'flex';
+      document.getElementById('graph-empty-msg').textContent = 'Falha ao carregar (' + e.message + ')';
     });
 }
 
-function _graphShowEmpty(msg) {
-  document.getElementById('graph-canvas').style.display = 'none';
-  var em = document.getElementById('graph-empty');
-  em.style.display = ''; em.textContent = msg;
-}
-
 function _graphRender(d) {
+  document.getElementById('graph-loading').style.display = 'none';
   var canvas = document.getElementById('graph-canvas');
   var iocs = (d.nodes || []).filter(function(n){ return n.node_kind === 'ioc'; });
+
+  if (!iocs.length) {
+    document.getElementById('graph-empty').style.display = 'flex';
+    document.getElementById('graph-empty-msg').textContent = 'Nenhum IOC correlacionado para este filtro.';
+    return;
+  }
+  document.getElementById('graph-empty').style.display = 'none';
   document.getElementById('graph-stats').textContent =
     iocs.length + ' IOCs · ' + (d.edges || []).length + ' correlações';
-
-  if (!iocs.length) { _graphShowEmpty('Nenhum IOC correlacionado para este filtro.'); return; }
-  document.getElementById('graph-empty').style.display = 'none';
-  canvas.style.display = '';
 
   _graphMeta = {};
   var nodes = (d.nodes || []).map(function(n) {
     _graphMeta[n.id] = n;
     if (n.node_kind === 'hub') {
+      var iscamp = n.hub_type === 'campaign';
       return {
         id: n.id, label: n.label,
-        shape: n.hub_type === 'campaign' ? 'star' : (n.hub_type === 'asn' ? 'hexagon' : 'square'),
-        size: n.hub_type === 'campaign' ? 24 : 16,
-        color: { background: HUB_COLOR[n.hub_type], border: '#fff' },
-        font: { color: '#e8e8e8', size: 13, face: 'JetBrains Mono', strokeWidth: 3, strokeColor: '#000' }
+        shape: iscamp ? 'star' : (n.hub_type === 'asn' ? 'hexagon' : 'square'),
+        size: iscamp ? 26 : 14,
+        color: {
+          background: HUB_COLOR[n.hub_type] || '#666',
+          border: HUB_COLOR[n.hub_type] || '#666',
+          highlight: { background: '#fff', border: HUB_COLOR[n.hub_type] || '#666' },
+          hover:      { background: '#fff', border: HUB_COLOR[n.hub_type] || '#666' }
+        },
+        font: { color: '#e8e8e8', size: 12, face: 'JetBrains Mono', strokeWidth:3, strokeColor:'#050505' },
+        borderWidth: 0, shadow: { enabled:true, color:'rgba(0,0,0,.7)', size:10, x:0, y:2 }
       };
     }
     var sev = (n.severity || 'MEDIUM').toUpperCase();
+    var c = SEV_COLOR[sev] || '#555';
     return {
-      id: n.id, label: n.label, shape: 'dot',
-      size: 7 + Math.min(18, (n.score || 0) / 5),
-      color: { background: SEV_COLOR[sev] || '#555', border: '#000' },
-      font: { color: '#999', size: 10, face: 'JetBrains Mono' },
-      title: sev + ' · ' + (n.type || '') + ' · score ' + (n.score || 0)
+      id: n.id, label: '',   /* sem label nos IOCs para não poluir */
+      shape: 'dot',
+      size: 6 + Math.min(14, Math.round((n.score || 40) / 8)),
+      color: {
+        background: c, border: c,
+        highlight: { background:'#ffffff', border: c },
+        hover:      { background:'#ffffff', border: c }
+      },
+      borderWidth: 0,
+      title: (n.type||'') + ' · ' + sev + ' · score ' + (n.score||0),
+      shadow: { enabled:true, color:'rgba(0,0,0,.8)', size:6, x:0, y:1 }
     };
   });
+
   var edges = (d.edges || []).map(function(e) {
-    return { from: e.from, to: e.to, width: e.weight || 1,
-             color: { color: EDGE_COLOR[e.kind] || '#444', highlight: '#fff' }, smooth: false };
+    return {
+      from: e.from, to: e.to,
+      width: e.kind === 'campaign' ? 1.5 : 1,
+      color: { color: EDGE_COLOR[e.kind] || 'rgba(80,80,80,.3)', highlight:'rgba(255,255,255,.5)', hover:'rgba(255,255,255,.3)' },
+      smooth: { enabled: true, type: 'continuous', roundness: 0.15 }
+    };
   });
 
   var data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
   var options = {
-    layout: { improvedLayout: false },
-    physics: { stabilization: { iterations: 220 },
-      barnesHut: { gravitationalConstant: -4200, springLength: 110, springConstant: 0.035, damping: 0.45 } },
-    interaction: { hover: true, tooltipDelay: 120, navigationButtons: false },
-    nodes: { borderWidth: 1.5 },
-    edges: { selectionWidth: 2 }
+    layout: { improvedLayout: iocs.length < 80 },
+    physics: {
+      stabilization: { iterations: 180, fit: true },
+      barnesHut: { gravitationalConstant:-5500, centralGravity:.25, springLength:95, springConstant:.04, damping:.5, avoidOverlap:.1 }
+    },
+    interaction: { hover:true, tooltipDelay:200, navigationButtons:false, zoomView:true, dragView:true },
+    nodes: { borderWidth:0 },
+    edges: { selectionWidth:2.5, hoverWidth:.5 },
+    background: 'transparent'
   };
 
-  if (_graphNet) { _graphNet.setData(data); }
-  else {
+  if (_graphNet) {
+    _graphNet.setOptions(options);
+    _graphNet.setData(data);
+  } else {
     _graphNet = new vis.Network(canvas, data, options);
+
     _graphNet.on('click', function(p) {
-      if (!p.nodes.length) return;
+      if (!p.nodes.length) { _gdpReset(); return; }
       var meta = _graphMeta[p.nodes[0]];
       if (!meta) return;
       if (meta.node_kind === 'ioc') {
-        openDrawer({ value: meta.id, type: meta.type, severity: meta.severity });
+        _gdpShow(meta);
       } else if (meta.hub_type === 'campaign') {
-        _graphLoad({ campaign_id: String(meta.id).replace('campaign:', '') });
+        _graphLoad({ campaign_id: String(meta.id).replace('campaign:','') });
       } else if (meta.hub_type === 'asn') {
-        _graphLoad({ asn: String(meta.id).replace('asn:', '') });
+        _graphLoad({ asn: String(meta.id).replace('asn:','') });
       }
     });
+
+    _graphNet.on('deselectNode', function() { _gdpReset(); });
   }
+}
+
+/* ── Node Detail Panel ────────────────────────────────────────── */
+function _gdpReset() {
+  _graphSelectedMeta = null;
+  document.getElementById('gdp-sev-bar').style.background = '#1e1e1e';
+  document.getElementById('gdp-footer').style.display = 'none';
+  document.getElementById('gdp-body').innerHTML =
+    '<div class="gdp-empty">' +
+    '<div class="gdp-pulse">◎</div>' +
+    '<div class="gdp-hint">Clique em um nó<br>para ver os detalhes</div>' +
+    '</div>';
+}
+
+function _gdpShow(meta) {
+  _graphSelectedMeta = meta;
+  var sev = (meta.severity||'MEDIUM').toUpperCase();
+  var sevColors = { CRITICAL:'#c0392b', HIGH:'#c06010', MEDIUM:'#8a7000', LOW:'#1e6b1e' };
+  document.getElementById('gdp-sev-bar').style.background = sevColors[sev] || '#444';
+  document.getElementById('gdp-footer').style.display = 'flex';
+
+  var scoreBar = meta.score
+    ? '<div class="gdp-score-bar"><div class="gdp-score-fill" style="width:'+Math.min(100,meta.score)+'%"></div></div>'
+    : '';
+
+  var rows = [
+    ['valor',  '<span style="font-size:10.5px;word-break:break-all">' + escHtml(meta.id||'—') + '</span>'],
+    ['tipo',   escHtml(meta.type||'—')],
+    ['sev',    '<span class="gdp-val sev-'+sev.toLowerCase()+'">' + sev + '</span>'],
+    ['score',  (meta.score||0) + scoreBar],
+  ];
+  if (meta.tactic)   rows.push(['tática',  escHtml(meta.tactic)]);
+  if (meta.adversary)rows.push(['ator',    '<span style="color:var(--accent-gold)">' + escHtml(meta.adversary) + '</span>']);
+  if (meta.asn)      rows.push(['ASN',     'AS' + meta.asn + (meta.country ? ' · ' + meta.country : '')]);
+  if (meta.source)   rows.push(['fonte',   escHtml(meta.source)]);
+
+  var html = rows.map(function(r) {
+    return '<div class="gdp-field"><div class="gdp-key">' + r[0] + '</div>' +
+           '<div class="gdp-val">' + r[1] + '</div></div>';
+  }).join('');
+
+  document.getElementById('gdp-body').innerHTML = '<div class="gdp-fields">' + html + '</div>';
+}
+
+function _graphOpenDrawer() {
+  if (!_graphSelectedMeta) return;
+  openDrawer({ value:_graphSelectedMeta.id, type:_graphSelectedMeta.type, severity:_graphSelectedMeta.severity });
+}
+
+function _graphFromPanel() {
+  if (!_graphSelectedMeta) return;
+  _graphLoad({ seed: _graphSelectedMeta.id });
 }
 
 function _graphSeedSearch() {
