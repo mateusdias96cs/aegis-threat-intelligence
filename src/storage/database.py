@@ -464,6 +464,223 @@ class DatabaseManager:
             print(f"[database] get_trends failed: {e}")
             return []
 
+    # ── Threat Overview (panorama do SOC) ─────────────────────────────────────
+
+    # IOCs que ainda contam para o panorama operacional (exclui ruído arquivado).
+    _ACTIVE_FILTER = "(ioc_status IS NULL OR ioc_status NOT IN ('FALSE_POSITIVE', 'HISTORICAL'))"
+
+    def get_overview(self) -> dict:
+        """Agregações para o painel de panorama (Threat Overview).
+
+        Um único método entrega tudo que o dashboard precisa: distribuições,
+        rankings de infraestrutura atacante (ASN/país), táticas MITRE, atores e
+        campanhas — calculado no banco para não trafegar 9k linhas ao browser.
+        """
+        s = self._session
+        af = self._ACTIVE_FILTER
+
+        def fetch(sql: str) -> list:
+            return s.execute(text(sql)).all()
+
+        by_severity = {(r[0] or "UNKNOWN"): r[1] for r in fetch(
+            f"SELECT severity, COUNT(*) FROM iocs WHERE {af} GROUP BY severity")}
+        by_type = {(r[0] or "unknown"): r[1] for r in fetch(
+            f"SELECT type, COUNT(*) FROM iocs WHERE {af} GROUP BY type")}
+        by_status = {(r[0] or "UNKNOWN"): r[1] for r in fetch(
+            "SELECT ioc_status, COUNT(*) FROM iocs GROUP BY ioc_status")}
+
+        top_sources = [{"source": r[0], "count": r[1]} for r in fetch(
+            f"""SELECT source, COUNT(*) c FROM iocs
+                WHERE {af} AND source IS NOT NULL AND source != ''
+                GROUP BY source ORDER BY c DESC LIMIT 12""")]
+        top_asns = [{"asn": r[0], "count": r[1], "country": r[2]} for r in fetch(
+            f"""SELECT asn, COUNT(*) c, MAX(country) FROM iocs
+                WHERE {af} AND asn IS NOT NULL AND asn > 0
+                GROUP BY asn ORDER BY c DESC LIMIT 10""")]
+        top_countries = [{"country": r[0], "count": r[1]} for r in fetch(
+            f"""SELECT country, COUNT(*) c FROM iocs
+                WHERE {af} AND country IS NOT NULL AND country != ''
+                GROUP BY country ORDER BY c DESC LIMIT 10""")]
+        mitre_tactics = [{"tactic": r[0], "count": r[1]} for r in fetch(
+            f"""SELECT mitre_tactic, COUNT(*) c FROM iocs
+                WHERE {af} AND mitre_tactic IS NOT NULL AND mitre_tactic != ''
+                GROUP BY mitre_tactic ORDER BY c DESC""")]
+        top_adversaries = [{"adversary": r[0], "count": r[1]} for r in fetch(
+            f"""SELECT adversary, COUNT(*) c FROM iocs
+                WHERE {af} AND adversary IS NOT NULL AND adversary != ''
+                GROUP BY adversary ORDER BY c DESC LIMIT 10""")]
+        top_campaigns = [{"campaign_id": r[0], "count": r[1], "adversary": r[2]} for r in fetch(
+            f"""SELECT campaign_id, COUNT(*) c, MAX(adversary) FROM iocs
+                WHERE {af} AND campaign_id IS NOT NULL AND campaign_id != ''
+                GROUP BY campaign_id ORDER BY c DESC LIMIT 10""")]
+
+        total_active = sum(by_severity.values())
+        return {
+            "totals": {
+                "active":   total_active,
+                "critical": by_severity.get("CRITICAL", 0),
+                "high":     by_severity.get("HIGH", 0),
+                "campaigns": len(top_campaigns),
+                "adversaries": len(top_adversaries),
+            },
+            "by_severity":     by_severity,
+            "by_type":         by_type,
+            "by_status":       by_status,
+            "top_sources":     top_sources,
+            "top_asns":        top_asns,
+            "top_countries":   top_countries,
+            "mitre_tactics":   mitre_tactics,
+            "top_adversaries": top_adversaries,
+            "top_campaigns":   top_campaigns,
+            "timeline":        self.get_trends(30),
+        }
+
+    # ── Correlation Graph (entrelaçamento de IOCs) ────────────────────────────
+
+    # Pesos de aresta por força do sinal de correlação (maior = mais confiável).
+    _EDGE_WEIGHTS = {"campaign": 3, "asn": 2, "subnet": 2}
+
+    def get_correlation_graph(
+        self,
+        campaign_id: str | None = None,
+        asn: int | None = None,
+        tactic: str | None = None,
+        country: str | None = None,
+        adversary: str | None = None,
+        seed: str | None = None,
+        limit: int = 120,
+    ) -> dict:
+        """Monta um grafo navegável (nós = IOCs, arestas = correlações reais).
+
+        As arestas usam SÓ os sinais estruturais que o pipeline já calcula —
+        campanha compartilhada (OTX pulse), mesmo ASN e mesmo /24 — que indicam
+        infraestrutura comum do atacante. Os nós são limitados (`limit`) e as
+        arestas são computadas em memória sobre esse conjunto (O(n²) acotado).
+        """
+        limit = max(10, min(limit, 250))
+        s = self._session
+        af = self._ACTIVE_FILTER
+        cols = ("value, type, severity, source, score_atual, confidence_score, "
+                "campaign_id, asn, mitre_tactic, country, adversary, first_seen")
+
+        if campaign_id:
+            where, params = "campaign_id = :cid", {"cid": campaign_id}
+        elif asn is not None:
+            where, params = "type = 'ip' AND asn = :asn", {"asn": asn}
+        elif adversary:
+            where, params = "adversary = :adv", {"adv": adversary}
+        elif tactic:
+            where, params = "mitre_tactic = :tactic", {"tactic": tactic}
+        elif country:
+            where, params = "country = :country", {"country": country}
+        elif seed:
+            # Nós = o IOC semente + os que compartilham sua campanha/ASN/-24.
+            anchor = s.execute(
+                text(f"SELECT {cols} FROM iocs WHERE LOWER(value) = LOWER(:v)"),
+                {"v": seed},
+            ).mappings().fetchone()
+            if not anchor:
+                return {"nodes": [], "edges": [], "filter": {"seed": seed}}
+            a = dict(anchor)
+            net = ""
+            if a.get("type") == "ip" and (a.get("value") or "").count(".") == 3:
+                net = a["value"].rsplit(".", 1)[0] + ".%"
+            rows = s.execute(text(f"""
+                SELECT {cols} FROM iocs
+                WHERE {af} AND LOWER(value) != LOWER(:v) AND (
+                    (:cid != '' AND campaign_id = :cid)
+                    OR (:asn != -1 AND type = 'ip' AND asn = :asn)
+                    OR (:net != '' AND value LIKE :net)
+                )
+                LIMIT :limit
+            """), {
+                "v": a["value"], "cid": a.get("campaign_id") or "",
+                "asn": a.get("asn") if a.get("asn") is not None else -1,
+                "net": net, "limit": limit - 1,
+            }).mappings().all()
+            return self._build_graph([a] + [dict(r) for r in rows], {"seed": seed})
+        else:
+            # Default: clusters completos das maiores campanhas (visão mais útil).
+            where = f"""campaign_id IN (
+                SELECT campaign_id FROM iocs
+                WHERE {af} AND campaign_id IS NOT NULL AND campaign_id != ''
+                GROUP BY campaign_id ORDER BY COUNT(*) DESC LIMIT 8
+            )"""
+            params = {}
+
+        rows = s.execute(
+            text(f"SELECT {cols} FROM iocs WHERE {af} AND ({where}) LIMIT :limit"),
+            {**params, "limit": limit},
+        ).mappings().all()
+        flt = {"campaign_id": campaign_id, "asn": asn, "tactic": tactic,
+               "country": country, "adversary": adversary}
+        return self._build_graph([dict(r) for r in rows], {k: v for k, v in flt.items() if v})
+
+    def _build_graph(self, rows: list[dict], flt: dict) -> dict:
+        """Converte linhas de IOC em um grafo hub-and-spoke.
+
+        Cada sinal de correlação (campanha, ASN, /24) vira um NÓ HUB e os IOCs se
+        ligam a ele — em vez de conectar todos os pares (que vira um emaranhado
+        N²). Dois IOCs ligados ao mesmo hub estão correlacionados; o cluster fica
+        visualmente óbvio. Hubs com um único IOC são podados (não há correlação).
+        """
+        from collections import Counter
+
+        nodes: list[dict] = []
+        hubs: dict[str, dict] = {}
+        edges: list[dict] = []
+
+        def hub(hub_id: str, label: str, hub_type: str) -> str:
+            if hub_id not in hubs:
+                hubs[hub_id] = {
+                    "id": hub_id, "label": label,
+                    "node_kind": "hub", "hub_type": hub_type,
+                }
+            return hub_id
+
+        for r in rows:
+            val = r["value"]
+            score = r.get("score_atual")
+            if score is None:
+                score = r.get("confidence_score") or 0
+            nodes.append({
+                "id":          val,
+                "label":       (val or "")[:42],
+                "node_kind":   "ioc",
+                "type":        r.get("type"),
+                "severity":    (r.get("severity") or "MEDIUM").upper(),
+                "score":       round(float(score), 1),
+                "source":      r.get("source"),
+                "campaign_id": r.get("campaign_id"),
+                "asn":         r.get("asn"),
+                "tactic":      r.get("mitre_tactic"),
+                "country":     r.get("country"),
+                "adversary":   r.get("adversary"),
+            })
+
+            cid = r.get("campaign_id")
+            if cid:
+                label = r.get("adversary") or f"Campanha {str(cid)[:8]}"
+                hid = hub(f"campaign:{cid}", label, "campaign")
+                edges.append({"from": val, "to": hid, "kind": "campaign", "weight": 3})
+
+            if r.get("type") == "ip" and r.get("asn") and r["asn"] > 0:
+                hid = hub(f"asn:{r['asn']}", f"AS{r['asn']}", "asn")
+                edges.append({"from": val, "to": hid, "kind": "asn", "weight": 2})
+
+            if r.get("type") == "ip" and (val or "").count(".") == 3 and ":" not in (val or ""):
+                net = val.rsplit(".", 1)[0] + ".0/24"
+                hid = hub(f"subnet:{net}", net, "subnet")
+                edges.append({"from": val, "to": hid, "kind": "subnet", "weight": 2})
+
+        # Poda hubs triviais: um hub com um só IOC não evidencia correlação.
+        spokes = Counter(e["to"] for e in edges)
+        keep = {h for h, c in spokes.items() if c >= 2}
+        kept_hubs = [h for hid, h in hubs.items() if hid in keep]
+        edges = [e for e in edges if e["to"] in keep]
+
+        return {"nodes": nodes + kept_hubs, "edges": edges, "filter": flt}
+
     # ── BioSec decay ──────────────────────────────────────────────────────────
 
     _HALF_LIVES: dict = {

@@ -475,9 +475,47 @@
     .similar-pill:hover { background:rgba(255,255,255,.08); color:#fff; border-color:var(--red-muted); }
     .camp-spinner { text-align:center; padding:48px 20px; }
     .camp-no-similar { font-size:12px; color:var(--text-tertiary); font-style:italic; }
+
+    /* ── Threat Overview ── */
+    .ov-kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:16px; }
+    .ov-kpi { background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:16px 14px; }
+    .ov-kpi-val { font-size:26px; font-weight:700; color:var(--text-primary); font-family:var(--font-mono); line-height:1; }
+    .ov-kpi-lbl { font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-secondary); margin-top:7px; }
+    .ov-kpi-crit { border-top:2px solid #c0392b; } .ov-kpi-crit .ov-kpi-val { color:#e05a4b; }
+    .ov-kpi-high { border-top:2px solid #c06010; } .ov-kpi-high .ov-kpi-val { color:#d98030; }
+    .ov-grid { display:grid; grid-template-columns:repeat(2,1fr); gap:12px; margin-bottom:12px; }
+    .ov-card { background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; padding:14px 16px; min-width:0; }
+    .ov-span2 { grid-column:span 2; }
+    .ov-card-title { font-size:11px; font-weight:600; letter-spacing:1.4px; text-transform:uppercase; color:var(--text-secondary); margin-bottom:12px; }
+    .ov-rank { display:flex; flex-direction:column; gap:2px; }
+    .ov-rank-row { display:flex; align-items:center; gap:10px; padding:7px 8px; border-radius:4px; cursor:pointer; transition:background 140ms ease; }
+    .ov-rank-row:hover { background:rgba(255,255,255,.05); }
+    .ov-rank-row.nolink { cursor:default; } .ov-rank-row.nolink:hover { background:transparent; }
+    .ov-rank-name { font-size:12px; color:var(--text-primary); font-family:var(--font-mono); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+    .ov-rank-sub { font-size:10px; color:var(--text-tertiary); }
+    .ov-rank-bar { height:5px; border-radius:3px; background:var(--red-primary); opacity:.55; flex-shrink:0; }
+    .ov-rank-count { font-size:11px; color:var(--text-secondary); font-family:var(--font-mono); min-width:34px; text-align:right; }
+    @media (max-width:900px){ .ov-kpis{grid-template-columns:repeat(2,1fr);} .ov-grid{grid-template-columns:1fr;} .ov-span2{grid-column:span 1;} }
+
+    /* ── Correlation Graph ── */
+    .graph-toolbar { display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+    .graph-input { flex:0 1 320px; background:var(--bg-surface); border:1px solid var(--border-strong); border-radius:5px; padding:8px 11px; color:var(--text-primary); font-size:12px; font-family:var(--font-mono); }
+    .graph-input:focus { outline:none; border-color:var(--red-muted); }
+    .graph-btn { background:var(--red-primary); color:#fff; border:none; border-radius:5px; padding:8px 14px; font-size:11px; font-weight:600; letter-spacing:.6px; text-transform:uppercase; cursor:pointer; transition:opacity 140ms ease; }
+    .graph-btn:hover { opacity:.86; }
+    .graph-btn-ghost { background:transparent; border:1px solid var(--border-strong); color:var(--text-secondary); }
+    .graph-btn-ghost:hover { color:#fff; border-color:var(--red-muted); }
+    .graph-chip { font-size:11px; font-family:var(--font-mono); color:var(--accent-gold); background:rgba(200,169,110,.10); border:1px solid rgba(200,169,110,.35); border-radius:999px; padding:4px 11px; }
+    .graph-legend { display:flex; align-items:center; gap:14px; flex-wrap:wrap; margin-bottom:10px; padding:8px 12px; background:var(--bg-surface); border:1px solid var(--border); border-radius:6px; }
+    .gl-item { display:flex; align-items:center; gap:6px; font-size:10.5px; color:var(--text-secondary); letter-spacing:.4px; }
+    .gl-dot { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .gl-hub { width:11px; height:11px; border:2px solid; border-radius:3px; display:inline-block; }
+    .gl-sep { width:1px; height:16px; background:var(--border-strong); }
+    #graph-canvas { height:560px; background:var(--bg-surface); border:1px solid var(--border); border-radius:8px; }
   </style>
   <!-- AEGIS_PUBLIC_KEY_PLACEHOLDER -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/vis-network/9.1.9/dist/vis-network.min.js"></script>
 </head>
 <body>
 
@@ -500,6 +538,10 @@
       <button id="btn-ioc" class="sb-item active" onclick="switchTab('ioc')">
         <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg></span>
         <span>IOC Dashboard</span>
+      </button>
+      <button id="btn-overview" class="sb-item" onclick="switchTab('overview')">
+        <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 13h4l3 8 4-16 3 8h4"/></svg></span>
+        <span>Threat Overview</span>
       </button>
       <button id="btn-lookup" class="sb-item" onclick="switchTab('lookup')">
         <span class="sb-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg></span>
@@ -529,6 +571,14 @@
           </svg>
         </span>
         <span>Campaigns</span>
+      </button>
+      <button id="btn-graph" class="sb-item" onclick="switchTab('graph')">
+        <span class="sb-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="5" cy="6" r="2.4"/><circle cx="19" cy="6" r="2.4"/><circle cx="12" cy="18" r="2.4"/><path d="M6.8 7.3 10.6 16M17.2 7.3 13.4 16M7 6h10"/>
+          </svg>
+        </span>
+        <span>Correlation Graph</span>
       </button>
     </nav>
     <div class="sb-rule"></div>
@@ -984,6 +1034,85 @@
 
   </section>
 
+  <!-- ═══ THREAT OVERVIEW ═══ -->
+  <section id="tab-overview" style="display:none">
+    <div style="margin-bottom:16px;">
+      <h2 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:5px;">Threat Overview</h2>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Panorama operacional — distribuição de ameaças, infraestrutura atacante e atividade recente. Clique numa campanha, ator ou ASN para investigar no grafo de correlação.</p>
+    </div>
+
+    <div id="ov-loading" style="text-align:center;padding:50px;color:var(--text-tertiary);font-size:13px;">Carregando panorama…</div>
+
+    <div id="ov-content" style="display:none">
+      <!-- KPIs -->
+      <div class="ov-kpis">
+        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-active">—</div><div class="ov-kpi-lbl">IOCs Ativos</div></div>
+        <div class="ov-kpi ov-kpi-crit"><div class="ov-kpi-val" id="ov-kpi-critical">—</div><div class="ov-kpi-lbl">Critical</div></div>
+        <div class="ov-kpi ov-kpi-high"><div class="ov-kpi-val" id="ov-kpi-high">—</div><div class="ov-kpi-lbl">High</div></div>
+        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-campaigns">—</div><div class="ov-kpi-lbl">Campanhas</div></div>
+        <div class="ov-kpi"><div class="ov-kpi-val" id="ov-kpi-adversaries">—</div><div class="ov-kpi-lbl">Atores</div></div>
+      </div>
+
+      <!-- Charts -->
+      <div class="ov-grid">
+        <div class="ov-card ov-span2">
+          <div class="ov-card-title">Atividade — últimos 30 dias</div>
+          <div style="height:200px"><canvas id="ov-timeline"></canvas></div>
+        </div>
+        <div class="ov-card">
+          <div class="ov-card-title">Por severidade</div>
+          <div style="height:200px"><canvas id="ov-severity"></canvas></div>
+        </div>
+        <div class="ov-card">
+          <div class="ov-card-title">Por tipo</div>
+          <div style="height:200px"><canvas id="ov-type"></canvas></div>
+        </div>
+        <div class="ov-card ov-span2">
+          <div class="ov-card-title">Táticas MITRE ATT&amp;CK</div>
+          <div style="height:210px"><canvas id="ov-tactics"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Rankings -->
+      <div class="ov-grid">
+        <div class="ov-card"><div class="ov-card-title">Top Campanhas</div><div id="ov-campaigns" class="ov-rank"></div></div>
+        <div class="ov-card"><div class="ov-card-title">Top Atores</div><div id="ov-adversaries" class="ov-rank"></div></div>
+        <div class="ov-card"><div class="ov-card-title">Top ASNs atacantes</div><div id="ov-asns" class="ov-rank"></div></div>
+        <div class="ov-card"><div class="ov-card-title">Top Países</div><div id="ov-countries" class="ov-rank"></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ CORRELATION GRAPH ═══ -->
+  <section id="tab-graph" style="display:none">
+    <div style="margin-bottom:14px;">
+      <h2 style="font-size:17px;font-weight:600;color:var(--text-primary);margin-bottom:5px;">Correlation Graph</h2>
+      <p style="font-size:12px;color:var(--text-secondary);line-height:1.6;">Entrelaçamento de IOCs por infraestrutura comum do atacante. Os hubs (campanha, ASN, /24) revelam quais indicadores co-ocorrem. Clique num IOC para abrir o contexto completo.</p>
+    </div>
+
+    <div class="graph-toolbar">
+      <input id="graph-seed" class="graph-input" placeholder="Investigar um IOC (IP/domínio/hash)…" />
+      <button class="graph-btn" onclick="_graphSeedSearch()">Investigar</button>
+      <button class="graph-btn graph-btn-ghost" onclick="_graphLoad({})">Top campanhas</button>
+      <span id="graph-filter-chip" class="graph-chip" style="display:none"></span>
+      <span id="graph-stats" style="margin-left:auto;font-size:11px;color:var(--text-secondary);font-family:var(--font-mono);"></span>
+    </div>
+
+    <div class="graph-legend">
+      <span class="gl-item"><i class="gl-dot" style="background:#c0392b"></i>Critical</span>
+      <span class="gl-item"><i class="gl-dot" style="background:#c06010"></i>High</span>
+      <span class="gl-item"><i class="gl-dot" style="background:#8a7000"></i>Medium</span>
+      <span class="gl-item"><i class="gl-dot" style="background:#1e6b1e"></i>Low</span>
+      <span class="gl-sep"></span>
+      <span class="gl-item"><i class="gl-hub" style="border-color:#c8a96e"></i>Campanha</span>
+      <span class="gl-item"><i class="gl-hub" style="border-color:#58a6ff"></i>ASN</span>
+      <span class="gl-item"><i class="gl-hub" style="border-color:#888"></i>Sub-rede /24</span>
+    </div>
+
+    <div id="graph-canvas"></div>
+    <div id="graph-empty" style="display:none;text-align:center;padding:50px;color:var(--text-tertiary);font-size:13px;"></div>
+  </section>
+
     </div><!-- /.scroller -->
 
     <footer>AEGIS Threat Intelligence &mdash; {{ generated_at }}</footer>
@@ -1294,13 +1423,15 @@
 
   /* ── Tab switching ── */
   function switchTab(tab) {
-    ['ioc','lookup','profiling','mitre','workbench','campaigns'].forEach(function(t) {
+    ['ioc','overview','lookup','profiling','mitre','workbench','campaigns','graph'].forEach(function(t) {
       var el = document.getElementById('tab-' + t);
       if (el) el.style.display = t === tab ? '' : 'none';
       var btn = document.getElementById('btn-' + t);
       if (btn) btn.classList.toggle('active', t === tab);
     });
     if (tab === 'workbench') _wbRender();
+    if (tab === 'overview') _overviewInit();
+    if (tab === 'graph') _graphInit();
   }
 
   /* Country filter removed — rows are now loaded dynamically via API */
@@ -3498,6 +3629,241 @@ function _campInfoBlock(label, value) {
     '<div class="camp-info-value">' + value + '</div>' +
     '</div>';
 }
+
+/* ════════════════════════════════════════════════════════════════
+   THREAT OVERVIEW
+   ════════════════════════════════════════════════════════════════ */
+var _ovLoaded = false;
+var SEV_COLOR = { CRITICAL:'#c0392b', HIGH:'#c06010', MEDIUM:'#8a7000', LOW:'#1e6b1e' };
+function _apiHeaders() { return { 'X-API-Key': window.AEGIS_PUBLIC_KEY || '' }; }
+
+function _overviewInit() {
+  if (_ovLoaded) return;
+  _ovLoaded = true;
+  fetch('/api/overview', { headers: _apiHeaders() })
+    .then(function(r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(_overviewRender)
+    .catch(function(e) {
+      _ovLoaded = false;
+      var l = document.getElementById('ov-loading');
+      if (l) l.textContent = 'Falha ao carregar o panorama (' + e.message + ').';
+    });
+}
+
+function _overviewRender(d) {
+  document.getElementById('ov-loading').style.display = 'none';
+  document.getElementById('ov-content').style.display = '';
+  var t = d.totals || {};
+  var fmt = function(n) { return (n || 0).toLocaleString('pt-BR'); };
+  document.getElementById('ov-kpi-active').textContent      = fmt(t.active);
+  document.getElementById('ov-kpi-critical').textContent    = fmt(t.critical);
+  document.getElementById('ov-kpi-high').textContent        = fmt(t.high);
+  document.getElementById('ov-kpi-campaigns').textContent   = fmt(t.campaigns);
+  document.getElementById('ov-kpi-adversaries').textContent = fmt(t.adversaries);
+
+  var gridColor = 'rgba(255,255,255,.05)', tickColor = '#888';
+  Chart.defaults.color = tickColor;
+  Chart.defaults.font.family = "'JetBrains Mono', monospace";
+
+  /* Timeline — barras empilhadas por severidade */
+  var tl = d.timeline || [];
+  new Chart(document.getElementById('ov-timeline'), {
+    type: 'bar',
+    data: {
+      labels: tl.map(function(x){ return (x.date||'').slice(5); }),
+      datasets: [
+        { label:'Critical', data: tl.map(function(x){return x.critical;}), backgroundColor:'#c0392b' },
+        { label:'High',     data: tl.map(function(x){return x.high;}),     backgroundColor:'#c06010' },
+        { label:'Medium',   data: tl.map(function(x){return x.medium;}),   backgroundColor:'#8a7000' },
+        { label:'Low',      data: tl.map(function(x){return x.low;}),      backgroundColor:'#1e6b1e' }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ labels:{ boxWidth:10, font:{size:10} } } },
+      scales:{ x:{ stacked:true, grid:{display:false} }, y:{ stacked:true, grid:{color:gridColor} } } }
+  });
+
+  /* Severidade — doughnut */
+  var sv = d.by_severity || {};
+  new Chart(document.getElementById('ov-severity'), {
+    type:'doughnut',
+    data:{ labels:['Critical','High','Medium','Low'],
+      datasets:[{ data:[sv.CRITICAL||0, sv.HIGH||0, sv.MEDIUM||0, sv.LOW||0],
+        backgroundColor:['#c0392b','#c06010','#8a7000','#1e6b1e'], borderColor:'#0f0f0f', borderWidth:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:10, font:{size:10} } } } }
+  });
+
+  /* Tipo — doughnut */
+  var ty = d.by_type || {}; var tyKeys = Object.keys(ty);
+  var tyPalette = ['#58a6ff','#c8a96e','#c0392b','#2e9b3e','#9b59b6','#e67e22','#16a085'];
+  new Chart(document.getElementById('ov-type'), {
+    type:'doughnut',
+    data:{ labels:tyKeys, datasets:[{ data:tyKeys.map(function(k){return ty[k];}),
+      backgroundColor:tyKeys.map(function(_,i){return tyPalette[i%tyPalette.length];}), borderColor:'#0f0f0f', borderWidth:2 }] },
+    options:{ responsive:true, maintainAspectRatio:false, cutout:'62%',
+      plugins:{ legend:{ position:'right', labels:{ boxWidth:10, font:{size:10} } } } }
+  });
+
+  /* Táticas MITRE — barras horizontais */
+  var mt = (d.mitre_tactics || []).slice(0, 9);
+  new Chart(document.getElementById('ov-tactics'), {
+    type:'bar',
+    data:{ labels: mt.map(function(x){return x.tactic;}),
+      datasets:[{ data: mt.map(function(x){return x.count;}), backgroundColor:'#c8a96e', borderRadius:3 }] },
+    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ x:{ grid:{color:gridColor} }, y:{ grid:{display:false}, ticks:{font:{size:10}} } } }
+  });
+
+  /* Rankings */
+  _ovRank('ov-campaigns', d.top_campaigns, function(c){ return c.adversary || ('Campanha ' + (c.campaign_id||'').slice(0,8)); },
+    function(c){ return c.count; }, function(c){ _graphFromOverview({ campaign_id: c.campaign_id }); });
+  _ovRank('ov-adversaries', d.top_adversaries, function(c){ return c.adversary; },
+    function(c){ return c.count; }, function(c){ _graphFromOverview({ adversary: c.adversary }); });
+  _ovRank('ov-asns', d.top_asns, function(c){ return 'AS' + c.asn + (c.country ? ' · ' + c.country : ''); },
+    function(c){ return c.count; }, function(c){ _graphFromOverview({ asn: c.asn }); });
+  _ovRank('ov-countries', d.top_countries, function(c){ return c.country; },
+    function(c){ return c.count; }, function(c){ _graphFromOverview({ country: c.country }); });
+}
+
+function _ovRank(elId, items, nameFn, countFn, onClick) {
+  var el = document.getElementById(elId);
+  if (!el) return;
+  items = items || [];
+  if (!items.length) { el.innerHTML = '<div class="ov-rank-sub" style="padding:8px;">Sem dados</div>'; return; }
+  var max = Math.max.apply(null, items.map(countFn));
+  el.innerHTML = '';
+  items.forEach(function(it) {
+    var row = document.createElement('div');
+    row.className = 'ov-rank-row' + (onClick ? '' : ' nolink');
+    var pct = max ? Math.max(8, Math.round(countFn(it) / max * 70)) : 8;
+    row.innerHTML =
+      '<span class="ov-rank-name">' + escHtml(String(nameFn(it) || '—')) + '</span>' +
+      '<span class="ov-rank-bar" style="width:' + pct + 'px"></span>' +
+      '<span class="ov-rank-count">' + countFn(it) + '</span>';
+    if (onClick) row.addEventListener('click', function(){ onClick(it); });
+    el.appendChild(row);
+  });
+}
+
+function _graphFromOverview(params) {
+  switchTab('graph');
+  _graphLoad(params);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   CORRELATION GRAPH (vis-network)
+   ════════════════════════════════════════════════════════════════ */
+var _graphNet = null, _graphInited = false, _graphMeta = {};
+var HUB_COLOR = { campaign:'#c8a96e', asn:'#58a6ff', subnet:'#888888' };
+var EDGE_COLOR = { campaign:'rgba(200,169,110,.55)', asn:'rgba(88,166,255,.45)', subnet:'rgba(136,136,136,.4)' };
+
+function _graphInit() {
+  if (_graphInited) return;
+  _graphInited = true;
+  _graphLoad({});
+}
+
+function _graphLoad(params) {
+  params = params || {};
+  var qs = Object.keys(params).filter(function(k){ return params[k] != null && params[k] !== ''; })
+    .map(function(k){ return k + '=' + encodeURIComponent(params[k]); }).join('&');
+  var chip = document.getElementById('graph-filter-chip');
+  var labelMap = { campaign_id:'Campanha', asn:'ASN', country:'País', adversary:'Ator', tactic:'Tática', seed:'IOC' };
+  var key = Object.keys(params)[0];
+  if (key && params[key]) {
+    chip.style.display = ''; chip.textContent = labelMap[key] + ': ' + params[key];
+  } else { chip.style.display = 'none'; }
+
+  var stats = document.getElementById('graph-stats');
+  stats.textContent = 'carregando…';
+  fetch('/api/graph' + (qs ? '?' + qs : ''), { headers: _apiHeaders() })
+    .then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); })
+    .then(_graphRender)
+    .catch(function(e){
+      stats.textContent = '';
+      _graphShowEmpty('Falha ao carregar o grafo (' + e.message + ').');
+    });
+}
+
+function _graphShowEmpty(msg) {
+  document.getElementById('graph-canvas').style.display = 'none';
+  var em = document.getElementById('graph-empty');
+  em.style.display = ''; em.textContent = msg;
+}
+
+function _graphRender(d) {
+  var canvas = document.getElementById('graph-canvas');
+  var iocs = (d.nodes || []).filter(function(n){ return n.node_kind === 'ioc'; });
+  document.getElementById('graph-stats').textContent =
+    iocs.length + ' IOCs · ' + (d.edges || []).length + ' correlações';
+
+  if (!iocs.length) { _graphShowEmpty('Nenhum IOC correlacionado para este filtro.'); return; }
+  document.getElementById('graph-empty').style.display = 'none';
+  canvas.style.display = '';
+
+  _graphMeta = {};
+  var nodes = (d.nodes || []).map(function(n) {
+    _graphMeta[n.id] = n;
+    if (n.node_kind === 'hub') {
+      return {
+        id: n.id, label: n.label,
+        shape: n.hub_type === 'campaign' ? 'star' : (n.hub_type === 'asn' ? 'hexagon' : 'square'),
+        size: n.hub_type === 'campaign' ? 24 : 16,
+        color: { background: HUB_COLOR[n.hub_type], border: '#fff' },
+        font: { color: '#e8e8e8', size: 13, face: 'JetBrains Mono', strokeWidth: 3, strokeColor: '#000' }
+      };
+    }
+    var sev = (n.severity || 'MEDIUM').toUpperCase();
+    return {
+      id: n.id, label: n.label, shape: 'dot',
+      size: 7 + Math.min(18, (n.score || 0) / 5),
+      color: { background: SEV_COLOR[sev] || '#555', border: '#000' },
+      font: { color: '#999', size: 10, face: 'JetBrains Mono' },
+      title: sev + ' · ' + (n.type || '') + ' · score ' + (n.score || 0)
+    };
+  });
+  var edges = (d.edges || []).map(function(e) {
+    return { from: e.from, to: e.to, width: e.weight || 1,
+             color: { color: EDGE_COLOR[e.kind] || '#444', highlight: '#fff' }, smooth: false };
+  });
+
+  var data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+  var options = {
+    layout: { improvedLayout: false },
+    physics: { stabilization: { iterations: 220 },
+      barnesHut: { gravitationalConstant: -4200, springLength: 110, springConstant: 0.035, damping: 0.45 } },
+    interaction: { hover: true, tooltipDelay: 120, navigationButtons: false },
+    nodes: { borderWidth: 1.5 },
+    edges: { selectionWidth: 2 }
+  };
+
+  if (_graphNet) { _graphNet.setData(data); }
+  else {
+    _graphNet = new vis.Network(canvas, data, options);
+    _graphNet.on('click', function(p) {
+      if (!p.nodes.length) return;
+      var meta = _graphMeta[p.nodes[0]];
+      if (!meta) return;
+      if (meta.node_kind === 'ioc') {
+        openDrawer({ value: meta.id, type: meta.type, severity: meta.severity });
+      } else if (meta.hub_type === 'campaign') {
+        _graphLoad({ campaign_id: String(meta.id).replace('campaign:', '') });
+      } else if (meta.hub_type === 'asn') {
+        _graphLoad({ asn: String(meta.id).replace('asn:', '') });
+      }
+    });
+  }
+}
+
+function _graphSeedSearch() {
+  var v = (document.getElementById('graph-seed').value || '').trim();
+  if (v) _graphLoad({ seed: v });
+}
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'graph-seed') _graphSeedSearch();
+});
 </script>
 </body>
 </html>

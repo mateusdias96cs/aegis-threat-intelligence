@@ -346,6 +346,48 @@ async def get_trends(days: int = Query(default=30, ge=1, le=90)):
         db.close()
 
 
+@app.get("/api/overview", dependencies=[Depends(_require_read_key)])
+async def get_overview():
+    """
+    Panorama operacional do SOC: distribuições por severidade/tipo/status,
+    rankings de infraestrutura atacante (ASN, país, fonte), táticas MITRE,
+    atores e campanhas, e a timeline de 30 dias. Tudo agregado no banco.
+    Usado pela aba **Threat Overview** do dashboard.
+    """
+    db = DatabaseManager()
+    try:
+        return db.get_overview()
+    finally:
+        db.close()
+
+
+@app.get("/api/graph", dependencies=[Depends(_require_read_key)])
+async def get_graph(
+    campaign_id: str | None = Query(default=None, max_length=64),
+    asn: int | None = Query(default=None, ge=0, le=4_294_967_295),
+    tactic: str | None = Query(default=None, max_length=64),
+    country: str | None = Query(default=None, max_length=8),
+    adversary: str | None = Query(default=None, max_length=128),
+    seed: str | None = Query(default=None, max_length=512),
+    limit: int = Query(default=120, ge=10, le=250),
+):
+    """
+    Grafo de correlação (nós = IOCs, arestas = infraestrutura comum do atacante:
+    campanha compartilhada, mesmo ASN, mesmo /24). Sem filtros, retorna os
+    clusters das maiores campanhas. Usado pela aba **Correlation Graph**.
+    """
+    if seed:
+        seed = _sanitize_ioc_value(seed)
+    db = DatabaseManager()
+    try:
+        return db.get_correlation_graph(
+            campaign_id=campaign_id, asn=asn, tactic=tactic,
+            country=country, adversary=adversary, seed=seed, limit=limit,
+        )
+    finally:
+        db.close()
+
+
 @app.post("/api/pipeline/run", dependencies=[Depends(_require_api_key)])
 async def run_pipeline(background_tasks: BackgroundTasks):
     background_tasks.add_task(run_pipeline_task)
