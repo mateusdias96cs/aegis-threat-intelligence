@@ -75,6 +75,8 @@ class IOC(Base):
     # EPSS (FIRST.org) — probabilidade de exploração do CVE nos próximos 30 dias.
     epss_score          = Column(Float)
     epss_percentile     = Column(Float)
+    # Shodan InternetDB — superfície do IP: {ports, tags, vulns, hostnames} (JSON).
+    shodan_data         = Column(Text)
 
 
 class Report(Base):
@@ -140,6 +142,8 @@ _DECAY_COLUMNS = [
     # EPSS — probabilidade de exploração (FIRST.org)
     ("epss_score",          "FLOAT"),
     ("epss_percentile",     "FLOAT"),
+    # Shodan InternetDB — superfície do IP (JSON)
+    ("shodan_data",         "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -246,6 +250,7 @@ class DatabaseManager:
                 "mitre_techniques":   json.dumps(ioc["mitre_techniques"]) if ioc.get("mitre_techniques") else None,
                 "epss_score":         ioc.get("epss_score"),
                 "epss_percentile":    ioc.get("epss_percentile"),
+                "shodan_data":        json.dumps(ioc["shodan_data"]) if ioc.get("shodan_data") else None,
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -278,6 +283,14 @@ class DatabaseManager:
                 row["abuse_categories"] = {int(k): v for k, v in json.loads(raw).items()}
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
+        # shodan_data e mitre_techniques: JSON → estrutura, para o drawer/API.
+        for _json_field in ("shodan_data", "mitre_techniques"):
+            _raw = row.get(_json_field)
+            if _raw and isinstance(_raw, str):
+                try:
+                    row[_json_field] = json.loads(_raw)
+                except (json.JSONDecodeError, TypeError):
+                    pass
         return row
 
     def get_all_iocs(self) -> list[dict]:
