@@ -175,14 +175,21 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
     # T — Type Severity
     cvss  = ioc.get("cvss_score")
     abuse = ioc.get("abuse_score")
+    epss_score = ioc.get("epss_score")
+    epss_pct   = ioc.get("epss_percentile")
 
     if ioc_type == "cve":
         if cvss is not None:
             T         = min(100.0, float(cvss) * 10)
             type_base = f"CVSS {float(cvss):.1f}/10 (NVD)"
+        elif epss_pct is not None:
+            # Sem CVSS: o percentil EPSS (probabilidade de exploração) é um sinal
+            # real e discrimina melhor que o padrão fixo 80.
+            T         = max(60.0, round(float(epss_pct) * 100, 1))
+            type_base = f"EPSS percentil {float(epss_pct) * 100:.1f}% (CVSS indisponível)"
         else:
             T         = 80.0
-            type_base = "padrão CVE (CVSS não disponível no NVD)"
+            type_base = "padrão CVE (CVSS/EPSS indisponíveis)"
         type_ref = _TYPE_REFS["cve"].replace("{value}", value)
 
     elif ioc_type == "ip":
@@ -238,6 +245,10 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
             "contribuicao": round(T * 0.30, 2),
             "base":         type_base,
             "referencia":   type_ref,
+            # Probabilidade de exploração (EPSS) — exposta para priorização do analista,
+            # independente de entrar no T. None quando não é CVE ou não foi enriquecido.
+            "epss":            epss_score,
+            "epss_percentile": epss_pct,
         },
         "score_final":      round(score_final, 2),
         "score_arredondado": score_rounded,

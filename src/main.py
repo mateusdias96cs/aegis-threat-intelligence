@@ -13,7 +13,7 @@ from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
 from src.processors import normalizer, classifier, deduplicator
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
-from src.enrichers import ip_enricher
+from src.enrichers import ip_enricher, epss_enricher
 
 
 def run():
@@ -122,6 +122,11 @@ def run():
                     if ip_new:
                         print(f"[pipeline] enriquecendo {len(ip_new)} IPs novos ...")
                         new_iocs = ip_enricher.enrich_batch(new_iocs, ip_collected_iocs)
+
+                    cve_new = [i for i in new_iocs if i.get("type") == "cve"]
+                    if cve_new:
+                        print(f"[pipeline] enriquecendo {len(cve_new)} CVEs novos com EPSS ...")
+                        new_iocs = epss_enricher.enrich_batch(new_iocs)
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)

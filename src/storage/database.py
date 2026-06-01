@@ -72,6 +72,9 @@ class IOC(Base):
     adversary           = Column(Text)
     # Lista JSON de técnicas ATT&CK reais (OTX attack_ids) — Kill Chain confiável.
     mitre_techniques    = Column(Text)
+    # EPSS (FIRST.org) — probabilidade de exploração do CVE nos próximos 30 dias.
+    epss_score          = Column(Float)
+    epss_percentile     = Column(Float)
 
 
 class Report(Base):
@@ -134,6 +137,9 @@ _DECAY_COLUMNS = [
     ("campaign_id",         "TEXT"),
     ("adversary",           "TEXT"),
     ("mitre_techniques",    "TEXT"),
+    # EPSS — probabilidade de exploração (FIRST.org)
+    ("epss_score",          "FLOAT"),
+    ("epss_percentile",     "FLOAT"),
 ]
 _dialect = engine.dialect.name
 
@@ -238,6 +244,8 @@ class DatabaseManager:
                 "campaign_id":        ioc.get("campaign_id"),
                 "adversary":          ioc.get("adversary"),
                 "mitre_techniques":   json.dumps(ioc["mitre_techniques"]) if ioc.get("mitre_techniques") else None,
+                "epss_score":         ioc.get("epss_score"),
+                "epss_percentile":    ioc.get("epss_percentile"),
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -636,7 +644,8 @@ class DatabaseManager:
             ph     = ",".join(f":v{j}" for j in range(len(batch)))
             params = {f"v{j}": v for j, v in enumerate(batch)}
             rows = self._session.execute(text(f"""
-                SELECT id, type, value, source, abuse_score, cvss_score, correlated_sources
+                SELECT id, type, value, source, abuse_score, cvss_score, correlated_sources,
+                       epss_score, epss_percentile
                 FROM iocs
                 WHERE value IN ({ph})
                   AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -661,11 +670,13 @@ class DatabaseManager:
                     continue
 
                 breakdown = calculate_score_breakdown({
-                    "type":        row["type"],
-                    "value":       row["value"],
-                    "source":      row["source"],
-                    "abuse_score": row["abuse_score"],
-                    "cvss_score":  row["cvss_score"],
+                    "type":            row["type"],
+                    "value":           row["value"],
+                    "source":          row["source"],
+                    "abuse_score":     row["abuse_score"],
+                    "cvss_score":      row["cvss_score"],
+                    "epss_score":      row["epss_score"],
+                    "epss_percentile": row["epss_percentile"],
                 }, sources=merged)
                 score = float(breakdown["score_arredondado"])
                 updates.append({
@@ -701,7 +712,7 @@ class DatabaseManager:
 
         rows = self._session.execute(text("""
             SELECT id, type, value, source, abuse_score, cvss_score,
-                   correlated_sources, score_breakdown
+                   correlated_sources, score_breakdown, epss_score, epss_percentile
             FROM iocs
             WHERE correlated_sources IS NOT NULL
               AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -724,11 +735,13 @@ class DatabaseManager:
                 pass
 
             breakdown = calculate_score_breakdown({
-                "type":        row["type"],
-                "value":       row["value"],
-                "source":      row["source"],
-                "abuse_score": row["abuse_score"],
-                "cvss_score":  row["cvss_score"],
+                "type":            row["type"],
+                "value":           row["value"],
+                "source":          row["source"],
+                "abuse_score":     row["abuse_score"],
+                "cvss_score":      row["cvss_score"],
+                "epss_score":      row["epss_score"],
+                "epss_percentile": row["epss_percentile"],
             }, sources=src_set)
             new_score = breakdown["score_arredondado"]
 
@@ -916,11 +929,13 @@ class DatabaseManager:
             result = []
             for row in rows:
                 ioc_dict = {
-                    "type":        row["type"],
-                    "value":       row["value"],
-                    "source":      row["source"],
-                    "abuse_score": row["abuse_score"],
-                    "cvss_score":  row["cvss_score"],
+                    "type":            row["type"],
+                    "value":           row["value"],
+                    "source":          row["source"],
+                    "abuse_score":     row["abuse_score"],
+                    "cvss_score":      row["cvss_score"],
+                    "epss_score":      row["epss_score"],
+                    "epss_percentile": row["epss_percentile"],
                 }
                 # Preserva a corroboração já registrada (C consistente após reativação).
                 # Reconstrói o conjunto de feeds para recalcular C por família.
@@ -964,7 +979,7 @@ class DatabaseManager:
                 rows = self._session.execute(
                     text(f"""
                         SELECT id, type, value, source, abuse_score, cvss_score,
-                               correlated_sources
+                               correlated_sources, epss_score, epss_percentile
                         FROM iocs
                         WHERE {where_clause} AND id > :last_id
                         ORDER BY id
