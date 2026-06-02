@@ -12,3 +12,6 @@ airflow.db
 airflow-webserver.pid
 webserver_config.py
 logs/
+
+# doc local — não versionar
+atualizacoes.md
