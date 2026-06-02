@@ -2645,6 +2645,7 @@ function renderDrawerBody(ioc) {
   if (hasScore || ioc.ioc_status === 'FALSE_POSITIVE') html += renderScoreSection(ioc);
   html += renderContextSection(ioc);
   html += renderOriginSection(ioc);
+  html += renderSightingsSection(ioc);
   if (type === 'hash') html += renderMalwareSection(ioc);
   if (hasMitre) html += renderMitreSection(ioc);
   if (type === 'ip') html += '<div id="drawer-enrichment">' + renderEnrichLoading() + '</div>';
@@ -2912,6 +2913,30 @@ function renderOriginSection(ioc) {
   }
 
   return html + '</div>';
+}
+
+/* ── Section: Sightings / Proveniência por fonte ────────────── */
+/* Linha do tempo de QUEM viu o IOC e QUANDO. Só aparece depois que
+   loadDrawerContext traz o array `sightings` da API (a linha da tabela não o tem). */
+function renderSightingsSection(ioc) {
+  var s = ioc.sightings;
+  if (!s || !s.length) return '';
+  var rows = s.map(function(x) {
+    var span = (x.first_seen && x.last_seen && x.first_seen !== x.last_seen)
+      ? escHtml(x.first_seen) + ' → ' + escHtml(x.last_seen)
+      : escHtml(x.first_seen || x.last_seen || '—');
+    var times = (x.seen_count && x.seen_count > 1)
+      ? '<span style="color:var(--text-tertiary);font-size:10.5px;margin-left:6px">' + x.seen_count + '×</span>'
+      : '';
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-subtle)">' +
+      '<span style="font-family:var(--font-mono);font-size:12px;color:var(--text-primary)">' + escHtml(x.source || '—') + times + '</span>' +
+      '<span style="font-size:11px;color:var(--text-secondary);white-space:nowrap">' + span + '</span>' +
+    '</div>';
+  }).join('');
+  var label = s.length === 1 ? '1 fonte' : s.length + ' fontes independentes';
+  return '<div class="drawer-section"><div class="drawer-section-title">Proveniência por Fonte</div>' +
+    '<div style="font-size:11px;color:var(--text-tertiary);margin-bottom:8px">' + label + ' registraram este IOC ao longo do tempo (linhagem de coleta).</div>' +
+    rows + '</div>';
 }
 
 /* ── Section: MITRE ─────────────────────────────────────────── */

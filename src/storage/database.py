@@ -4,7 +4,10 @@ import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, create_engine, text
+from sqlalchemy import (
+    Column, DateTime, Float, Index, Integer, String, Text, UniqueConstraint,
+    create_engine, text,
+)
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
 _raw_url = os.getenv("DATABASE_URL")
@@ -99,6 +102,29 @@ class SharedWorkbench(Base):
     payload    = Column(Text, nullable=False)   # JSON com pins + notas
     created_at = Column(String, nullable=False)
     expires_at = Column(String, nullable=False)
+
+
+class Sighting(Base):
+    """Proveniência/linhagem: QUEM (source) viu QUE IOC (value), QUANDO (first/last_seen)
+    e QUANTAS vezes (seen_count). Uma linha por par (value, source).
+
+    A tabela `iocs` colapsa o IOC numa única linha (deduplicado); aqui guardamos o
+    rastro por fonte ao longo do tempo. É a base para: timeliness real por fonte,
+    C com datas verdadeiras, e (frente futura) confiabilidade de fonte EMPÍRICA
+    derivada do histórico de falso-positivo. Ver [[research-data-engineering]]."""
+    __tablename__ = "sightings"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    value      = Column(String, nullable=False)
+    source     = Column(String, nullable=False)
+    first_seen = Column(String)   # YYYY-MM-DD — 1ª vez que ESTA fonte viu o IOC
+    last_seen  = Column(String)   # YYYY-MM-DD — última vez que ESTA fonte o viu
+    seen_count = Column(Integer, default=1)
+
+    __table_args__ = (
+        UniqueConstraint("value", "source", name="uq_sightings_value_source"),
+        Index("idx_sightings_value", "value"),
+    )
 
 
 Base.metadata.create_all(engine)
@@ -1143,7 +1169,10 @@ class DatabaseManager:
         ).mappings().fetchone()
         if not row:
             return None
-        return self._parse_abuse_categories(self._parse_breakdown(dict(row)))
+        ctx = self._parse_abuse_categories(self._parse_breakdown(dict(row)))
+        # Proveniência: linha do tempo de quais fontes viram o IOC e quando.
+        ctx["sightings"] = self.get_sightings(value)
+        return ctx
 
     def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:
         """Returns recent IOCs from the same source, excluding the anchor IOC."""
@@ -1160,6 +1189,55 @@ class DatabaseManager:
             {"source": source, "exclude": exclude_value, "limit": limit},
         ).mappings().all()
         return [dict(row) for row in rows]
+
+    # ── Proveniência (sightings) ────────────────────────────────────────────────
+    def record_sightings(self, value_sources: dict[str, set], day: str | None = None) -> int:
+        """Registra/atualiza a proveniência da coleta de hoje: para cada par
+        (value, source) faz upsert — insere com first/last_seen=hoje, ou incrementa
+        seen_count e atualiza last_seen se o par já existe.
+
+        `value_sources` (value -> {fontes}) é o mesmo dict que o pipeline já monta
+        ANTES do dedup, então cada par aparece uma vez por execução (1 incremento).
+        Idempotência por DIA: reexecutar no mesmo dia conta como "visto de novo"
+        (seen_count sobe) — fiel à semântica de sighting. ON CONFLICT funciona igual
+        em SQLite (3.24+) e PostgreSQL."""
+        if not value_sources:
+            return 0
+        day = day or datetime.utcnow().strftime("%Y-%m-%d")
+        rows = [
+            {"value": v, "source": s, "day": day}
+            for v, srcs in value_sources.items() if v
+            for s in srcs if s
+        ]
+        if not rows:
+            return 0
+        stmt = text("""
+            INSERT INTO sightings (value, source, first_seen, last_seen, seen_count)
+            VALUES (:value, :source, :day, :day, 1)
+            ON CONFLICT (value, source) DO UPDATE SET
+                last_seen  = excluded.last_seen,
+                seen_count = sightings.seen_count + 1
+        """)
+        BATCH = 500
+        for i in range(0, len(rows), BATCH):
+            self._session.execute(stmt, rows[i:i + BATCH])
+            self._session.commit()
+        return len(rows)
+
+    def get_sightings(self, value: str) -> list[dict]:
+        """Linha do tempo de proveniência de um IOC: cada fonte que o reportou, com
+        primeira/última observação e contagem. Ordenado por first_seen (quem viu
+        primeiro encabeça). Usado no drawer."""
+        rows = self._session.execute(
+            text("""
+                SELECT source, first_seen, last_seen, seen_count
+                FROM sightings
+                WHERE LOWER(value) = LOWER(:value)
+                ORDER BY first_seen ASC, seen_count DESC
+            """),
+            {"value": value},
+        ).mappings().all()
+        return [dict(r) for r in rows]
 
     # IOCs que DEVEM ter score_breakdown: ativos, reativados ou legados sem status.
     # IOCs DECAYED/HISTORICAL têm o breakdown liberado de propósito (apply_decay) —

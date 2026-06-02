@@ -96,6 +96,15 @@ def run():
                     if _v:
                         value_sources.setdefault(_v, set()).add(_i.get("source") or "")
 
+                # Proveniência/linhagem (P1): registra QUEM viu QUE IOC e QUANDO,
+                # antes do dedup colapsar as duplicatas. Base para timeliness por
+                # fonte e (futuro) confiabilidade empírica de fonte.
+                try:
+                    n_sight = db.record_sightings(value_sources)
+                    print(f"[pipeline] sightings recorded: {n_sight} (value,source) pairs")
+                except Exception as e:
+                    print(f"[pipeline] sightings recording skipped: {e}")
+
                 # Deduplicate internally first
                 raw_iocs = deduplicator.deduplicate(raw_iocs)
                 print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
