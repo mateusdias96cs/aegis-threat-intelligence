@@ -87,6 +87,9 @@ class IOC(Base):
     context_breakdown   = Column(Text)   # JSON: {score, filled, total, dimensions[]}
     # Warninglist (P2) — nome da lista de infra legítima que casou (provável FP).
     fp_warning          = Column(Text)
+    # RDAP — ciclo de vida do registro do domínio {registered, expiration, registrar,
+    # status, age_days}. Para domains e URLs. age_days < 30 = sinal de risco.
+    rdap_data           = Column(Text)
 
 
 class Report(Base):
@@ -184,6 +187,9 @@ _DECAY_COLUMNS = [
     ("context_breakdown",   "TEXT"),
     # Warninglist / known-good (P2) — qual lista de infra legítima casou (NULL = limpo).
     ("fp_warning",          "TEXT"),
+    # RDAP — ciclo de vida do registro do domínio (JSON): registered, expiration,
+    # registrar, status, age_days. Para domains e URLs.
+    ("rdap_data",           "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -295,6 +301,7 @@ class DatabaseManager:
                 "context_score":      ioc.get("context_score"),
                 "context_breakdown":  json.dumps(ioc["context_breakdown"]) if ioc.get("context_breakdown") else None,
                 "fp_warning":         ioc.get("fp_warning"),
+                "rdap_data":          json.dumps(ioc["rdap_data"]) if ioc.get("rdap_data") else None,
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -328,7 +335,7 @@ class DatabaseManager:
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         # shodan_data e mitre_techniques: JSON → estrutura, para o drawer/API.
-        for _json_field in ("shodan_data", "mitre_techniques", "malware_context", "context_breakdown"):
+        for _json_field in ("shodan_data", "mitre_techniques", "malware_context", "context_breakdown", "rdap_data"):
             _raw = row.get(_json_field)
             if _raw and isinstance(_raw, str):
                 try:
@@ -965,7 +972,7 @@ class DatabaseManager:
             params = {f"v{j}": v for j, v in enumerate(batch)}
             rows = self._session.execute(text(f"""
                 SELECT id, type, value, source, abuse_score, cvss_score, correlated_sources,
-                       epss_score, epss_percentile, fp_warning
+                       epss_score, epss_percentile, fp_warning, rdap_data
                 FROM iocs
                 WHERE value IN ({ph})
                   AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -989,6 +996,7 @@ class DatabaseManager:
                 if len(merged) <= len(existing) or len(merged) < 2:
                     continue
 
+                raw_rdap = row["rdap_data"]
                 breakdown = calculate_score_breakdown({
                     "type":            row["type"],
                     "value":           row["value"],
@@ -998,6 +1006,7 @@ class DatabaseManager:
                     "epss_score":      row["epss_score"],
                     "epss_percentile": row["epss_percentile"],
                     "fp_warning":      row["fp_warning"],
+                    "rdap_data":       json.loads(raw_rdap) if raw_rdap else None,
                 }, sources=merged)
                 score = float(breakdown["score_arredondado"])
                 updates.append({
@@ -1034,7 +1043,7 @@ class DatabaseManager:
         rows = self._session.execute(text("""
             SELECT id, type, value, source, abuse_score, cvss_score,
                    correlated_sources, score_breakdown, epss_score, epss_percentile,
-                   fp_warning
+                   fp_warning, rdap_data
             FROM iocs
             WHERE correlated_sources IS NOT NULL
               AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -1056,6 +1065,7 @@ class DatabaseManager:
             except (json.JSONDecodeError, TypeError):
                 pass
 
+            raw_rdap = row.get("rdap_data")
             breakdown = calculate_score_breakdown({
                 "type":            row["type"],
                 "value":           row["value"],
@@ -1064,7 +1074,8 @@ class DatabaseManager:
                 "cvss_score":      row["cvss_score"],
                 "epss_score":      row["epss_score"],
                 "epss_percentile": row["epss_percentile"],
-                "fp_warning":      row["fp_warning"],
+                "fp_warning":      row.get("fp_warning"),
+                "rdap_data":       json.loads(raw_rdap) if raw_rdap else None,
             }, sources=src_set)
             new_score = breakdown["score_arredondado"]
 
@@ -1346,6 +1357,7 @@ class DatabaseManager:
         def _build_updates(rows):
             result = []
             for row in rows:
+                raw_rdap = row.get("rdap_data")
                 ioc_dict = {
                     "type":            row["type"],
                     "value":           row["value"],
@@ -1354,7 +1366,8 @@ class DatabaseManager:
                     "cvss_score":      row["cvss_score"],
                     "epss_score":      row["epss_score"],
                     "epss_percentile": row["epss_percentile"],
-                    "fp_warning":      row["fp_warning"],
+                    "fp_warning":      row.get("fp_warning"),
+                    "rdap_data":       json.loads(raw_rdap) if raw_rdap else None,
                 }
                 # Preserva a corroboração já registrada (C consistente após reativação).
                 # Reconstrói o conjunto de feeds para recalcular C por família.
@@ -1398,7 +1411,8 @@ class DatabaseManager:
                 rows = self._session.execute(
                     text(f"""
                         SELECT id, type, value, source, abuse_score, cvss_score,
-                               correlated_sources, epss_score, epss_percentile, fp_warning
+                               correlated_sources, epss_score, epss_percentile,
+                               fp_warning, rdap_data
                         FROM iocs
                         WHERE {where_clause} AND id > :last_id
                         ORDER BY id

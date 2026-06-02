@@ -131,7 +131,8 @@ _ADM_NUMBER_LABEL = {
 
 # Dimensões de enriquecimento que dão credibilidade extra a um IOC de fonte única.
 _ENRICH_FIELDS = ("cvss_score", "abuse_score", "epss_score", "epss_percentile",
-                  "shodan_data", "malware_context", "mitre_technique_id", "campaign_id")
+                  "shodan_data", "malware_context", "mitre_technique_id", "campaign_id",
+                  "rdap_data")
 
 
 def _admiralty_source_letter(best_source: str, S: float) -> str:
@@ -209,13 +210,14 @@ def _get_interpretation(score: float) -> str:
 # Materializa o diferencial do AEGIS — "IOC bruto" vs. "IOC refinado" vira métrica.
 _CONTEXT_DIMS: dict[str, list[str]] = {
     "ip":     ["geo", "network", "reputation", "surface", "ttp", "attribution", "corroboration"],
-    "domain": ["geo", "ttp", "attribution", "corroboration"],
-    "url":    ["geo", "ttp", "attribution", "corroboration"],
+    "domain": ["registration", "geo", "ttp", "attribution", "corroboration"],
+    "url":    ["registration", "geo", "ttp", "attribution", "corroboration"],
     "hash":   ["malware", "ttp", "attribution", "corroboration"],
     "cve":    ["severity", "exploitability", "ttp", "attribution", "corroboration"],
 }
 
 _DIM_LABEL: dict[str, str] = {
+    "registration":   "Registro (RDAP)",
     "geo":            "Geolocalização",
     "network":        "ASN / Rede",
     "reputation":     "Reputação (AbuseIPDB)",
@@ -230,6 +232,7 @@ _DIM_LABEL: dict[str, str] = {
 
 
 def _dim_present(dim: str, ioc: dict) -> bool:
+    if dim == "registration":   return bool(ioc.get("rdap_data"))
     if dim == "geo":            return bool(ioc.get("country"))
     if dim == "network":        return ioc.get("asn") is not None
     if dim == "reputation":     return ioc.get("abuse_score") is not None
@@ -356,13 +359,27 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
         T, type_base = 75.0, "padrão hash"
         type_ref = _TYPE_REFS["hash"].replace("{value}", value)
 
-    elif ioc_type == "url":
-        T, type_base = 65.0, "padrão URL"
-        type_ref = _TYPE_REFS["url"].replace("{value}", value)
-
-    elif ioc_type == "domain":
-        T, type_base = 60.0, "padrão domain"
-        type_ref = _TYPE_REFS["domain"].replace("{value}", value)
+    elif ioc_type in ("url", "domain"):
+        # Padrão: url=65, domain=60. Com RDAP, discrimina pela idade do registro:
+        # domínio < 30 dias = infraestrutura descartável (T sobe para 85);
+        # 30–180 dias = suspeito (T sobe para 75); > 180 dias = padrão.
+        base_T    = 65.0 if ioc_type == "url" else 60.0
+        rdap      = ioc.get("rdap_data") if isinstance(ioc.get("rdap_data"), dict) else None
+        age_days  = rdap.get("age_days") if rdap else None
+        if age_days is not None and age_days >= 0:
+            if age_days < 30:
+                T         = 85.0
+                type_base = f"RDAP: domínio com {age_days}d de existência (< 30d — alta suspeita)"
+            elif age_days < 180:
+                T         = 75.0
+                type_base = f"RDAP: domínio com {age_days}d de existência (30–180d — suspeito)"
+            else:
+                T         = base_T
+                type_base = f"RDAP: domínio com {age_days}d de existência (padrão {ioc_type})"
+        else:
+            T         = base_T
+            type_base = f"padrão {ioc_type}"
+        type_ref = _TYPE_REFS.get(ioc_type, _TYPE_REFS["url"]).replace("{value}", value)
 
     else:
         T, type_base, type_ref = 50.0, "padrão", ""

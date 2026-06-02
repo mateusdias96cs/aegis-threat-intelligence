@@ -13,7 +13,7 @@ from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
 from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
-from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher
+from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher, rdap_enricher
 
 
 def run():
@@ -150,6 +150,11 @@ def run():
                     if hash_new:
                         print(f"[pipeline] enriquecendo {len(hash_new)} hashes novas com MalwareBazaar ...")
                         new_iocs = malwarebazaar_enricher.enrich_batch(new_iocs)
+
+                    domain_new = [i for i in new_iocs if i.get("type") in ("domain", "url")]
+                    if domain_new:
+                        print(f"[pipeline] enriquecendo {len(domain_new)} domínios/URLs com RDAP ...")
+                        new_iocs = rdap_enricher.enrich_batch(new_iocs)
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)

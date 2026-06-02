@@ -2651,6 +2651,7 @@ function renderDrawerBody(ioc) {
   html += renderOriginSection(ioc);
   html += renderSightingsSection(ioc);
   if (type === 'hash') html += renderMalwareSection(ioc);
+  if (type === 'domain' || type === 'url') html += renderRdapSection(ioc);
   if (hasMitre) html += renderMitreSection(ioc);
   if (type === 'ip') html += '<div id="drawer-enrichment">' + renderEnrichLoading() + '</div>';
   html += renderHistorySection(ioc);
@@ -2948,6 +2949,36 @@ function renderFpWarningBanner(ioc) {
         '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Casou lista de infraestrutura legítima conhecida — <strong>' + escHtml(w) + '</strong>. Score reduzido automaticamente; valide o contexto antes de agir.</div>' +
       '</div>' +
     '</div></div>';
+}
+
+/* ── Section: RDAP — Registro do domínio ────────────────────── */
+function renderRdapSection(ioc) {
+  var r = ioc.rdap_data;
+  if (!r) return '';
+
+  var age = r.age_days != null ? r.age_days : null;
+  var ageColor = '#999', ageLabel = '';
+  if (age != null) {
+    if (age < 30)       { ageColor = '#e74c3c'; ageLabel = age + ' dias  ⚠ recém-registrado'; }
+    else if (age < 180) { ageColor = '#e3b341'; ageLabel = age + ' dias  ↑ suspeito'; }
+    else                { ageColor = 'var(--text-secondary)'; ageLabel = age + ' dias'; }
+  }
+
+  var rows = '';
+  if (r.registered)   rows += drawerInfoBlock('Registro',    escHtml(r.registered));
+  if (r.expiration)   rows += drawerInfoBlock('Expiração',   escHtml(r.expiration));
+  if (r.registrar)    rows += drawerInfoBlock('Registradora', escHtml(r.registrar));
+  if (age != null)    rows += '<div class="drawer-info-block" style="grid-column:span 2">' +
+    '<div class="drawer-info-label">Idade do domínio</div>' +
+    '<div class="drawer-info-value" style="color:' + ageColor + ';font-weight:600">' + escHtml(ageLabel) + '</div></div>';
+
+  var status = (r.status || []).filter(Boolean);
+  if (status.length)  rows += '<div class="drawer-info-block" style="grid-column:span 2">' +
+    '<div class="drawer-info-label">Status RDAP</div>' +
+    '<div class="drawer-info-value" style="font-size:11px">' + status.map(escHtml).join(' · ') + '</div></div>';
+
+  return '<div class="drawer-section"><div class="drawer-section-title">Registro do Domínio (RDAP)</div>' +
+    '<div class="drawer-info-grid">' + rows + '</div></div>';
 }
 
 /* ── Section: Sightings / Proveniência por fonte ────────────── */
