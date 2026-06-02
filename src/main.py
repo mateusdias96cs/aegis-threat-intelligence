@@ -10,7 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
 from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
-from src.processors import normalizer, classifier, deduplicator
+from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
 from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher
@@ -126,6 +126,13 @@ def run():
                 if new_iocs:
                     print("[pipeline] normalizing ...")
                     new_iocs = normalizer.normalize(new_iocs)
+
+                    # Warninglist (P2): marca IOCs que casam infra legítima conhecida
+                    # (cloud/CDN/DNS/Tranco) ANTES do score — o classifier aplica a
+                    # penalidade de provável-FP. No-op se data/warninglists vazio.
+                    print("[pipeline] checking warninglists (known-good infra) ...")
+                    n_fp = sum(1 for i in warninglist.annotate(new_iocs) if i.get("fp_warning"))
+                    print(f"[pipeline] warninglist flags: {n_fp} likely false-positives")
 
                     ip_new = [i for i in new_iocs if i.get("type") == "ip"]
                     if ip_new:

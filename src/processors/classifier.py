@@ -3,6 +3,12 @@ from datetime import datetime
 
 SEVERITY_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
+# Fator de penalidade quando o IOC casa uma warninglist de infra legítima (P2).
+# 0.5 = score rebaixado pela metade: forte sinal de provável FP sem zerar (o IOC
+# continua visível para o analista, que pode contestar). Confirmado-FP manual
+# (mark_false_positive) é mais agressivo (−80%).
+_FP_WARNING_FACTOR = 0.5
+
 # ── Source reliability data ───────────────────────────────────────────────────
 # Keys are lowercase normalized source names.
 
@@ -285,10 +291,31 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
     else:
         T, type_base, type_ref = 50.0, "padrão", ""
 
-    score_final   = (S * 0.40) + (C * 0.30) + (T * 0.30)
+    score_base    = (S * 0.40) + (C * 0.30) + (T * 0.30)
+
+    # Penalidade de warninglist (P2): o IOC casou uma lista de infra LEGÍTIMA
+    # conhecida (cloud/CDN/DNS/Tranco). Não é deletado — mas é provável FP, então
+    # o score é rebaixado por um fator. Mantém o IOC visível e auditável (o analista
+    # vê qual lista casou) sem inflar a fila com infraestrutura benigna.
+    fp_warning   = ioc.get("fp_warning")
+    fp_block     = None
+    if fp_warning:
+        score_final = round(score_base * _FP_WARNING_FACTOR, 2)
+        fp_block = {
+            "lista":         fp_warning,
+            "fator":         _FP_WARNING_FACTOR,
+            "score_sem_penalidade": round(score_base, 2),
+            "justificativa": (
+                f"Casou lista de infraestrutura legítima conhecida ({fp_warning}) — "
+                f"provável falso-positivo; score reduzido em "
+                f"{round((1 - _FP_WARNING_FACTOR) * 100)}%."
+            ),
+        }
+    else:
+        score_final = round(score_base, 2)
     score_rounded = round(score_final)
 
-    return {
+    breakdown = {
         "formula": "Score = (S × 0.40) + (C × 0.30) + (T × 0.30)",
         "source_reliability": {
             "fonte":        best_source,
@@ -319,11 +346,14 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
             "epss":            epss_score,
             "epss_percentile": epss_pct,
         },
-        "score_final":      round(score_final, 2),
+        "score_final":      score_final,
         "score_arredondado": score_rounded,
         "interpretacao":    _get_interpretation(score_final),
         "aviso":            "Score é indicador de confiança, não certeza absoluta.",
     }
+    if fp_block:
+        breakdown["fp_warning"] = fp_block
+    return breakdown
 
 
 def apply_confidence(iocs: list, value_sources: dict[str, set] | None = None) -> list:

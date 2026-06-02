@@ -2642,6 +2642,7 @@ function renderDrawerBody(ioc) {
   var hasMitre = ioc.mitre_technique_id || ioc.mitre_tactic;
 
   var html = '';
+  html += renderFpWarningBanner(ioc);
   if (hasScore || ioc.ioc_status === 'FALSE_POSITIVE') html += renderScoreSection(ioc);
   html += renderContextSection(ioc);
   html += renderOriginSection(ioc);
@@ -2913,6 +2914,23 @@ function renderOriginSection(ioc) {
   }
 
   return html + '</div>';
+}
+
+/* ── Banner: Warninglist / provável falso-positivo ──────────── */
+/* Quando o IOC casa uma lista de infra legítima conhecida (cloud/CDN/DNS/Tranco),
+   exibe um aviso destacado: o score já vem rebaixado, mas o analista vê a razão. */
+function renderFpWarningBanner(ioc) {
+  var w = ioc.fp_warning;
+  if (!w) return '';
+  return '<div class="drawer-section" style="border-bottom:1px solid var(--border-subtle)">' +
+    '<div style="display:flex;gap:10px;align-items:flex-start;background:rgba(212,160,23,.10);' +
+    'border:1px solid rgba(212,160,23,.35);border-radius:4px;padding:10px 12px">' +
+      '<span style="font-size:15px;line-height:1">⚠️</span>' +
+      '<div>' +
+        '<div style="font-size:11px;font-weight:700;letter-spacing:.6px;color:#d4a017;text-transform:uppercase;margin-bottom:3px">Provável falso-positivo</div>' +
+        '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Casou lista de infraestrutura legítima conhecida — <strong>' + escHtml(w) + '</strong>. Score reduzido automaticamente; valide o contexto antes de agir.</div>' +
+      '</div>' +
+    '</div></div>';
 }
 
 /* ── Section: Sightings / Proveniência por fonte ────────────── */

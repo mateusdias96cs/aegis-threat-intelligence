@@ -85,6 +85,8 @@ class IOC(Base):
     # Completude de Contexto (D3) — quantas dimensões de contexto estão preenchidas.
     context_score       = Column(Integer)
     context_breakdown   = Column(Text)   # JSON: {score, filled, total, dimensions[]}
+    # Warninglist (P2) — nome da lista de infra legítima que casou (provável FP).
+    fp_warning          = Column(Text)
 
 
 class Report(Base):
@@ -180,6 +182,8 @@ _DECAY_COLUMNS = [
     # Completude de Contexto (D3)
     ("context_score",       "INTEGER"),
     ("context_breakdown",   "TEXT"),
+    # Warninglist / known-good (P2) — qual lista de infra legítima casou (NULL = limpo).
+    ("fp_warning",          "TEXT"),
 ]
 _dialect = engine.dialect.name
 
@@ -290,6 +294,7 @@ class DatabaseManager:
                 "malware_context":    json.dumps(ioc["malware_context"]) if ioc.get("malware_context") else None,
                 "context_score":      ioc.get("context_score"),
                 "context_breakdown":  json.dumps(ioc["context_breakdown"]) if ioc.get("context_breakdown") else None,
+                "fp_warning":         ioc.get("fp_warning"),
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -914,7 +919,7 @@ class DatabaseManager:
             params = {f"v{j}": v for j, v in enumerate(batch)}
             rows = self._session.execute(text(f"""
                 SELECT id, type, value, source, abuse_score, cvss_score, correlated_sources,
-                       epss_score, epss_percentile
+                       epss_score, epss_percentile, fp_warning
                 FROM iocs
                 WHERE value IN ({ph})
                   AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -946,6 +951,7 @@ class DatabaseManager:
                     "cvss_score":      row["cvss_score"],
                     "epss_score":      row["epss_score"],
                     "epss_percentile": row["epss_percentile"],
+                    "fp_warning":      row["fp_warning"],
                 }, sources=merged)
                 score = float(breakdown["score_arredondado"])
                 updates.append({
@@ -981,7 +987,8 @@ class DatabaseManager:
 
         rows = self._session.execute(text("""
             SELECT id, type, value, source, abuse_score, cvss_score,
-                   correlated_sources, score_breakdown, epss_score, epss_percentile
+                   correlated_sources, score_breakdown, epss_score, epss_percentile,
+                   fp_warning
             FROM iocs
             WHERE correlated_sources IS NOT NULL
               AND (ioc_status IS NULL OR ioc_status != 'FALSE_POSITIVE')
@@ -1011,6 +1018,7 @@ class DatabaseManager:
                 "cvss_score":      row["cvss_score"],
                 "epss_score":      row["epss_score"],
                 "epss_percentile": row["epss_percentile"],
+                "fp_warning":      row["fp_warning"],
             }, sources=src_set)
             new_score = breakdown["score_arredondado"]
 
@@ -1292,6 +1300,7 @@ class DatabaseManager:
                     "cvss_score":      row["cvss_score"],
                     "epss_score":      row["epss_score"],
                     "epss_percentile": row["epss_percentile"],
+                    "fp_warning":      row["fp_warning"],
                 }
                 # Preserva a corroboração já registrada (C consistente após reativação).
                 # Reconstrói o conjunto de feeds para recalcular C por família.
@@ -1335,7 +1344,7 @@ class DatabaseManager:
                 rows = self._session.execute(
                     text(f"""
                         SELECT id, type, value, source, abuse_score, cvss_score,
-                               correlated_sources, epss_score, epss_percentile
+                               correlated_sources, epss_score, epss_percentile, fp_warning
                         FROM iocs
                         WHERE {where_clause} AND id > :last_id
                         ORDER BY id
