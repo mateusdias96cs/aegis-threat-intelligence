@@ -2768,6 +2768,20 @@ function renderScoreSection(ioc) {
     html += '<div style="background:' + badgeBg + ';color:' + badgeFg + ';padding:8px 12px;border-radius:3px;font-size:12px;font-weight:600;margin-bottom:12px;">' +
       escHtml(sb.interpretacao || '') + '</div>';
 
+    /* ── 1b. Admiralty Code (NATO 6×6): fonte (A–F) × credibilidade (1–6) ── */
+    var adm = sb.admiralty || null;
+    if (adm && adm.grade) {
+      html += '<div title="' + escHtml(adm.explicacao || '') + '" ' +
+        'style="display:flex;align-items:center;gap:10px;background:var(--bg-elevated);' +
+        'border:1px solid var(--border);border-radius:3px;padding:8px 12px;margin-bottom:12px;cursor:help;">' +
+        '<span style="font-family:var(--font-mono);font-size:20px;font-weight:700;letter-spacing:1px;color:#fff;">' + escHtml(adm.grade) + '</span>' +
+        '<div style="font-size:11px;color:var(--text-secondary);line-height:1.4;">' +
+          '<div><strong style="color:var(--text-primary)">Admiralty</strong> · fonte: ' + escHtml(adm.source_label || '') + ' (' + escHtml(adm.source_letter || '') + ')</div>' +
+          '<div>informação: ' + escHtml(adm.info_label || '') + ' (' + escHtml(String(adm.info_number || '')) + ')</div>' +
+        '</div>' +
+      '</div>';
+    }
+
     /* ── 2. Score final grande + barra de progresso ─────────────── */
     html += '<div style="margin-bottom:14px;">' +
       '<div style="font-size:28px;font-weight:700;font-family:monospace;color:' + badgeFg + ';">' +

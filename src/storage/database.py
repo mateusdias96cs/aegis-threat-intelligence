@@ -1180,6 +1180,14 @@ class DatabaseManager:
         ctx = self._parse_abuse_categories(self._parse_breakdown(dict(row)))
         # Proveniência: linha do tempo de quais fontes viram o IOC e quando.
         ctx["sightings"] = self.get_sightings(value)
+        # Admiralty (P4): garante o grade mesmo em breakdowns legados (derivado em
+        # serve-time do próprio breakdown, sem recomputar o score).
+        bd = ctx.get("score_breakdown")
+        if isinstance(bd, dict) and "admiralty" not in bd:
+            from src.processors.classifier import admiralty_for
+            adm = admiralty_for(bd, ctx)
+            if adm:
+                bd["admiralty"] = adm
         return ctx
 
     def get_correlated_iocs(self, source: str, exclude_value: str, limit: int = 5) -> list[dict]:

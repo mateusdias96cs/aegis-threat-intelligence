@@ -115,6 +115,82 @@ def _get_source_info(source: str, value: str) -> tuple[int, str, str]:
     return score, ref, justification
 
 
+# ── Admiralty Code / NATO 6×6 (P4) ────────────────────────────────────────────
+# Padrão NATO (recomendado pela SANS p/ CTI): avalia DOIS eixos SEPARADOS —
+# confiabilidade da FONTE (letra A–F) e credibilidade da INFORMAÇÃO (número 1–6),
+# sem um enviesar o outro. Mapeia direto no S (fonte) e C (corroboração) do AEGIS
+# e dá ao analista a notação padrão de SOC ("B2"). Ver [[research-data-engineering]].
+_ADM_LETTER_LABEL = {
+    "A": "Confiável", "B": "Geralmente confiável", "C": "Razoavelmente confiável",
+    "D": "Pouco confiável", "E": "Não confiável", "F": "Sem histórico",
+}
+_ADM_NUMBER_LABEL = {
+    1: "Confirmado", 2: "Provavelmente verdadeiro", 3: "Possivelmente verdadeiro",
+    4: "Duvidoso", 5: "Improvável", 6: "Não avaliável",
+}
+
+# Dimensões de enriquecimento que dão credibilidade extra a um IOC de fonte única.
+_ENRICH_FIELDS = ("cvss_score", "abuse_score", "epss_score", "epss_percentile",
+                  "shodan_data", "malware_context", "mitre_technique_id", "campaign_id")
+
+
+def _admiralty_source_letter(best_source: str, S: float) -> str:
+    """Confiabilidade da FONTE (A–F). Fonte sem histórico no catálogo = F (NATO:
+    'fonte sem histórico suficiente'). Caso contrário, derivada do S."""
+    if not best_source or _resolve_source(best_source) not in _SOURCE_DATA:
+        return "F"
+    if S >= 95:  return "A"
+    if S >= 70:  return "B"
+    if S >= 55:  return "C"
+    if S >= 40:  return "D"
+    return "E"
+
+
+def _admiralty_info_number(fam_count: int, has_source: bool, enriched: bool, has_fp: bool) -> int:
+    """Credibilidade da INFORMAÇÃO (1–6). Dirigida pela corroboração independente;
+    rebaixada por warninglist (provável FP) e elevada por enriquecimento."""
+    if not has_source:      return 6   # não avaliável
+    if has_fp:              return 5   # improvável (casou infra legítima)
+    if fam_count >= 3:      return 1   # confirmado por múltiplas fontes independentes
+    if fam_count == 2:      return 2   # corroborado por 2 famílias
+    return 3 if enriched else 4        # 1 fonte: enriquecida → possível; senão duvidoso
+
+
+def _admiralty_grade(best_source: str, S: float, fam_count: int, ioc: dict, has_fp: bool) -> dict:
+    has_source = bool(best_source)
+    enriched   = any(ioc.get(f) is not None and ioc.get(f) != "" for f in _ENRICH_FIELDS)
+    letter = _admiralty_source_letter(best_source, S)
+    number = _admiralty_info_number(fam_count, has_source, enriched, has_fp)
+    return {
+        "grade":         f"{letter}{number}",
+        "source_letter": letter,
+        "source_label":  _ADM_LETTER_LABEL[letter],
+        "info_number":   number,
+        "info_label":    _ADM_NUMBER_LABEL[number],
+        "explicacao": (
+            f"Admiralty {letter}{number}: fonte {_ADM_LETTER_LABEL[letter].lower()} "
+            f"({best_source or 'desconhecida'}); informação {_ADM_NUMBER_LABEL[number].lower()}. "
+            "Eixos avaliados separadamente (padrão NATO/SANS)."
+        ),
+    }
+
+
+def admiralty_for(breakdown: dict, row: dict | None = None) -> dict | None:
+    """Deriva o grade Admiralty de um score_breakdown JÁ calculado (sem recomputar
+    o score). Usado no serve-time para IOCs legados/decaídos cujo breakdown foi
+    gravado antes do P4. `row` (linha do banco) é opcional, só p/ detectar
+    enriquecimento quando a corroboração é de fonte única."""
+    if not isinstance(breakdown, dict):
+        return None
+    sr = breakdown.get("source_reliability") or {}
+    corr = breakdown.get("corroboration") or {}
+    best_source = sr.get("fonte") or ""
+    S = sr.get("score") or 0
+    fam_count = corr.get("familias_count") or corr.get("fontes_count") or 1
+    has_fp = "fp_warning" in breakdown or bool((row or {}).get("fp_warning"))
+    return _admiralty_grade(best_source, S, fam_count, row or {}, has_fp)
+
+
 def _get_interpretation(score: float) -> str:
     if score >= 85:
         return "ALTA confiança — múltiplas fontes confirmadas, ação recomendada"
@@ -353,6 +429,9 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
     }
     if fp_block:
         breakdown["fp_warning"] = fp_block
+    # Admiralty Code (P4): notação NATO de dois eixos, derivada do S e do C já
+    # calculados. Não altera o score — é leitura padrão de SOC sobre a confiança.
+    breakdown["admiralty"] = _admiralty_grade(best_source, S, fam_count, ioc, bool(fp_warning))
     return breakdown
 
 
