@@ -1198,8 +1198,11 @@
           <span class="gl-sep"></span>
           <span style="font-size:9.5px;font-weight:700;letter-spacing:1.5px;color:#2e2e2e;text-transform:uppercase;font-family:var(--font-mono);">HUB</span>
           <span class="gl-item"><i class="gl-hub" style="border-color:#c8a96e;background:rgba(200,169,110,.06)"></i>Campanha</span>
+          <span class="gl-item"><i class="gl-hub" style="border-color:#e0568a;background:rgba(224,86,138,.06)"></i>Ator</span>
           <span class="gl-item"><i class="gl-hub" style="border-color:#58a6ff;background:rgba(88,166,255,.06)"></i>ASN</span>
           <span class="gl-item"><i class="gl-hub" style="border-color:#444"></i>Sub-rede /24</span>
+          <span class="gl-sep"></span>
+          <span class="gl-item" title="Cores de preenchimento dos IOCs agrupam clusters detectados por Louvain (comunidades)"><i class="gl-dot" style="background:linear-gradient(90deg,#4a90e2,#e0568a,#3fb950);"></i>Clusters (comunidades)</span>
         </div>
         <span id="graph-stats" class="graph-stats-pill"></span>
       </div>
@@ -4005,8 +4008,11 @@ function _graphFromOverview(params) {
    CORRELATION GRAPH — Dark Analytics (vis-network)
    ════════════════════════════════════════════════════════════════ */
 var _graphNet = null, _graphInited = false, _graphMeta = {}, _graphSelectedMeta = null;
-var HUB_COLOR = { campaign:'#c8a96e', asn:'#58a6ff', subnet:'#666666' };
-var EDGE_COLOR = { campaign:'rgba(200,169,110,.4)', asn:'rgba(88,166,255,.35)', subnet:'rgba(100,100,100,.3)' };
+var HUB_COLOR = { campaign:'#c8a96e', adversary:'#e0568a', asn:'#58a6ff', subnet:'#666666' };
+var EDGE_COLOR = { campaign:'rgba(200,169,110,.4)', adversary:'rgba(224,86,138,.4)', asn:'rgba(88,166,255,.35)', subnet:'rgba(100,100,100,.3)' };
+/* Paleta de comunidades (Louvain): preenchimento do nó = cluster; borda = severidade. */
+var COMMUNITY_PALETTE = ['#4a90e2','#e0568a','#3fb950','#e3b341','#a371f7','#1abc9c','#e8833a','#56c5d0','#c96b6b','#7d8aa3'];
+function communityColor(c) { return (c == null || c < 0) ? null : COMMUNITY_PALETTE[c % COMMUNITY_PALETTE.length]; }
 
 function _graphInit() {
   if (_graphInited) return;
@@ -4069,10 +4075,13 @@ function _graphRender(d) {
     _graphMeta[n.id] = n;
     if (n.node_kind === 'hub') {
       var iscamp = n.hub_type === 'campaign';
+      var hubShape = iscamp ? 'star'
+        : n.hub_type === 'adversary' ? 'triangle'
+        : n.hub_type === 'asn' ? 'hexagon' : 'square';
       return {
         id: n.id, label: n.label,
-        shape: iscamp ? 'star' : (n.hub_type === 'asn' ? 'hexagon' : 'square'),
-        size: iscamp ? 26 : 14,
+        shape: hubShape,
+        size: iscamp ? 26 : (n.hub_type === 'adversary' ? 20 : 14),
         color: {
           background: HUB_COLOR[n.hub_type] || '#666',
           border: HUB_COLOR[n.hub_type] || '#666',
@@ -4085,17 +4094,23 @@ function _graphRender(d) {
     }
     var sev = (n.severity || 'MEDIUM').toUpperCase();
     var c = SEV_COLOR[sev] || '#555';
+    /* Preenchimento = comunidade (cluster Louvain); borda = severidade. Quando o
+       IOC não está em nenhuma comunidade, cai no esquema antigo (cor = severidade). */
+    var comm = communityColor(n.community);
+    var bg = comm || c;
+    var bw = comm ? 2 : 0;
+    var commLabel = (n.community != null && n.community >= 0) ? ' · cluster ' + n.community : '';
     return {
       id: n.id, label: '',   /* sem label nos IOCs para não poluir */
       shape: 'dot',
       size: 6 + Math.min(14, Math.round((n.score || 40) / 8)),
       color: {
-        background: c, border: c,
+        background: bg, border: c,
         highlight: { background:'#ffffff', border: c },
         hover:      { background:'#ffffff', border: c }
       },
-      borderWidth: 0,
-      title: (n.type||'') + ' · ' + sev + ' · score ' + (n.score||0),
+      borderWidth: bw,
+      title: (n.type||'') + ' · ' + sev + ' · score ' + (n.score||0) + commLabel,
       shadow: { enabled:true, color:'rgba(0,0,0,.8)', size:6, x:0, y:1 }
     };
   });
@@ -4103,7 +4118,7 @@ function _graphRender(d) {
   var edges = (d.edges || []).map(function(e) {
     return {
       from: e.from, to: e.to,
-      width: e.kind === 'campaign' ? 1.5 : 1,
+      width: (e.kind === 'campaign' || e.kind === 'adversary') ? 1.5 : 1,
       color: { color: EDGE_COLOR[e.kind] || 'rgba(80,80,80,.3)', highlight:'rgba(255,255,255,.5)', hover:'rgba(255,255,255,.3)' },
       smooth: { enabled: true, type: 'continuous', roundness: 0.15 }
     };
@@ -4136,6 +4151,8 @@ function _graphRender(d) {
         _gdpShow(meta);
       } else if (meta.hub_type === 'campaign') {
         _graphLoad({ campaign_id: String(meta.id).replace('campaign:','') });
+      } else if (meta.hub_type === 'adversary') {
+        _graphLoad({ adversary: String(meta.id).replace('adversary:','') });
       } else if (meta.hub_type === 'asn') {
         _graphLoad({ asn: String(meta.id).replace('asn:','') });
       }

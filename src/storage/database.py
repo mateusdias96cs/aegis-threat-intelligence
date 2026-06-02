@@ -708,6 +708,13 @@ class DatabaseManager:
                 hid = hub(f"campaign:{cid}", label, "campaign")
                 edges.append({"from": val, "to": hid, "kind": "campaign", "weight": 3})
 
+            # Ator atribuído: liga IOCs do MESMO adversário mesmo em campanhas
+            # (pulses) distintas — atribuição é o sinal de correlação mais forte.
+            adv = r.get("adversary")
+            if adv:
+                hid = hub(f"adversary:{adv}", adv, "adversary")
+                edges.append({"from": val, "to": hid, "kind": "adversary", "weight": 3})
+
             if r.get("type") == "ip" and r.get("asn") and r["asn"] > 0:
                 hid = hub(f"asn:{r['asn']}", f"AS{r['asn']}", "asn")
                 edges.append({"from": val, "to": hid, "kind": "asn", "weight": 2})
@@ -723,7 +730,46 @@ class DatabaseManager:
         kept_hubs = [h for hid, h in hubs.items() if hid in keep]
         edges = [e for e in edges if e["to"] in keep]
 
+        # Community detection (Louvain): clusters de campanha/infraestrutura que
+        # NÃO compartilham um único sinal explícito, mas se conectam por sobreposição
+        # de hubs (mesma campanha + mesmo ASN, etc.). Colore os nós no frontend.
+        communities = self._detect_communities(edges)
+        for n in nodes:
+            n["community"] = communities.get(n["id"], -1)
+        for h in kept_hubs:
+            h["community"] = communities.get(h["id"], -1)
+
         return {"nodes": nodes + kept_hubs, "edges": edges, "filter": flt}
+
+    @staticmethod
+    def _detect_communities(edges: list[dict]) -> dict:
+        """Particiona o grafo bipartite (IOC↔hub) em comunidades via Louvain.
+        IOCs que se conectam pelos mesmos hubs caem na mesma comunidade — revela
+        clusters que nenhum sinal isolado evidencia. Degrada para componentes
+        conexas (ou vazio) se as libs não estiverem disponíveis."""
+        if not edges:
+            return {}
+        from collections import Counter
+        try:
+            import networkx as nx
+            import community as community_louvain  # python-louvain
+        except ImportError:
+            return {}
+        g = nx.Graph()
+        for e in edges:
+            g.add_edge(e["from"], e["to"], weight=e.get("weight", 1))
+        try:
+            partition = community_louvain.best_partition(g, weight="weight", random_state=42)
+        except Exception:
+            # fallback: cada componente conexa é uma comunidade
+            partition = {}
+            for i, comp in enumerate(nx.connected_components(g)):
+                for node in comp:
+                    partition[node] = i
+        # Renumera por tamanho (maior comunidade = 0) p/ cores estáveis no frontend.
+        sizes = Counter(partition.values())
+        order = {raw: rank for rank, (raw, _) in enumerate(sizes.most_common())}
+        return {node: order[c] for node, c in partition.items()}
 
     # ── BioSec decay ──────────────────────────────────────────────────────────
 
