@@ -13,7 +13,7 @@
 
 ## O que é o AEGIS?
 
-O AEGIS é uma plataforma de inteligência de ameaças cibernéticas construída do zero por um único desenvolvedor. Ele coleta, normaliza, enriquece e correlaciona IOCs (Indicators of Compromise) de 6 fontes públicas em tempo real, entregando contexto acionável para analistas SOC — sem depender de ferramentas pagas.
+O AEGIS é uma plataforma de inteligência de ameaças cibernéticas construída do zero por um único desenvolvedor. Ele coleta, normaliza, enriquece e correlaciona IOCs (Indicators of Compromise) de múltiplas fontes públicas em tempo real, entregando contexto acionável para analistas SOC — sem depender de ferramentas pagas.
 
 O diferencial não é apenas agregar feeds: é transformar dados brutos em **inteligência interpretável**, com scoring auditável, decay automático por tipo de IOC, Kill Chain reconstruída por atacante e handoff de turno entre analistas.
 
@@ -59,6 +59,16 @@ Navegação completa pelas técnicas do framework MITRE ATT&CK carregadas automa
 
 Resolve o problema de handoff entre turnos em SOCs 24/7 sem depender de e-mail ou planilha.
 
+### Threat Overview & Correlation Graph
+Painel de panorama com KPIs e rankings clicáveis (campanhas, adversários, ASNs e países) e um grafo navegável de correlação entre IOCs. As arestas representam infraestrutura comum do atacante — campanha compartilhada, mesmo adversário, mesmo ASN e sub-rede /24 — e a **detecção de comunidades (Louvain)** revela clusters de infraestrutura mesmo quando os indicadores não compartilham um identificador explícito.
+
+### Confiabilidade e Qualidade dos Dados
+Camada dedicada a elevar a confiança dos indicadores:
+- **Proveniência por fonte** — linhagem de coleta: qual fonte viu cada IOC, quando e quantas vezes.
+- **Redução de falso-positivo** — IOCs que casam infraestrutura legítima conhecida (faixas de cloud/CDN, DNS público e domínios populares via Tranco) são sinalizados e têm o score rebaixado, sem serem descartados.
+- **Admiralty Code (NATO 6×6)** — notação padrão de SOC que avalia a confiabilidade da fonte (A–F) e a credibilidade da informação (1–6) em eixos separados.
+- **Completude de contexto** — métrica que indica quantas dimensões de contexto cada IOC tem preenchidas.
+
 ---
 
 ## Fontes de Dados
@@ -71,6 +81,11 @@ Resolve o problema de handoff entre turnos em SOCs 24/7 sem depender de e-mail o
 | URLhaus | URLs maliciosas | até 2.000 |
 | Feodo Tracker | IPs de botnet C2 | ~5 |
 | AbuseIPDB Blacklist | IPs com histórico de abuso | até 10.000 |
+| DShield / SANS ISC | IPs atacantes (telemetria de firewall) | ~500 por run |
+| Emerging Threats | IPs maliciosos | variável |
+| GreyNoise | Scanners de internet | variável |
+
+**Enriquecimento:** os IOCs são enriquecidos com GeoIP2/ASN (MaxMind), Shodan InternetDB (portas, serviços e vulnerabilidades por IP), EPSS/FIRST.org (probabilidade de exploração de CVE) e MalwareBazaar (família de malware por hash).
 
 **Total atual no banco: ~29.000 IOCs ativos**
 
@@ -87,8 +102,8 @@ Score = (S × 0.40) + (C × 0.30) + (T × 0.30)
 | Componente | Descrição |
 |---|---|
 | **S** — Source Reliability | Confiabilidade da fonte (CISA=100, Feodo=85, ThreatFox=80...) |
-| **C** — Corroboration | Quantas fontes independentes confirmaram o IOC |
-| **T** — Type Severity | Para CVEs: CVSS real da NVD. Para IPs: score do AbuseIPDB |
+| **C** — Corroboration | Quantas famílias de fontes independentes confirmaram o IOC (feeds da mesma organização não somam) |
+| **T** — Type Severity | Para CVEs: CVSS da NVD ou probabilidade de exploração (EPSS). Para IPs: score de abuso/ataque |
 
 O breakdown completo é auditável por IOC no drawer, com links para as fontes de referência.
 
@@ -167,8 +182,9 @@ O AEGIS exporta IOCs em dois formatos:
 ```
 aegis-threat-intelligence/
 ├── src/
-│   ├── collectors/          # CISA, OTX, ThreatFox, URLhaus, Feodo, AbuseIPDB, MITRE
-│   ├── processors/          # Normalizer, Classifier, Deduplicator
+│   ├── collectors/          # CISA, OTX, ThreatFox, URLhaus, Feodo, AbuseIPDB, DShield, EmergingThreats, GreyNoise, MITRE
+│   ├── enrichers/           # GeoIP2/ASN, Shodan InternetDB, EPSS, MalwareBazaar
+│   ├── processors/          # Normalizer, Classifier, Deduplicator, Warninglist
 │   ├── storage/             # DatabaseManager, MITRE cache, Shared Workbench
 │   └── reporters/           # Gerador de relatório HTML
 ├── templates/
