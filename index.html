@@ -517,6 +517,15 @@
     .graph-chip { font-size:11px; font-family:var(--font-mono); color:var(--accent-gold); background:rgba(200,169,110,.10); border:1px solid rgba(200,169,110,.28); border-radius:999px; padding:4px 12px; white-space:nowrap; display:flex; align-items:center; gap:6px; }
     .graph-chip-x { cursor:pointer; opacity:.6; font-size:13px; line-height:1; } .graph-chip-x:hover { opacity:1; }
 
+    /* Barra de controles (agrupamento, cor, arestas, foco) */
+    .graph-controls { display:flex; align-items:center; gap:7px; padding:8px 16px; background:rgba(255,255,255,.012); border-bottom:1px solid #161616; flex-wrap:wrap; }
+    .graph-ctl-label { font-size:9px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#3a3a3a; font-family:var(--font-mono); }
+    .graph-toggle { background:rgba(255,255,255,.03); border:1px solid #222; border-radius:6px; color:#666; font-size:11px; font-family:var(--font-mono); padding:4px 10px; cursor:pointer; transition:background .15s,border-color .15s,color .15s; white-space:nowrap; letter-spacing:.2px; }
+    .graph-toggle:hover { background:rgba(255,255,255,.06); color:#aaa; }
+    .graph-toggle.on { background:rgba(192,57,43,.14); border-color:rgba(192,57,43,.45); color:#e8a39a; }
+    .graph-select { background:rgba(255,255,255,.03); border:1px solid #222; border-radius:6px; color:#aaa; font-size:11px; font-family:var(--font-mono); padding:4px 8px; cursor:pointer; outline:none; }
+    .graph-select:focus { border-color:#c0392b; }
+
     /* Barra de legenda + stats */
     .graph-statusbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:7px 16px; background:rgba(255,255,255,.015); border-bottom:1px solid #161616; flex-wrap:wrap; }
     .graph-legend-row { display:flex; align-items:center; gap:14px; flex-wrap:wrap; }
@@ -664,7 +673,7 @@
     <div class="sb-rule"></div>
     <div class="sb-foot">
       <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
-      <div class="sb-meta">Generated<br /><b>2026-06-02 08:59:43</b></div>
+      <div class="sb-meta">Generated<br /><b>2026-06-03 09:38:36</b></div>
     </div>
   </aside>
 
@@ -681,7 +690,7 @@
         </div>
       </div>
       <div class="topbar-right">
-        <div class="pipeline-meta">Total IOCs<b id="topbar-total">3102</b></div>
+        <div class="pipeline-meta">Total IOCs<b id="topbar-total">2944</b></div>
         <button class="btn-run">&#9654; Run Pipeline</button>
       </div>
     </div>
@@ -691,9 +700,9 @@
       <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
       <h1>AEGIS Threat Intelligence</h1>
       <div class="page-sub">
-        <span>Generated <b>2026-06-02 08:59:43</b></span>
+        <span>Generated <b>2026-06-03 09:38:36</b></span>
         <span style="color:var(--text-tertiary)">·</span>
-        <span>Total IOCs in database <b id="stat-db-total">3102</b></span>
+        <span>Total IOCs in database <b id="stat-db-total">2944</b></span>
       </div>
     </div>
 
@@ -716,7 +725,7 @@
     <div class="stats">
       <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="num" id="stat-total">3102</div>
+        <div class="num" id="stat-total">2944</div>
       </div>
       <div class="stat s-critical">
         <div class="label">Critical</div>
@@ -724,11 +733,11 @@
       </div>
       <div class="stat s-high">
         <div class="label">High</div>
-        <div class="num" id="stat-high">1586</div>
+        <div class="num" id="stat-high">1308</div>
       </div>
       <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="num" id="stat-medium">1396</div>
+        <div class="num" id="stat-medium">1516</div>
       </div>
       <div class="stat s-low">
         <div class="label">Low</div>
@@ -1169,7 +1178,7 @@
       <div>
         <div style="font-size:9.5px;font-weight:700;letter-spacing:2.5px;text-transform:uppercase;color:var(--red-primary);margin-bottom:6px;font-family:var(--font-mono);">AEGIS / LINK ANALYSIS</div>
         <h2 style="font-size:20px;font-weight:700;color:var(--text-primary);margin:0;letter-spacing:-.3px;">Correlation Graph</h2>
-        <p style="font-size:12px;color:var(--text-tertiary);margin:6px 0 0;line-height:1.5;">Clique num hub para expandir o cluster · Clique num IOC para ver detalhes · Scroll para zoom</p>
+        <p style="font-size:12px;color:var(--text-tertiary);margin:6px 0 0;line-height:1.5;">Duplo-clique num cluster para expandir · Clique num hub para focar · Clique num IOC para ver detalhes · Scroll para zoom</p>
       </div>
     </div>
 
@@ -1187,6 +1196,32 @@
         </div>
       </div>
 
+      <!-- Controles: agrupamento · cor · arestas · foco -->
+      <div class="graph-controls">
+        <span class="graph-ctl-label">Agrupar</span>
+        <button id="gc-cluster" class="graph-toggle on" onclick="_graphToggleCluster()" title="Colapsa cada comunidade (Louvain) num super-nó. Duplo-clique para expandir.">Comunidades</button>
+        <span class="gl-sep"></span>
+        <span class="graph-ctl-label">Cor do IOC</span>
+        <button id="gc-color-community" class="graph-toggle on" onclick="_graphSetColorMode('community')" title="Preenchimento do nó = cluster (comunidade). Borda = severidade.">Comunidade</button>
+        <button id="gc-color-severity" class="graph-toggle" onclick="_graphSetColorMode('severity')" title="Preenchimento do nó = severidade.">Severidade</button>
+        <span class="gl-sep"></span>
+        <span class="graph-ctl-label">Arestas</span>
+        <button id="gc-edge-campaign" class="graph-toggle on" onclick="_graphToggleEdgeKind('campaign')">Campanha</button>
+        <button id="gc-edge-adversary" class="graph-toggle on" onclick="_graphToggleEdgeKind('adversary')">Ator</button>
+        <button id="gc-edge-asn" class="graph-toggle on" onclick="_graphToggleEdgeKind('asn')">ASN</button>
+        <button id="gc-edge-subnet" class="graph-toggle on" onclick="_graphToggleEdgeKind('subnet')">/24</button>
+        <span class="gl-sep"></span>
+        <span class="graph-ctl-label">Foco</span>
+        <button id="gc-hidenc" class="graph-toggle" onclick="_graphToggleHideNoCluster()" title="Esconde IOCs que não caíram em nenhuma comunidade.">Só clusters</button>
+        <button id="gc-hulls" class="graph-toggle" onclick="_graphToggleHulls()" title="Desenha contornos translúcidos ao redor de cada comunidade (desativa o agrupamento).">Contornos</button>
+        <select id="gc-topn" class="graph-select" onchange="_graphSetTopN(this.value)" title="Mostra apenas as N maiores comunidades.">
+          <option value="0">Todas as comunidades</option>
+          <option value="3">Top 3 comunidades</option>
+          <option value="5">Top 5 comunidades</option>
+          <option value="8">Top 8 comunidades</option>
+        </select>
+      </div>
+
       <!-- Status bar + legenda -->
       <div class="graph-statusbar">
         <div class="graph-legend-row">
@@ -1202,7 +1237,7 @@
           <span class="gl-item"><i class="gl-hub" style="border-color:#58a6ff;background:rgba(88,166,255,.06)"></i>ASN</span>
           <span class="gl-item"><i class="gl-hub" style="border-color:#444"></i>Sub-rede /24</span>
           <span class="gl-sep"></span>
-          <span class="gl-item" title="Cores de preenchimento dos IOCs agrupam clusters detectados por Louvain (comunidades)"><i class="gl-dot" style="background:linear-gradient(90deg,#4a90e2,#e0568a,#3fb950);"></i>Clusters (comunidades)</span>
+          <span class="gl-item" title="No modo Comunidade: preenchimento do IOC = cluster (Louvain); borda = severidade. Tamanho = score."><i class="gl-dot" style="background:linear-gradient(90deg,#4a90e2,#e0568a,#3fb950);"></i>Preenchimento = cluster · borda = severidade</span>
         </div>
         <span id="graph-stats" class="graph-stats-pill"></span>
       </div>
@@ -1248,7 +1283,7 @@
 
     </div><!-- /.scroller -->
 
-    <footer>AEGIS Threat Intelligence &mdash; 2026-06-02 08:59:43</footer>
+    <footer>AEGIS Threat Intelligence &mdash; 2026-06-03 09:38:36</footer>
 
   </main>
 
@@ -2521,7 +2556,7 @@
 </div>
 
 <script>
-const TREND_DATA = [{"critical": 0, "date": "2026-05-06", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-07", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-08", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-14", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-15", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-20", "high": 7, "low": 0, "medium": 0, "total": 7}, {"critical": 0, "date": "2026-05-21", "high": 2, "low": 0, "medium": 0, "total": 2}, {"critical": 0, "date": "2026-05-22", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-26", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 2, "date": "2026-05-27", "high": 1, "low": 0, "medium": 0, "total": 3}, {"critical": 0, "date": "2026-05-29", "high": 17, "low": 0, "medium": 22, "total": 39}, {"critical": 0, "date": "2026-05-30", "high": 85, "low": 0, "medium": 513, "total": 598}, {"critical": 0, "date": "2026-05-31", "high": 269, "low": 0, "medium": 391, "total": 660}, {"critical": 0, "date": "2026-06-01", "high": 251, "low": 0, "medium": 410, "total": 661}, {"critical": 0, "date": "2026-06-02", "high": 195, "low": 0, "medium": 60, "total": 255}];
+const TREND_DATA = [{"critical": 0, "date": "2026-05-06", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-07", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-08", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-14", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-15", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-20", "high": 7, "low": 0, "medium": 0, "total": 7}, {"critical": 0, "date": "2026-05-21", "high": 2, "low": 0, "medium": 0, "total": 2}, {"critical": 0, "date": "2026-05-22", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 0, "date": "2026-05-26", "high": 1, "low": 0, "medium": 0, "total": 1}, {"critical": 2, "date": "2026-05-27", "high": 1, "low": 0, "medium": 0, "total": 3}, {"critical": 0, "date": "2026-05-29", "high": 17, "low": 0, "medium": 0, "total": 17}, {"critical": 0, "date": "2026-05-30", "high": 38, "low": 0, "medium": 72, "total": 110}, {"critical": 0, "date": "2026-05-31", "high": 175, "low": 0, "medium": 485, "total": 660}, {"critical": 0, "date": "2026-06-01", "high": 192, "low": 0, "medium": 469, "total": 661}, {"critical": 0, "date": "2026-06-02", "high": 193, "low": 0, "medium": 444, "total": 637}, {"critical": 0, "date": "2026-06-03", "high": 115, "low": 0, "medium": 46, "total": 161}];
 
 (function () {
   var container = document.getElementById('trendsChartContainer');
@@ -2651,6 +2686,7 @@ function renderDrawerBody(ioc) {
   html += renderOriginSection(ioc);
   html += renderSightingsSection(ioc);
   if (type === 'hash') html += renderMalwareSection(ioc);
+  if (type === 'domain' || type === 'url') html += renderRdapSection(ioc);
   if (hasMitre) html += renderMitreSection(ioc);
   if (type === 'ip') html += '<div id="drawer-enrichment">' + renderEnrichLoading() + '</div>';
   html += renderHistorySection(ioc);
@@ -2948,6 +2984,36 @@ function renderFpWarningBanner(ioc) {
         '<div style="font-size:12px;color:var(--text-secondary);line-height:1.5">Casou lista de infraestrutura legítima conhecida — <strong>' + escHtml(w) + '</strong>. Score reduzido automaticamente; valide o contexto antes de agir.</div>' +
       '</div>' +
     '</div></div>';
+}
+
+/* ── Section: RDAP — Registro do domínio ────────────────────── */
+function renderRdapSection(ioc) {
+  var r = ioc.rdap_data;
+  if (!r) return '';
+
+  var age = r.age_days != null ? r.age_days : null;
+  var ageColor = '#999', ageLabel = '';
+  if (age != null) {
+    if (age < 30)       { ageColor = '#e74c3c'; ageLabel = age + ' dias  ⚠ recém-registrado'; }
+    else if (age < 180) { ageColor = '#e3b341'; ageLabel = age + ' dias  ↑ suspeito'; }
+    else                { ageColor = 'var(--text-secondary)'; ageLabel = age + ' dias'; }
+  }
+
+  var rows = '';
+  if (r.registered)   rows += drawerInfoBlock('Registro',    escHtml(r.registered));
+  if (r.expiration)   rows += drawerInfoBlock('Expiração',   escHtml(r.expiration));
+  if (r.registrar)    rows += drawerInfoBlock('Registradora', escHtml(r.registrar));
+  if (age != null)    rows += '<div class="drawer-info-block" style="grid-column:span 2">' +
+    '<div class="drawer-info-label">Idade do domínio</div>' +
+    '<div class="drawer-info-value" style="color:' + ageColor + ';font-weight:600">' + escHtml(ageLabel) + '</div></div>';
+
+  var status = (r.status || []).filter(Boolean);
+  if (status.length)  rows += '<div class="drawer-info-block" style="grid-column:span 2">' +
+    '<div class="drawer-info-label">Status RDAP</div>' +
+    '<div class="drawer-info-value" style="font-size:11px">' + status.map(escHtml).join(' · ') + '</div></div>';
+
+  return '<div class="drawer-section"><div class="drawer-section-title">Registro do Domínio (RDAP)</div>' +
+    '<div class="drawer-info-grid">' + rows + '</div></div>';
 }
 
 /* ── Section: Sightings / Proveniência por fonte ────────────── */
@@ -4008,11 +4074,27 @@ function _graphFromOverview(params) {
    CORRELATION GRAPH — Dark Analytics (vis-network)
    ════════════════════════════════════════════════════════════════ */
 var _graphNet = null, _graphInited = false, _graphMeta = {}, _graphSelectedMeta = null;
+var _graphRaw = null;          /* último payload de /api/graph (não filtrado)        */
+var _graphData = null;         /* DataSets atuais { nodes, edges }                   */
+var _graphCommInfo = {};       /* por comunidade: { count, label, color }            */
+/* Estado dos controles (R1/R3/R4/R5) */
+var _graphClustered = true;            /* R1 — comunidades colapsadas por padrão     */
+var _graphColorMode = 'community';     /* R4 — 'community' | 'severity'              */
+var _graphHulls = false;               /* R3 — contornos translúcidos                */
+var _graphHideNoCluster = false;       /* R5c — esconder IOCs sem comunidade         */
+var _graphTopN = 0;                    /* R5b — 0 = todas; senão só as N maiores      */
+var _graphEdgeKinds = { campaign:true, adversary:true, asn:true, subnet:true }; /* R5a */
 var HUB_COLOR = { campaign:'#c8a96e', adversary:'#e0568a', asn:'#58a6ff', subnet:'#666666' };
 var EDGE_COLOR = { campaign:'rgba(200,169,110,.4)', adversary:'rgba(224,86,138,.4)', asn:'rgba(88,166,255,.35)', subnet:'rgba(100,100,100,.3)' };
 /* Paleta de comunidades (Louvain): preenchimento do nó = cluster; borda = severidade. */
 var COMMUNITY_PALETTE = ['#4a90e2','#e0568a','#3fb950','#e3b341','#a371f7','#1abc9c','#e8833a','#56c5d0','#c96b6b','#7d8aa3'];
 function communityColor(c) { return (c == null || c < 0) ? null : COMMUNITY_PALETTE[c % COMMUNITY_PALETTE.length]; }
+/* #rrggbb → rgba(r,g,b,a) para os contornos (R3) */
+function _hexA(hex, a) {
+  var h = hex.replace('#',''); if (h.length === 3) h = h[0]+h[0]+h[1]+h[1]+h[2]+h[2];
+  var n = parseInt(h, 16);
+  return 'rgba(' + ((n>>16)&255) + ',' + ((n>>8)&255) + ',' + (n&255) + ',' + a + ')';
+}
 
 function _graphInit() {
   if (_graphInited) return;
@@ -4056,66 +4138,135 @@ function _graphLoad(params) {
     });
 }
 
+/* Recebe o payload bruto de /api/graph, calcula metadados de comunidade e
+   delega a montagem (filtros + render) para _graphBuild. */
 function _graphRender(d) {
   document.getElementById('graph-loading').style.display = 'none';
-  var canvas = document.getElementById('graph-canvas');
-  var iocs = (d.nodes || []).filter(function(n){ return n.node_kind === 'ioc'; });
+  _graphRaw = d || { nodes: [], edges: [] };
 
-  if (!iocs.length) {
+  var iocCount = (_graphRaw.nodes || []).filter(function(n){ return n.node_kind === 'ioc'; }).length;
+  if (!iocCount) {
     document.getElementById('graph-empty').style.display = 'flex';
     document.getElementById('graph-empty-msg').textContent = 'Nenhum IOC correlacionado para este filtro.';
+    document.getElementById('graph-stats').textContent = '';
     return;
   }
-  document.getElementById('graph-empty').style.display = 'none';
-  document.getElementById('graph-stats').textContent =
-    iocs.length + ' IOCs · ' + (d.edges || []).length + ' correlações';
 
+  /* meta por id + resumo de cada comunidade (rótulo dominante + contagem) */
   _graphMeta = {};
-  var nodes = (d.nodes || []).map(function(n) {
+  _graphCommInfo = {};
+  var agg = {};
+  (_graphRaw.nodes || []).forEach(function(n) {
     _graphMeta[n.id] = n;
-    if (n.node_kind === 'hub') {
-      var iscamp = n.hub_type === 'campaign';
-      var hubShape = iscamp ? 'star'
-        : n.hub_type === 'adversary' ? 'triangle'
-        : n.hub_type === 'asn' ? 'hexagon' : 'square';
-      return {
-        id: n.id, label: n.label,
-        shape: hubShape,
-        size: iscamp ? 26 : (n.hub_type === 'adversary' ? 20 : 14),
-        color: {
-          background: HUB_COLOR[n.hub_type] || '#666',
-          border: HUB_COLOR[n.hub_type] || '#666',
-          highlight: { background: '#fff', border: HUB_COLOR[n.hub_type] || '#666' },
-          hover:      { background: '#fff', border: HUB_COLOR[n.hub_type] || '#666' }
-        },
-        font: { color: '#e8e8e8', size: 12, face: 'JetBrains Mono', strokeWidth:3, strokeColor:'#050505' },
-        borderWidth: 0, shadow: { enabled:true, color:'rgba(0,0,0,.7)', size:10, x:0, y:2 }
-      };
-    }
-    var sev = (n.severity || 'MEDIUM').toUpperCase();
-    var c = SEV_COLOR[sev] || '#555';
-    /* Preenchimento = comunidade (cluster Louvain); borda = severidade. Quando o
-       IOC não está em nenhuma comunidade, cai no esquema antigo (cor = severidade). */
-    var comm = communityColor(n.community);
-    var bg = comm || c;
-    var bw = comm ? 2 : 0;
-    var commLabel = (n.community != null && n.community >= 0) ? ' · cluster ' + n.community : '';
-    return {
-      id: n.id, label: '',   /* sem label nos IOCs para não poluir */
-      shape: 'dot',
-      size: 6 + Math.min(14, Math.round((n.score || 40) / 8)),
-      color: {
-        background: bg, border: c,
-        highlight: { background:'#ffffff', border: c },
-        hover:      { background:'#ffffff', border: c }
-      },
-      borderWidth: bw,
-      title: (n.type||'') + ' · ' + sev + ' · score ' + (n.score||0) + commLabel,
-      shadow: { enabled:true, color:'rgba(0,0,0,.8)', size:6, x:0, y:1 }
+    var c = n.community;
+    if (c == null || c < 0) return;
+    var a = agg[c] || (agg[c] = { count:0, campaign:null, adversary:null, asn:null, subnet:null });
+    if (n.node_kind === 'ioc') a.count++;
+    else if (n.hub_type && !a[n.hub_type]) a[n.hub_type] = n.label;
+  });
+  Object.keys(agg).forEach(function(c) {
+    var a = agg[c];
+    _graphCommInfo[c] = {
+      count: a.count,
+      label: a.campaign || a.adversary || a.asn || a.subnet || ('Cluster ' + c),
+      color: communityColor(parseInt(c, 10))
     };
   });
 
-  var edges = (d.edges || []).map(function(e) {
+  _graphBuild();
+}
+
+/* Uma comunidade passa nos filtros de foco? (Top-N / só-clusters — R5) */
+function _commPass(c) {
+  if (c == null || c < 0) return !_graphHideNoCluster && _graphTopN === 0;
+  return _graphTopN === 0 || c < _graphTopN;   /* renumeradas por tamanho: 0 = maior */
+}
+
+function _iocVisNode(n) {
+  var sev = (n.severity || 'MEDIUM').toUpperCase();
+  var sevC = SEV_COLOR[sev] || '#555';
+  var comm = communityColor(n.community);
+  var useComm = (_graphColorMode === 'community') && comm;   /* R4 */
+  var commLabel = (n.community != null && n.community >= 0) ? ' · cluster ' + n.community : '';
+  return {
+    id: n.id, label: '',
+    shape: 'dot',
+    size: 6 + Math.min(14, Math.round((n.score || 40) / 8)),
+    color: {
+      background: useComm ? comm : sevC, border: sevC,
+      highlight: { background:'#ffffff', border: sevC },
+      hover:      { background:'#ffffff', border: sevC }
+    },
+    borderWidth: useComm ? 2 : 0,
+    community: (n.community != null ? n.community : -1),   /* p/ joinCondition do cluster */
+    title: (n.type||'') + ' · ' + sev + ' · score ' + (n.score||0) + commLabel,
+    shadow: { enabled:true, color:'rgba(0,0,0,.8)', size:6, x:0, y:1 },
+    font: { color:'#cfcfcf', size:11, face:'JetBrains Mono', strokeWidth:3, strokeColor:'#050505' }
+  };
+}
+
+function _hubVisNode(n) {
+  var iscamp = n.hub_type === 'campaign';
+  var hubShape = iscamp ? 'star'
+    : n.hub_type === 'adversary' ? 'triangle'
+    : n.hub_type === 'asn' ? 'hexagon' : 'square';
+  return {
+    id: n.id, label: n.label,
+    shape: hubShape,
+    size: iscamp ? 26 : (n.hub_type === 'adversary' ? 20 : 14),
+    color: {
+      background: HUB_COLOR[n.hub_type] || '#666',
+      border: HUB_COLOR[n.hub_type] || '#666',
+      highlight: { background:'#fff', border: HUB_COLOR[n.hub_type] || '#666' },
+      hover:      { background:'#fff', border: HUB_COLOR[n.hub_type] || '#666' }
+    },
+    font: { color:'#e8e8e8', size:12, face:'JetBrains Mono', strokeWidth:3, strokeColor:'#050505' },
+    borderWidth: 0, shadow: { enabled:true, color:'rgba(0,0,0,.7)', size:10, x:0, y:2 },
+    community: (n.community != null ? n.community : -1)
+  };
+}
+
+/* Monta os DataSets a partir de _graphRaw honrando os controles e (re)renderiza. */
+function _graphBuild() {
+  if (!_graphRaw) return;
+  var raw = _graphRaw;
+
+  /* 1) IOCs que sobrevivem aos filtros de comunidade */
+  var iocNodes = (raw.nodes || []).filter(function(n){ return n.node_kind === 'ioc' && _commPass(n.community); });
+  var keep = {};
+  iocNodes.forEach(function(n){ keep[n.id] = true; });
+
+  /* 2) Arestas: tipo ativo (R5a) + endpoints presentes */
+  var hubById = {};
+  (raw.nodes || []).forEach(function(n){ if (n.node_kind === 'hub') hubById[n.id] = n; });
+  var rawEdges = (raw.edges || []).filter(function(e) {
+    if (!_graphEdgeKinds[e.kind]) return false;
+    if (!keep[e.from]) return false;
+    var h = hubById[e.to];
+    return h && _commPass(h.community);
+  });
+
+  /* 3) Hubs que ainda têm >=1 aresta após o filtro */
+  var hubDeg = {};
+  rawEdges.forEach(function(e){ hubDeg[e.to] = (hubDeg[e.to] || 0) + 1; });
+
+  document.getElementById('graph-stats').textContent =
+    iocNodes.length + ' IOCs · ' + rawEdges.length + ' correlações';
+
+  if (!iocNodes.length) {
+    document.getElementById('graph-empty').style.display = 'flex';
+    document.getElementById('graph-empty-msg').textContent = 'Nenhum IOC para os controles atuais.';
+    return;
+  }
+  document.getElementById('graph-empty').style.display = 'none';
+
+  /* 4) Nós e arestas vis.js */
+  var visNodes = [];
+  iocNodes.forEach(function(n){ visNodes.push(_iocVisNode(n)); });
+  (raw.nodes || []).forEach(function(n) {
+    if (n.node_kind === 'hub' && hubDeg[n.id]) visNodes.push(_hubVisNode(n));
+  });
+  var visEdges = rawEdges.map(function(e) {
     return {
       from: e.from, to: e.to,
       width: (e.kind === 'campaign' || e.kind === 'adversary') ? 1.5 : 1,
@@ -4124,42 +4275,224 @@ function _graphRender(d) {
     };
   });
 
-  var data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+  _graphLabelsShown = false;   /* R6 — rótulos de IOC começam ocultos */
+  _graphData = { nodes: new vis.DataSet(visNodes), edges: new vis.DataSet(visEdges) };
+
   var options = {
-    layout: { improvedLayout: iocs.length < 80 },
+    /* R2 — layout determinístico: seed fixo + improvedLayout até 120 nós */
+    layout: { improvedLayout: iocNodes.length < 120, randomSeed: 42 },
     physics: {
-      stabilization: { iterations: 180, fit: true },
+      enabled: true,
+      stabilization: { iterations: 220, fit: true },
       barnesHut: { gravitationalConstant:-5500, centralGravity:.25, springLength:95, springConstant:.04, damping:.5, avoidOverlap:.1 }
     },
     interaction: { hover:true, tooltipDelay:200, navigationButtons:false, zoomView:true, dragView:true },
-    nodes: { borderWidth:0 },
+    /* R6 — escala o rótulo conforme o zoom */
+    nodes: { borderWidth:0, scaling: { label: { enabled:true, min:8, max:22 } } },
     edges: { selectionWidth:2.5, hoverWidth:.5 },
     background: 'transparent'
   };
 
   if (_graphNet) {
     _graphNet.setOptions(options);
-    _graphNet.setData(data);
+    _graphNet.setData(_graphData);
   } else {
-    _graphNet = new vis.Network(canvas, data, options);
+    _graphNet = new vis.Network(document.getElementById('graph-canvas'), _graphData, options);
+    _graphAttachHandlers();
+  }
+}
 
-    _graphNet.on('click', function(p) {
-      if (!p.nodes.length) { _gdpReset(); return; }
-      var meta = _graphMeta[p.nodes[0]];
-      if (!meta) return;
-      if (meta.node_kind === 'ioc') {
-        _gdpShow(meta);
-      } else if (meta.hub_type === 'campaign') {
-        _graphLoad({ campaign_id: String(meta.id).replace('campaign:','') });
-      } else if (meta.hub_type === 'adversary') {
-        _graphLoad({ adversary: String(meta.id).replace('adversary:','') });
-      } else if (meta.hub_type === 'asn') {
-        _graphLoad({ asn: String(meta.id).replace('asn:','') });
+function _graphAttachHandlers() {
+  _graphNet.on('click', function(p) {
+    if (!p.nodes.length) { _gdpReset(); return; }
+    var id = p.nodes[0];
+    if (_graphNet.isCluster(id)) return;   /* cluster: usar duplo-clique p/ expandir */
+    var meta = _graphMeta[id];
+    if (!meta) return;
+    if (meta.node_kind === 'ioc') {
+      _gdpShow(meta);
+    } else if (meta.hub_type === 'campaign') {
+      _graphLoad({ campaign_id: String(meta.id).replace('campaign:','') });
+    } else if (meta.hub_type === 'adversary') {
+      _graphLoad({ adversary: String(meta.id).replace('adversary:','') });
+    } else if (meta.hub_type === 'asn') {
+      _graphLoad({ asn: String(meta.id).replace('asn:','') });
+    }
+  });
+
+  /* R1 — duplo-clique num super-nó expande a comunidade */
+  _graphNet.on('doubleClick', function(p) {
+    if (!p.nodes.length) return;
+    if (_graphNet.isCluster(p.nodes[0])) _graphNet.openCluster(p.nodes[0]);
+  });
+
+  _graphNet.on('deselectNode', function() { _gdpReset(); });
+  _graphNet.on('zoom', _graphOnZoom);                 /* R6 */
+  _graphNet.on('beforeDrawing', _graphDrawHulls);     /* R3 */
+
+  /* R2 — congela a física ao estabilizar; R1 — recolhe comunidades em seguida */
+  _graphNet.on('stabilizationIterationsDone', function() {
+    _graphNet.setOptions({ physics: false });
+    if (_graphClustered) _graphApplyClusters();
+  });
+}
+
+/* ── R1: colapso de comunidades em super-nós ─────────────────────── */
+function _graphApplyClusters() {
+  if (!_graphNet) return;
+  Object.keys(_graphCommInfo).forEach(function(c) {
+    var info = _graphCommInfo[c];
+    var cid = parseInt(c, 10);
+    if (info.count < 2 || !_commPass(cid)) return;   /* não colapsa clusters triviais/ocultos */
+    _graphNet.cluster({
+      joinCondition: function(opts) { return opts.community === cid; },
+      clusterNodeProperties: {
+        id: 'cluster:' + c,
+        label: info.label + '\n▣ ' + info.count + ' IOCs',
+        shape: 'dot',
+        size: Math.min(46, 18 + info.count),
+        color: {
+          background: info.color || '#555', border: '#ffffff',
+          highlight: { background:'#fff', border: info.color || '#999' },
+          hover:      { background:'#fff', border: info.color || '#999' }
+        },
+        borderWidth: 2,
+        font: { color:'#f0f0f0', size:13, face:'JetBrains Mono', strokeWidth:4, strokeColor:'#050505' },
+        shadow: { enabled:true, color:'rgba(0,0,0,.7)', size:12, x:0, y:3 }
       }
     });
+  });
+}
 
-    _graphNet.on('deselectNode', function() { _gdpReset(); });
+function _graphOpenAllClusters() {
+  if (!_graphNet) return;
+  Object.keys(_graphCommInfo).forEach(function(c) {
+    var cid = 'cluster:' + c;
+    if (_graphNet.isCluster(cid)) _graphNet.openCluster(cid);
+  });
+}
+
+/* ── R3: contornos translúcidos (convex hull) por comunidade ──────── */
+function _convexHull(points) {
+  if (points.length < 3) return points.slice();
+  var pts = points.slice().sort(function(a, b){ return a.x - b.x || a.y - b.y; });
+  function cross(o, a, b) { return (a.x-o.x)*(b.y-o.y) - (a.y-o.y)*(b.x-o.x); }
+  var lower = [], upper = [], i;
+  for (i = 0; i < pts.length; i++) {
+    while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], pts[i]) <= 0) lower.pop();
+    lower.push(pts[i]);
   }
+  for (i = pts.length - 1; i >= 0; i--) {
+    while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], pts[i]) <= 0) upper.pop();
+    upper.push(pts[i]);
+  }
+  lower.pop(); upper.pop();
+  return lower.concat(upper);
+}
+
+function _graphDrawHulls(ctx) {
+  if (!_graphHulls || _graphClustered || !_graphNet || !_graphData) return;
+  var ids = _graphData.nodes.getIds();
+  if (!ids.length) return;
+  var pos = _graphNet.getPositions(ids);
+  var groups = {};
+  Object.keys(pos).forEach(function(id) {
+    var m = _graphMeta[id];
+    if (!m || m.community == null || m.community < 0) return;
+    (groups[m.community] = groups[m.community] || []).push(pos[id]);
+  });
+  Object.keys(groups).forEach(function(c) {
+    var hull = _convexHull(groups[c]);
+    if (hull.length < 3) return;
+    var col = communityColor(parseInt(c, 10));
+    if (!col) return;
+    var cx = 0, cy = 0, i;
+    for (i = 0; i < hull.length; i++) { cx += hull[i].x; cy += hull[i].y; }
+    cx /= hull.length; cy /= hull.length;
+    ctx.beginPath();
+    for (i = 0; i < hull.length; i++) {        /* expande p/ fora do centróide */
+      var dx = hull[i].x - cx, dy = hull[i].y - cy;
+      var len = Math.sqrt(dx*dx + dy*dy) || 1;
+      var px = hull[i].x + (dx/len) * 22, py = hull[i].y + (dy/len) * 22;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+    ctx.fillStyle = _hexA(col, 0.08);
+    ctx.strokeStyle = _hexA(col, 0.40);
+    ctx.lineWidth = 2;
+    ctx.fill(); ctx.stroke();
+  });
+}
+
+/* ── R6: rótulos de IOC só aparecem ao aproximar o zoom ───────────── */
+var _graphLabelsShown = false;
+function _graphOnZoom() {
+  if (!_graphNet || !_graphData) return;
+  var show = _graphNet.getScale() >= 1.5;
+  if (show === _graphLabelsShown) return;
+  _graphLabelsShown = show;
+  var ups = [];
+  _graphData.nodes.forEach(function(node) {
+    var m = _graphMeta[node.id];
+    if (m && m.node_kind === 'ioc') ups.push({ id: node.id, label: show ? String(m.id || '').slice(0, 28) : '' });
+  });
+  if (ups.length) _graphData.nodes.update(ups);
+}
+
+/* ── Controles (R1/R3/R4/R5) ──────────────────────────────────────── */
+function _graphToggleCluster() {
+  _graphClustered = !_graphClustered;
+  document.getElementById('gc-cluster').classList.toggle('on', _graphClustered);
+  if (_graphClustered) {
+    if (_graphHulls) { _graphHulls = false; document.getElementById('gc-hulls').classList.remove('on'); }
+    _graphApplyClusters();
+  } else {
+    _graphOpenAllClusters();
+  }
+  if (_graphNet) _graphNet.redraw();
+}
+
+function _graphSetColorMode(mode) {
+  if (mode === _graphColorMode) return;
+  _graphColorMode = mode;
+  document.getElementById('gc-color-community').classList.toggle('on', mode === 'community');
+  document.getElementById('gc-color-severity').classList.toggle('on', mode === 'severity');
+  if (!_graphData) return;
+  var ups = [];   /* recolore sem reconstruir → preserva o layout */
+  (_graphRaw.nodes || []).forEach(function(n) {
+    if (n.node_kind !== 'ioc' || !_graphData.nodes.get(n.id)) return;
+    var v = _iocVisNode(n);
+    ups.push({ id: n.id, color: v.color, borderWidth: v.borderWidth });
+  });
+  if (ups.length) _graphData.nodes.update(ups);
+}
+
+function _graphToggleHulls() {
+  _graphHulls = !_graphHulls;
+  document.getElementById('gc-hulls').classList.toggle('on', _graphHulls);
+  if (_graphHulls && _graphClustered) {   /* contornos exigem nós visíveis */
+    _graphClustered = false;
+    document.getElementById('gc-cluster').classList.remove('on');
+    _graphOpenAllClusters();
+  }
+  if (_graphNet) _graphNet.redraw();
+}
+
+function _graphToggleEdgeKind(kind) {
+  _graphEdgeKinds[kind] = !_graphEdgeKinds[kind];
+  document.getElementById('gc-edge-' + kind).classList.toggle('on', _graphEdgeKinds[kind]);
+  _graphBuild();
+}
+
+function _graphToggleHideNoCluster() {
+  _graphHideNoCluster = !_graphHideNoCluster;
+  document.getElementById('gc-hidenc').classList.toggle('on', _graphHideNoCluster);
+  _graphBuild();
+}
+
+function _graphSetTopN(v) {
+  _graphTopN = parseInt(v, 10) || 0;
+  _graphBuild();
 }
 
 /* ── Node Detail Panel ────────────────────────────────────────── */
