@@ -14,6 +14,12 @@ from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
 from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher, rdap_enricher
+from src.enrichers import geoip_db
+
+# Intervalo mínimo entre execuções do pipeline (idempotência). O run leva ~9 min
+# (10:13→10:23 nos logs); 15 min dá folga sobre isso e ainda barra o re-disparo de
+# 19 min que aconteceu. Configurável; 0 desliga o guard.
+_MIN_RUN_INTERVAL_MIN = int(os.getenv("PIPELINE_MIN_INTERVAL_MIN", "15"))
 
 
 def run():
@@ -33,6 +39,23 @@ def run():
         techniques = {}
         new_iocs = []
         try:
+            # ── Idempotency guard ─────────────────────────────────────────────
+            # Barra re-disparos próximos (retry do Airflow, GitHub Actions e o POST
+            # diário colidindo, duplo-clique manual) que reprocessam APIs e limpam
+            # IOCs recém-inseridos. Autoritativo no servidor, vale p/ qualquer gatilho.
+            if _MIN_RUN_INTERVAL_MIN > 0:
+                since = db.minutes_since_last_run()
+                if since is not None and since < _MIN_RUN_INTERVAL_MIN:
+                    print(f"[pipeline] já executado há {since:.1f} min "
+                          f"(< {_MIN_RUN_INTERVAL_MIN} min) — execução ignorada (idempotência)")
+                    return
+            db.mark_pipeline_run()
+
+            # ── GeoIP2: garante os .mmdb (Render = FS efêmero) ────────────────
+            # Resolve por glob e baixa via MAXMIND_LICENSE_KEY se faltar; sem chave
+            # degrada graciosamente (country/asn = None). Nunca lança exception.
+            geoip_db.ensure_geoip_db()
+
             # ── Phase 1: collection + processing (non-fatal) ──────────────────
             try:
                 print("[pipeline] cleaning up expired IOCs ...")

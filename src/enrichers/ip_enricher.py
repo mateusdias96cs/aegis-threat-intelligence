@@ -1,6 +1,8 @@
 import os
 from collections import defaultdict
 
+from src.enrichers import geoip_db
+
 # Score-base por severidade da fonte mais forte (alinhado aos limiares do
 # classifier: >=90 CRITICAL, >=70 HIGH, >=40 MEDIUM). Preserva a severidade
 # da fonte para IPs de fonte única em vez de rebaixá-los.
@@ -26,6 +28,26 @@ def _compute_abuse_score(severities: list[str]) -> int:
     return min(100, base + bonus)
 
 
+def _open_geoip_reader(env_var: str, edition_id: str, label: str):
+    """Abre um Reader GeoIP2 tolerante a filesystem efêmero (Render). None se indisponível.
+
+    Resolve o .mmdb por: env var (se o arquivo REALMENTE existir) → glob em data/.
+    No Render o arquivo apontado pelo `.env` some no restart; em vez de estourar
+    FileNotFoundError, devolvemos None e o enrichment apenas não preenche country/asn.
+    Nunca propaga exception — degradação silenciosa por design.
+    """
+    env_path = os.getenv(env_var)
+    path = env_path if (env_path and os.path.exists(env_path)) else geoip_db.find_mmdb(edition_id)
+    if not path:
+        return None
+    try:
+        import geoip2.database
+        return geoip2.database.Reader(path)
+    except Exception as e:
+        print(f"[ip_enricher] GeoIP2 {label} indisponível ({e}) — seguindo sem ele")
+        return None
+
+
 def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]:
     """
     Enriquece IPs novos via cruzamento com IOCs já coletados + GeoIP2 local.
@@ -43,24 +65,10 @@ def enrich_batch(new_iocs: list[dict], collected_iocs: list[dict]) -> list[dict]
     ip_iocs = [ioc for ioc in new_iocs if ioc.get("type") == "ip" and ioc.get("value")]
     print(f"[ip_enricher] enriching {len(ip_iocs)} new IPs via cross-source + GeoIP2")
 
-    # Open GeoIP2 readers once for all IPs (country + ASN; both optional)
-    reader = None
-    db_path = os.getenv("MAXMIND_DB_PATH")
-    if db_path:
-        try:
-            import geoip2.database
-            reader = geoip2.database.Reader(db_path)
-        except Exception as e:
-            print(f"[ip_enricher] GeoIP2 reader failed to open: {e}")
-
-    asn_reader = None
-    asn_db_path = os.getenv("MAXMIND_ASN_DB_PATH")
-    if asn_db_path:
-        try:
-            import geoip2.database
-            asn_reader = geoip2.database.Reader(asn_db_path)
-        except Exception as e:
-            print(f"[ip_enricher] GeoIP2 ASN reader failed to open: {e}")
+    # Open GeoIP2 readers once for all IPs (country + ASN; both optional).
+    # Resolução robusta (env → glob) com fallback silencioso — ver _open_geoip_reader.
+    reader = _open_geoip_reader("MAXMIND_DB_PATH", "GeoLite2-Country", "Country")
+    asn_reader = _open_geoip_reader("MAXMIND_ASN_DB_PATH", "GeoLite2-ASN", "ASN")
 
     try:
         for ioc in ip_iocs:

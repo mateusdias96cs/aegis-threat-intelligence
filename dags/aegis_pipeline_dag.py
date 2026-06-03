@@ -70,7 +70,13 @@ def check_aegis_health():
     return data
 
 
-def run_aegis_pipeline():
+def trigger_aegis_pipeline(**context):
+    """Dispara o pipeline (POST único) e devolve o total_iocs ANTES via XCom.
+
+    Tarefa SEPARADA da espera e com `retries: 0` (ver task_kwargs): se a espera
+    falhar e o Airflow re-tentar, é só a ESPERA que repete — o gatilho NUNCA é
+    re-disparado. Isso elimina o run duplicado (10:13 e 10:32) causado pelo retry
+    da tarefa monolítica antiga re-POSTando /api/pipeline/run."""
     base = _base_url()
     health_before = requests.get(f"{base}/health", timeout=10).json()
     total_before = health_before.get("database", {}).get("total_iocs", 0)
@@ -82,8 +88,14 @@ def run_aegis_pipeline():
     )
     response.raise_for_status()
     print(f"Pipeline iniciado: {response.json()}")
+    return total_before
 
-    print("Aguardando pipeline terminar...")
+
+def wait_for_aegis_pipeline(**context):
+    """Acompanha a conclusão pelo /health. Idempotente — seguro re-tentar."""
+    base = _base_url()
+    total_before = context["ti"].xcom_pull(task_ids="trigger_pipeline") or 0
+    print(f"Aguardando pipeline terminar (baseline total_iocs={total_before})...")
     time.sleep(30)  # espera inicial — pipeline leva ~3 min
 
     today = str(date.today())
@@ -126,9 +138,19 @@ with DAG(
         python_callable=check_aegis_health,
     )
 
-    run_pipeline = PythonOperator(
-        task_id="run_pipeline",
-        python_callable=run_aegis_pipeline,
+    # O gatilho NÃO re-tenta: um retry aqui significaria disparar o pipeline duas
+    # vezes. A idempotência server-side (PIPELINE_MIN_INTERVAL_MIN) é a segunda
+    # rede de proteção caso outro gatilho (GitHub Actions) colida no mesmo horário.
+    trigger_pipeline = PythonOperator(
+        task_id="trigger_pipeline",
+        python_callable=trigger_aegis_pipeline,
+        retries=0,
     )
 
-    health_check >> run_pipeline
+    # Só a espera é re-tentável (polling é idempotente, não re-dispara nada).
+    wait_pipeline = PythonOperator(
+        task_id="wait_pipeline",
+        python_callable=wait_for_aegis_pipeline,
+    )
+
+    health_check >> trigger_pipeline >> wait_pipeline

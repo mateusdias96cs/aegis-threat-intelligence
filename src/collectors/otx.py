@@ -1,8 +1,37 @@
 import os
+import time
 import requests
 from datetime import date
 
 BASE_URL = "https://otx.alienvault.com/api/v1/pulses/subscribed"
+
+# O OTX é lento e instável sob carga: um único GET de 30s estourava o read timeout
+# e derrubava a coleta inteira ("[otx] failed to fetch pulses: Read timed out").
+# Damos mais fôlego (60s) e 3 tentativas com backoff crescente (10s/20s/30s) para
+# absorver instabilidade transitória sem travar o pipeline.
+_TIMEOUT = 60
+_BACKOFFS = [10, 20, 30]  # espera após a 1ª/2ª/3ª falha (a 3ª não dorme: é a última)
+
+
+def _get_with_retry(url: str, headers: dict) -> dict | None:
+    """GET no OTX com timeout de 60s e backoff exponencial. None se todas falharem.
+
+    Esgotadas as 3 tentativas, devolve None e o chamador preserva o que já coletou
+    (dados parciais) — o pipeline nunca trava por causa do OTX.
+    """
+    for attempt, wait in enumerate(_BACKOFFS, start=1):
+        try:
+            response = requests.get(url, headers=headers, timeout=_TIMEOUT)
+            response.raise_for_status()
+            return response.json()
+        except requests.RequestException as e:
+            if attempt < len(_BACKOFFS):
+                print(f"[otx] tentativa {attempt}/{len(_BACKOFFS)} falhou: {e} — "
+                      f"nova tentativa em {wait}s")
+                time.sleep(wait)
+            else:
+                print(f"[otx] todas as {len(_BACKOFFS)} tentativas falharam: {e}")
+    return None
 
 TYPE_MAP = {
     "IPv4": "ip",
@@ -66,12 +95,14 @@ def collect() -> list[dict]:
     MAX_PAGES = 3
 
     while url and pages_fetched < MAX_PAGES:
-        try:
-            response = requests.get(url, headers=headers, timeout=30)
-            response.raise_for_status()
-            data = response.json()
-        except requests.RequestException as e:
-            print(f"[otx] failed to fetch pulses: {e}")
+        data = _get_with_retry(url, headers)
+        if data is None:
+            # Falha após todas as tentativas: NÃO descarta o que já veio das páginas
+            # anteriores — compatível com o fallback de dados parciais existente.
+            if iocs:
+                print(f"[otx] retornando {len(iocs)} indicadores parciais coletados antes da falha")
+            else:
+                print("[otx] nenhum dado obtido — retornando lista vazia")
             break
 
         for pulse in data.get("results", []):

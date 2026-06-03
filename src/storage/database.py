@@ -132,6 +132,21 @@ class Sighting(Base):
     )
 
 
+class PipelineRun(Base):
+    """Marca de início de cada execução do pipeline — base do guard de idempotência.
+
+    O pipeline pode ser disparado por múltiplas fontes (DAG do Airflow, GitHub
+    Actions, POST manual em /api/pipeline/run) e, pior, a tarefa do Airflow tinha
+    `retries: 1`: quando a espera pós-trigger estourava, o Airflow re-disparava o
+    POST ~5 min depois — daí o run duplicado observado (10:13 e 10:32). Persistir o
+    instante do último início (autoritativo no servidor) permite pular re-disparos
+    dentro de uma janela mínima, independentemente de QUEM disparou."""
+    __tablename__ = "pipeline_runs"
+
+    id         = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime, nullable=False)
+
+
 Base.metadata.create_all(engine)
 SessionLocal = sessionmaker(bind=engine)
 
@@ -1564,6 +1579,39 @@ class DatabaseManager:
         except Exception as e:
             print(f"[db] get_last_updated error: {e}")
             return None
+
+    # ── pipeline idempotency ───────────────────────────────────────────────────
+
+    def minutes_since_last_run(self) -> float | None:
+        """Minutos desde o início do último run registrado, ou None se nunca rodou.
+
+        Fonte da verdade no servidor para o guard de idempotência: vale para
+        qualquer gatilho (Airflow, GitHub Actions, POST manual)."""
+        try:
+            result = self._session.execute(
+                text("SELECT MAX(started_at) FROM pipeline_runs")
+            ).fetchone()
+            last = result[0] if result else None
+            if not last:
+                return None
+            if isinstance(last, str):  # SQLite devolve string
+                last = datetime.fromisoformat(last)
+            return (datetime.utcnow() - last).total_seconds() / 60.0
+        except Exception as e:
+            print(f"[db] minutes_since_last_run error: {e}")
+            return None
+
+    def mark_pipeline_run(self) -> None:
+        """Registra AGORA como início de um run. Chamado só quando o run vai de fato rodar."""
+        try:
+            self._session.execute(
+                text("INSERT INTO pipeline_runs (started_at) VALUES (:ts)"),
+                {"ts": datetime.utcnow()},
+            )
+            self._session.commit()
+        except Exception as e:
+            self._session.rollback()
+            print(f"[db] mark_pipeline_run error: {e}")
 
     # ── report persistence ────────────────────────────────────────────────────
 
