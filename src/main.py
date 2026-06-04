@@ -9,7 +9,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
-from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield
+from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield, ipsum
 from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
@@ -98,6 +98,10 @@ def run():
                 dshield_iocs = dshield.collect()
                 print(f"[pipeline] DShield: {len(dshield_iocs)} IPs")
 
+                print("[pipeline] collecting from IPsum (agregador de blacklists) ...")
+                ipsum_iocs = ipsum.collect()
+                print(f"[pipeline] IPsum: {len(ipsum_iocs)} IPs")
+
                 # Preserve IP-focused feeds for cross-source enrichment (before dedup)
                 ip_collected_iocs = (
                     feodo_iocs
@@ -105,9 +109,10 @@ def run():
                     + greynoise_iocs
                     + et_iocs
                     + dshield_iocs
+                    + ipsum_iocs
                 )
 
-                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs + dshield_iocs
+                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs + dshield_iocs + ipsum_iocs
                 print(f"[pipeline] total collected: {len(raw_iocs)}")
 
                 # Corroboração entre fontes: mapeia value -> {fontes distintas} ANTES do

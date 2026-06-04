@@ -38,6 +38,11 @@ _SOURCE_DATA: dict[str, dict] = {
         "referencia": "https://www.abuseipdb.com/check/{value}",
         "justificativa": "Lista negra de IPs com histórico confirmado de ataques",
     },
+    "ipsum": {
+        "score": 72,
+        "referencia": "https://github.com/stamparm/ipsum",
+        "justificativa": "Agregador de 30+ blacklists públicas; nível 3 (>=3 listas) = baixo falso-positivo",
+    },
     "urlhaus": {
         "score": 70,
         "referencia": "https://urlhaus.abuse.ch",
@@ -69,6 +74,10 @@ _SOURCE_FAMILY: dict[str, str] = {
     "dshield":             "honeypot",
     "greynoise":           "honeypot",
     "emergingthreats":     "honeypot",
+    # IPsum agrega blacklists honeypot/blocklist — mesma família para NÃO inflar a
+    # corroboração quando concorda com DShield/ET (o consenso vira força no T, via
+    # abuse_score por hit-count, não uma família extra no C).
+    "ipsum":               "honeypot",
     # catálogo autoritativo
     "cisa-kev":            "autoritativa",
     # reputação de IP
