@@ -1492,55 +1492,58 @@ class DatabaseManager:
                 return (today - timedelta(days=days)).strftime("%Y-%m-%d")
 
             # Python-computed date strings make DELETE dialect-agnostic.
-            # AbuseIPDB é 58% do banco e seus IPs rotacionam rápido — reter 5 dias
-            # mantém a blacklist atual sem acumular IPs já inativos.
-            d1 = self._session.execute(text(
-                "DELETE FROM iocs WHERE source = 'AbuseIPDB-Blacklist'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
-            ), {"c": _cutoff(5)}).rowcount
-            self._session.commit()
-
+            #
+            # TTL por last_seen (NÃO first_seen). Vários feeds reportam first_seen com
+            # a data REAL de origem do IOC (ThreatFox export "recent" traz first_seen de
+            # até anos atrás; DShield = data do ataque; Feodo = surgimento do C2). Usar
+            # first_seen como TTL purgava IOCs ATIVOS (ainda no feed de hoje) logo no run
+            # seguinte — churn e perda de volume. last_seen = recência de OBSERVAÇÃO:
+            # todo collector grava last_seen=hoje e reactivate_many o mantém fresco, então
+            # quem continua aparecendo sobrevive e só some N dias após sair dos feeds.
+            #
+            # NB: a fonte AbuseIPDB-Blacklist foi descontinuada (limite do free tier
+            # quebrava o pipeline); registros remanescentes caem na regra geral de IP (d7).
             d2 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'ip' AND source = 'ThreatFox'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(7)}).rowcount
             self._session.commit()
 
             d3 = self._session.execute(text(
                 "DELETE FROM iocs WHERE source = 'FeodoTracker'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(14)}).rowcount
             self._session.commit()
 
             d4 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'url' AND description LIKE '%online%'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(14)}).rowcount
             self._session.commit()
 
             d5 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'url' AND description NOT LIKE '%online%'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(30)}).rowcount
             self._session.commit()
 
             d6 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'domain'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(30)}).rowcount
             self._session.commit()
 
             d7 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type = 'ip'"
-                " AND source NOT IN ('AbuseIPDB-Blacklist', 'ThreatFox', 'FeodoTracker')"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND source NOT IN ('ThreatFox', 'FeodoTracker')"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(30)}).rowcount
             self._session.commit()
 
             d8 = self._session.execute(text(
                 "DELETE FROM iocs WHERE type NOT IN ('hash', 'cve', 'ip', 'url', 'domain')"
                 " AND source != 'CISA-KEV'"
-                " AND SUBSTR(first_seen, 1, 10) < :c"
+                " AND SUBSTR(last_seen, 1, 10) < :c"
             ), {"c": _cutoff(90)}).rowcount
             self._session.commit()
 
@@ -1554,8 +1557,7 @@ class DatabaseManager:
             ), {"c": _cutoff(90)}).rowcount
             self._session.commit()
 
-            total_deleted = d1 + d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9
-            print(f"[cleanup] AbuseIPDB-BL: {d1} removed")
+            total_deleted = d2 + d3 + d4 + d5 + d6 + d7 + d8 + d9
             print(f"[cleanup] ThreatFox IPs: {d2} removed")
             print(f"[cleanup] Feodo IPs: {d3} removed")
             print(f"[cleanup] Active URLs: {d4} removed")
