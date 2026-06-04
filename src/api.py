@@ -263,7 +263,11 @@ async def health_check():
                 "ThreatFox",
                 "URLhaus",
                 "FeodoTracker",
-                "AbuseIPDB-Blacklist",
+                "DShield",
+                "EmergingThreats",
+                "GreyNoise",
+                "IPsum",
+                "Spamhaus-DROP",
             ],
         },
     }
