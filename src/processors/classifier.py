@@ -18,6 +18,11 @@ _SOURCE_DATA: dict[str, dict] = {
         "referencia": "https://www.cisa.gov/known-exploited-vulnerabilities-catalog",
         "justificativa": "Catálogo oficial CISA de vulnerabilidades exploradas ativamente",
     },
+    "spamhaus-drop": {
+        "score": 90,
+        "referencia": "https://www.spamhaus.org/drop/",
+        "justificativa": "Netblocks hijacked/bulletproof por research da Spamhaus — falso-positivo ~zero",
+    },
     "feodo-tracker": {
         "score": 85,
         "referencia": "https://feodotracker.abuse.ch",
@@ -80,6 +85,8 @@ _SOURCE_FAMILY: dict[str, str] = {
     "ipsum":               "honeypot",
     # catálogo autoritativo
     "cisa-kev":            "autoritativa",
+    # infraestrutura autoritativa (research próprio Spamhaus) — família independente
+    "spamhaus-drop":       "spamhaus",
     # reputação de IP
     "abuseipdb-blacklist": "reputacao",
     # comunidade / feed colaborativo
@@ -355,13 +362,13 @@ def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) ->
             type_base = "padrão CVE (CVSS/EPSS indisponíveis)"
         type_ref = _TYPE_REFS["cve"].replace("{value}", value)
 
-    elif ioc_type == "ip":
+    elif ioc_type in ("ip", "netblock"):
         if abuse is not None:
             T        = float(abuse)
-            type_base = f"AbuseIPDB score {abuse}"
+            type_base = f"abuse_score {abuse}"
         else:
             T        = 60.0
-            type_base = "padrão IP (sem score AbuseIPDB)"
+            type_base = "padrão IP (sem abuse_score)"
         type_ref = _TYPE_REFS["ip"].replace("{value}", value)
 
     elif ioc_type == "hash":

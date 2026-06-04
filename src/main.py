@@ -9,7 +9,7 @@ load_dotenv()
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from src.collectors import cisa, otx, mitre, threatfox
-from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield, ipsum
+from src.collectors import urlhaus, feodo, greynoise, emerging_threats, dshield, ipsum, spamhaus
 from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
@@ -102,7 +102,12 @@ def run():
                 ipsum_iocs = ipsum.collect()
                 print(f"[pipeline] IPsum: {len(ipsum_iocs)} IPs")
 
-                # Preserve IP-focused feeds for cross-source enrichment (before dedup)
+                print("[pipeline] collecting from Spamhaus DROP (netblocks) ...")
+                spamhaus_iocs = spamhaus.collect()
+                print(f"[pipeline] Spamhaus DROP: {len(spamhaus_iocs)} netblocks")
+
+                # Preserve IP-focused feeds for cross-source enrichment (before dedup).
+                # Netblocks (Spamhaus DROP) NÃO entram aqui — não são IPs individuais.
                 ip_collected_iocs = (
                     feodo_iocs
                     + [i for i in tf_iocs if i.get("type") == "ip"]
@@ -112,7 +117,8 @@ def run():
                     + ipsum_iocs
                 )
 
-                raw_iocs = cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs + greynoise_iocs + et_iocs + dshield_iocs + ipsum_iocs
+                raw_iocs = (cisa_iocs + otx_iocs + tf_iocs + urlhaus_iocs + feodo_iocs
+                            + greynoise_iocs + et_iocs + dshield_iocs + ipsum_iocs + spamhaus_iocs)
                 print(f"[pipeline] total collected: {len(raw_iocs)}")
 
                 # Corroboração entre fontes: mapeia value -> {fontes distintas} ANTES do

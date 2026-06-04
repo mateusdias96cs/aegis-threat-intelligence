@@ -797,6 +797,8 @@ class DatabaseManager:
 
     _HALF_LIVES: dict = {
         "ip": 15, "url": 7, "domain": 30, "hash": 180, "cve": 365,
+        # netblock (Spamhaus DROP): alocação de rede é estável — meia-vida longa.
+        "netblock": 90,
     }
 
     def apply_decay(self) -> int:
