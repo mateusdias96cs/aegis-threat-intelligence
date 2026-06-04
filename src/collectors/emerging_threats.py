@@ -1,7 +1,10 @@
 import requests
 from datetime import date
 
-ENDPOINT = "https://rules.emergingthreats.net/fwrules/emerging-Block-IPs.txt"
+# emerging-Block-IPs.txt virou ~todo CIDR (netblocks Spamhaus/DROP), que este
+# collector por-IP não expande. compromised-ips.txt traz IPs INDIVIDUAIS de hosts
+# comprometidos — o sinal por-IP que de fato alimenta a correlação do AEGIS.
+ENDPOINT = "https://rules.emergingthreats.net/blockrules/compromised-ips.txt"
 MAX_IPS = 10000
 
 
@@ -29,7 +32,7 @@ def collect() -> list[dict]:
                 "value": line,
                 "source": "EmergingThreats",
                 "severity": "HIGH",
-                "description": "Emerging Threats IP blocklist",
+                "description": "Emerging Threats — compromised IPs",
                 "first_seen": today,
                 "last_seen": today,
                 "country": None,
