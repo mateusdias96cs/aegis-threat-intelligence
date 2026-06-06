@@ -1,0 +1,58 @@
+# Render Blueprint — APENAS o Cron Job do pipeline (serviço SEPARADO).
+#
+# Por quê: o pipeline rodava no mesmo container do web server (512MB). Ao coletar
+# ~26–42k IOCs de 10 fontes, o pico de RAM estoura o container e o pipeline é morto
+# (OOM) no meio, sem nunca concluir. Rodando em um serviço PRÓPRIO, com memória
+# própria, o pipeline executa sozinho (sem o uvicorn junto) e o web service nunca
+# mais é afetado. Ambos falam com o MESMO Postgres, e o relatório é persistido no
+# banco (db.save_report), então o painel/'/report' do web continua funcionando.
+#
+# IMPORTANTE:
+#  - O web service e o Postgres ATUAIS foram criados manualmente no painel e NÃO
+#    estão neste arquivo de propósito — para o Render não tentar recriá-los/alterá-los.
+#    Este blueprint adiciona somente o cron.
+#  - Todas as variáveis abaixo estão como `sync: false`: preencha cada uma no painel
+#    do Render (Environment) com os MESMOS valores do web service. DATABASE_URL deve
+#    apontar para o MESMO Postgres do web (use a Internal Database URL).
+#  - Entrypoint: `python -m src.main` (já existe; persiste no Postgres). Sem mudança
+#    de código.
+
+services:
+  - type: cron
+    name: aegis-pipeline-cron
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerCommand: python -m src.main
+    schedule: "0 8 * * *"          # diário, 08:00 UTC (igual ao gatilho atual)
+    plan: starter                  # 512MB; o pipeline roda SOZINHO aqui. Se ainda
+                                   # der OOM, suba para um plano com mais RAM.
+    autoDeploy: true
+    envVars:
+      - key: DATABASE_URL          # MESMO Postgres do web service (Internal URL)
+        sync: false
+      # ── Coletores ──
+      - key: OTX_API_KEY
+        sync: false
+      - key: GREYNOISE_API_KEY
+        sync: false
+      - key: THREATFOX_API_KEY
+        sync: false
+      - key: ABUSE_CH_API_KEY
+        sync: false
+      - key: MALWAREBAZAAR_API_KEY
+        sync: false
+      # ── Enricher CIRCL Passive DNS/SSL ──
+      - key: CIRCL_USERNAME
+        sync: false
+      - key: CIRCL_PASSWORD
+        sync: false
+      - key: CIRCL_MAX_LOOKUPS     # opcional; default 100
+        sync: false
+      # ── GeoIP (MaxMind) ──
+      - key: MAXMIND_LICENSE_KEY
+        sync: false
+      # ── Operacional ──
+      - key: SENTRY_DSN
+        sync: false
+      - key: PIPELINE_MIN_INTERVAL_MIN   # idempotência (default 15)
+        sync: false
