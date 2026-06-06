@@ -2,6 +2,7 @@ import json
 import math
 import os
 from datetime import datetime, timedelta
+from itertools import islice
 from pathlib import Path
 
 from sqlalchemy import (
@@ -1347,13 +1348,18 @@ class DatabaseManager:
         if not value_sources:
             return 0
         day = day or datetime.utcnow().strftime("%Y-%m-%d")
-        rows = [
-            {"value": v, "source": s, "day": day}
-            for v, srcs in value_sources.items() if v
-            for s in srcs if s
-        ]
-        if not rows:
-            return 0
+
+        # Gera os pares (value, source) sob demanda — NÃO materializa a lista inteira
+        # (~dezenas de milhares de dicts) de uma vez, que somava ao pico de RAM da
+        # coleta. Consome em lotes de 500, mesmo padrão das demais escritas em lote.
+        def _pairs():
+            for v, srcs in value_sources.items():
+                if not v:
+                    continue
+                for s in srcs:
+                    if s:
+                        yield {"value": v, "source": s, "day": day}
+
         stmt = text("""
             INSERT INTO sightings (value, source, first_seen, last_seen, seen_count)
             VALUES (:value, :source, :day, :day, 1)
@@ -1362,10 +1368,16 @@ class DatabaseManager:
                 seen_count = sightings.seen_count + 1
         """)
         BATCH = 500
-        for i in range(0, len(rows), BATCH):
-            self._session.execute(stmt, rows[i:i + BATCH])
+        total = 0
+        pairs = _pairs()
+        while True:
+            chunk = list(islice(pairs, BATCH))
+            if not chunk:
+                break
+            self._session.execute(stmt, chunk)
             self._session.commit()
-        return len(rows)
+            total += len(chunk)
+        return total
 
     def get_sightings(self, value: str) -> list[dict]:
         """Linha do tempo de proveniência de um IOC: cada fonte que o reportou, com

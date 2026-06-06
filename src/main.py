@@ -144,18 +144,28 @@ def run():
                 raw_iocs = deduplicator.deduplicate(raw_iocs)
                 print(f"[pipeline] after internal deduplication: {len(raw_iocs)}")
 
-                # Separate new from existing; reactivate those already in DB
+                # Separate new from existing; reactivate those already in DB.
+                # Passagem ÚNICA: NÃO materializa `seen_again` como lista de dicts
+                # completos. No run diário a maioria dos coletados já existe no banco;
+                # guardar só os VALORES dos reativados (e não os dicts inteiros) corta o
+                # pico de RAM da janela coleta→split, onde o OOM de ~26k IOCs estourava.
                 existing_values = db.get_existing_values()
-                new_iocs      = [ioc for ioc in raw_iocs if ioc.get("value") not in existing_values]
-                seen_again    = [ioc for ioc in raw_iocs if ioc.get("value") in existing_values]
+                new_iocs: list[dict] = []
+                seen_again_values: list[str] = []
+                for ioc in raw_iocs:
+                    val = ioc.get("value")
+                    if val in existing_values:
+                        if val:
+                            seen_again_values.append(val)
+                    else:
+                        new_iocs.append(ioc)
                 print(f"[pipeline] new indicators to process: {len(new_iocs)}")
-                print(f"[pipeline] existing IOCs to reactivate: {len(seen_again)}")
-                seen_again_values = [ioc.get("value") for ioc in seen_again if ioc.get("value")]
+                print(f"[pipeline] existing IOCs to reactivate: {len(seen_again_values)}")
                 db.reactivate_many(seen_again_values)
 
                 # Libera as estruturas de coleta já consumidas antes das fases de
                 # normalização/enriquecimento (que criam cópias) — reduz o pico de RAM.
-                del raw_iocs, seen_again, seen_again_values
+                del raw_iocs, seen_again_values
 
                 # Process new IOCs
                 if new_iocs:
