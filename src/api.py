@@ -1,5 +1,7 @@
 import hmac
 import os
+import subprocess
+import sys
 import uuid
 import sentry_sdk
 from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request, Query
@@ -393,9 +395,35 @@ async def get_graph(
         db.close()
 
 
+# Handle do processo-filho do pipeline. Com WEB_CONCURRENCY=1 (1 worker uvicorn)
+# este estado de módulo é confiável; mesmo com mais workers, o guard de
+# idempotência server-side (PIPELINE_MIN_INTERVAL_MIN em src/main.py) é a rede de
+# proteção real contra runs duplicados.
+_pipeline_proc: subprocess.Popen | None = None
+
+
 @app.post("/api/pipeline/run", dependencies=[Depends(_require_api_key)])
-async def run_pipeline(background_tasks: BackgroundTasks):
-    background_tasks.add_task(run_pipeline_task)
+async def run_pipeline():
+    global _pipeline_proc
+
+    # Reapa o run anterior se já terminou (evita zumbi) e barra disparo concorrente.
+    if _pipeline_proc is not None and _pipeline_proc.poll() is None:
+        return {
+            "status": "already_running",
+            "message": "O pipeline já está em execução. Aguarde a conclusão.",
+        }
+
+    # Roda o pipeline em PROCESSO SEPARADO (mesmo container, env, FS e Postgres) em
+    # vez de uma thread dentro do uvicorn. Isolamento de memória: se o pipeline
+    # estourar a RAM (512MB no Render), o kernel mata ESTE filho — o web server
+    # (uvicorn) continua de pé respondendo /health e /report. start_new_session
+    # desacopla o filho do ciclo de vida do worker web.
+    project_root = Path(__file__).resolve().parents[1]
+    _pipeline_proc = subprocess.Popen(
+        [sys.executable, "-m", "src.main"],
+        cwd=str(project_root),
+        start_new_session=True,
+    )
     return {
         "status": "processing",
         "message": "O pipeline de inteligência foi iniciado em segundo plano! Demora alguns minutos. Aguarde e recarregue a página inicial daqui a pouco para ver o painel gerado."
