@@ -19,6 +19,7 @@ from starlette.requests import Request as StarletteRequest
 from src.collectors import cisa, otx, mitre
 from src.collectors import abuseipdb
 from src.processors import normalizer, classifier, deduplicator
+from src.processors.classifier import assess_circl_legitimacy
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
 from src.main import run as run_pipeline_task
@@ -632,6 +633,37 @@ async def get_score_breakdown(value: str):
     return {"value": value, "score_breakdown": breakdown}
 
 
+def _circl_groups(ioc: dict) -> None:
+    """Monta os grupos circl_pdns/circl_pssl no dict do IOC (in-place), apenas se
+    houver dados de enriquecimento (campos não-None). Mantém a rota retrocompatível:
+    IOCs sem CIRCL simplesmente não ganham os grupos."""
+    if ioc.get("pdns_record_count") is not None:
+        ioc["circl_pdns"] = {
+            "record_count":       ioc.get("pdns_record_count"),
+            "first_seen":         ioc.get("pdns_first_seen"),
+            "last_seen":          ioc.get("pdns_last_seen"),
+            "resolutions":        ioc.get("pdns_resolutions"),
+            "associated_ips":     ioc.get("pdns_associated_ips"),
+            "associated_domains": ioc.get("pdns_associated_domains"),
+            "suspicious":         bool(ioc.get("pdns_suspicious")),
+            "enriched_at":        ioc.get("pdns_enriched_at"),
+        }
+    if ioc.get("pssl_cert_count") is not None:
+        ioc["circl_pssl"] = {
+            "cert_count":   ioc.get("pssl_cert_count"),
+            "certificates": ioc.get("pssl_certificates"),
+            "subjects":     ioc.get("pssl_subjects"),
+            "self_signed":  bool(ioc.get("pssl_self_signed")),
+            "expired":      bool(ioc.get("pssl_expired")),
+            "suspicious":   bool(ioc.get("pssl_suspicious")),
+            "enriched_at":  ioc.get("pssl_enriched_at"),
+        }
+    # Veredito de legitimidade da infraestrutura (contexto, NÃO altera o score).
+    assessment = assess_circl_legitimacy(ioc)
+    if assessment:
+        ioc["circl_assessment"] = assessment
+
+
 @app.get("/api/iocs/{value}/context")
 async def get_ioc_context(value: str):
     """Returns full IOC context plus correlated IOCs from the same source.
@@ -644,6 +676,7 @@ async def get_ioc_context(value: str):
         ioc = db.get_ioc_context(value)
         if not ioc:
             raise HTTPException(status_code=404, detail=f"IOC '{value}' não encontrado.")
+        _circl_groups(ioc)
         correlated = db.get_correlated_iocs(
             source=ioc.get("source", ""),
             exclude_value=value,

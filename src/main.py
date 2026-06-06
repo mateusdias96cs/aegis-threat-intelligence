@@ -14,6 +14,7 @@ from src.processors import normalizer, classifier, deduplicator, warninglist
 from src.storage.database import DatabaseManager
 from src.reporters import html_report
 from src.enrichers import ip_enricher, epss_enricher, shodan_enricher, malwarebazaar_enricher, rdap_enricher
+from src.enrichers import circl_pdns_enricher, circl_pssl_enricher
 from src.enrichers import geoip_db
 
 # Intervalo mínimo entre execuções do pipeline (idempotência). O run leva ~9 min
@@ -189,6 +190,22 @@ def run():
                     if domain_new:
                         print(f"[pipeline] enriquecendo {len(domain_new)} domínios/URLs com RDAP ...")
                         new_iocs = rdap_enricher.enrich_batch(new_iocs)
+
+                    # CIRCL Passive DNS + Passive SSL (parceiro confiável; HTTP Basic Auth).
+                    # Só roda se CIRCL_USERNAME/CIRCL_PASSWORD estiverem no ambiente —
+                    # caso contrário, WARNING e pula (degradação graciosa). Sequencial,
+                    # 1 req/s, sem threading; teto por execução (CIRCL_MAX_LOOKUPS).
+                    if os.getenv("CIRCL_USERNAME") and os.getenv("CIRCL_PASSWORD"):
+                        circl_targets = [i for i in new_iocs if i.get("type") in ("domain", "ip", "url")]
+                        if circl_targets:
+                            print(f"[pipeline] enriquecendo {len(circl_targets)} IOCs com CIRCL Passive DNS ...")
+                            new_iocs = circl_pdns_enricher.enrich_batch(new_iocs)
+                        ip_circl = [i for i in new_iocs if i.get("type") == "ip"]
+                        if ip_circl:
+                            print(f"[pipeline] enriquecendo {len(ip_circl)} IPs com CIRCL Passive SSL ...")
+                            new_iocs = circl_pssl_enricher.enrich_batch(new_iocs)
+                    else:
+                        print("[pipeline] CIRCL_USERNAME/CIRCL_PASSWORD ausentes — pDNS/pSSL pulados")
 
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)

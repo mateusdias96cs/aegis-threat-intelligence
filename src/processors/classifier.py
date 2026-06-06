@@ -225,9 +225,9 @@ def _get_interpretation(score: float) -> str:
 # que é alcançável para o seu TIPO (uma hash não tem geo; um CVE não tem ASN).
 # Materializa o diferencial do AEGIS — "IOC bruto" vs. "IOC refinado" vira métrica.
 _CONTEXT_DIMS: dict[str, list[str]] = {
-    "ip":     ["geo", "network", "reputation", "surface", "ttp", "attribution", "corroboration"],
-    "domain": ["registration", "geo", "ttp", "attribution", "corroboration"],
-    "url":    ["registration", "geo", "ttp", "attribution", "corroboration"],
+    "ip":     ["geo", "network", "reputation", "surface", "passive_dns", "passive_ssl", "ttp", "attribution", "corroboration"],
+    "domain": ["registration", "geo", "passive_dns", "ttp", "attribution", "corroboration"],
+    "url":    ["registration", "geo", "passive_dns", "ttp", "attribution", "corroboration"],
     "hash":   ["malware", "ttp", "attribution", "corroboration"],
     "cve":    ["severity", "exploitability", "ttp", "attribution", "corroboration"],
 }
@@ -238,6 +238,8 @@ _DIM_LABEL: dict[str, str] = {
     "network":        "ASN / Rede",
     "reputation":     "Reputação (AbuseIPDB)",
     "surface":        "Superfície (Shodan)",
+    "passive_dns":    "Passive DNS (CIRCL)",
+    "passive_ssl":    "Passive SSL (CIRCL)",
     "malware":        "Família de Malware",
     "severity":       "Severidade (CVSS)",
     "exploitability": "Exploração (EPSS)",
@@ -253,6 +255,8 @@ def _dim_present(dim: str, ioc: dict) -> bool:
     if dim == "network":        return ioc.get("asn") is not None
     if dim == "reputation":     return ioc.get("abuse_score") is not None
     if dim == "surface":        return bool(ioc.get("shodan_data"))
+    if dim == "passive_dns":    return ioc.get("pdns_record_count") is not None
+    if dim == "passive_ssl":    return ioc.get("pssl_cert_count") is not None
     if dim == "malware":        return bool(ioc.get("malware_context"))
     if dim == "severity":       return ioc.get("cvss_score") is not None
     if dim == "exploitability": return ioc.get("epss_score") is not None or ioc.get("epss_percentile") is not None
@@ -278,6 +282,137 @@ def compute_context_completeness(ioc: dict) -> dict:
     total = len(dims)
     score = round(filled / total * 100) if total else 0
     return {"score": score, "filled": filled, "total": total, "dimensions": detail}
+
+
+# ── Avaliação de legitimidade da infraestrutura (CIRCL pDNS + pSSL) ───────────
+# Dimensão de contexto INDEPENDENTE do score: lê os sinais de Passive DNS e Passive
+# SSL e devolve um veredito ("legitimate" / "suspicious" / "mixed" / "unknown") com
+# os sinais que o sustentam. Ajuda o analista a separar infraestrutura legítima
+# (CDN, host estável, CA confiável) de descartável/maliciosa — SEM mexer no
+# confidence_score. É derivada em serve-time dos campos já persistidos.
+
+# CAs públicas amplamente confiáveis — emissão por uma delas é sinal (fraco) de
+# legitimidade; certificado auto-assinado é o oposto.
+_TRUSTED_CA = (
+    "let's encrypt", "lets encrypt", "digicert", "globalsign", "sectigo", "comodo",
+    "geotrust", "google trust", "google internet authority", "gts ca", "amazon",
+    "cloudflare", "microsoft", "entrust", "godaddy", "thawte", "rapidssl",
+    "starfield", "buypass", "zerossl", "actalis", "certum", "verisign", "symantec",
+    "usertrust", "baltimore", "isrg root", "quovadis", "identrust",
+)
+
+
+def _age_days(val) -> int | None:
+    """Idade em dias a partir de um datetime OU string (ISO/'YYYY-MM-DD ...')."""
+    if not val:
+        return None
+    dt = None
+    if isinstance(val, datetime):
+        dt = val
+    else:
+        s = str(val).strip().replace("Z", "+00:00")
+        for fmt in (None, "%Y-%m-%d %H:%M:%S.%f", "%Y-%m-%d %H:%M:%S", "%Y-%m-%d"):
+            try:
+                dt = datetime.fromisoformat(s) if fmt is None else datetime.strptime(s, fmt)
+                break
+            except ValueError:
+                continue
+    if dt is None:
+        return None
+    if dt.tzinfo is not None:
+        dt = dt.replace(tzinfo=None)
+    return (datetime.utcnow() - dt).days
+
+
+def assess_circl_legitimacy(ioc: dict) -> dict | None:
+    """Veredito de legitimidade da infraestrutura a partir do contexto CIRCL.
+
+    NÃO altera o score — nova fonte de contexto. Retorna dict com `veredito`,
+    `sinais_legitimos`, `sinais_suspeitos` e `resumo`, ou None se o IOC não tem
+    dados de Passive DNS nem Passive SSL."""
+    has_pdns = ioc.get("pdns_record_count") is not None
+    has_pssl = ioc.get("pssl_cert_count") is not None
+    if not (has_pdns or has_pssl):
+        return None
+
+    legit: list[str] = []
+    susp: list[str] = []
+
+    # Cross-sinal: casou warninglist de infra legítima conhecida (cloud/CDN/Tranco).
+    if ioc.get("fp_warning"):
+        legit.append(f"casa lista de infraestrutura legítima conhecida ({ioc.get('fp_warning')})")
+
+    # --- Passive DNS ---
+    if has_pdns:
+        age = _age_days(ioc.get("pdns_first_seen"))
+        if age is not None and age >= 365:
+            legit.append(f"histórico de Passive DNS longo (~{age // 365} ano(s) observado)")
+        elif age is not None and age < 30:
+            susp.append("infraestrutura de DNS recente (< 30 dias no Passive DNS)")
+        # Muitas contrapartes em A/AAAA: fast-flux / hospedagem em massa.
+        peers = ioc.get("pdns_associated_domains") or ioc.get("pdns_associated_ips") or []
+        if isinstance(peers, str):
+            try:
+                peers = json.loads(peers)
+            except (json.JSONDecodeError, TypeError):
+                peers = []
+        if len(peers) > 50:
+            susp.append(f"associado a muitos hosts ({len(peers)}+) — possível fast-flux/bullet-proof")
+
+    # --- Passive SSL ---
+    if has_pssl:
+        certs = ioc.get("pssl_certificates") or []
+        if isinstance(certs, str):
+            try:
+                certs = json.loads(certs)
+            except (json.JSONDecodeError, TypeError):
+                certs = []
+        certs = [c for c in certs if isinstance(c, dict)]
+
+        # O Passive SSL guarda a CADEIA histórica — raízes de CA confiável são
+        # auto-assinadas por natureza e NÃO são sinal de suspeita. Só conta como
+        # suspeito um cert auto-assinado que NÃO seja uma CA pública conhecida
+        # (ex.: cert de servidor gerado na unha).
+        leaf_self_signed = False
+        trusted_issuer = False
+        for c in certs:
+            scn = (c.get("subject_cn") or "").strip()
+            icn = (c.get("issuer_cn") or "").strip()
+            is_trusted = any(ca in f"{scn} {icn}".lower() for ca in _TRUSTED_CA)
+            if scn and icn and scn == icn and not is_trusted:
+                leaf_self_signed = True
+            if is_trusted:
+                trusted_issuer = True
+
+        # Fallback p/ o boolean quando não há detalhe de cert (cfetch indisponível).
+        if leaf_self_signed or (not certs and ioc.get("pssl_self_signed")):
+            susp.append("certificado auto-assinado (não-CA)")
+        if (ioc.get("pssl_cert_count") or 0) > 10:
+            susp.append(f"rotação excessiva de certificados ({ioc.get('pssl_cert_count')})")
+        if trusted_issuer:
+            legit.append("certificado emitido por CA pública confiável")
+
+    # --- Veredito ---
+    if susp and not legit:
+        veredito = "suspicious"
+        resumo = "Sinais de infraestrutura suspeita no contexto CIRCL."
+    elif legit and not susp:
+        veredito = "legitimate"
+        resumo = "Contexto CIRCL consistente com infraestrutura legítima."
+    elif legit and susp:
+        veredito = "mixed"
+        resumo = "Contexto CIRCL com sinais mistos — requer análise do analista."
+    else:
+        veredito = "unknown"
+        resumo = "Dados CIRCL presentes, sem sinais fortes para um veredito."
+
+    return {
+        "veredito":         veredito,
+        "sinais_legitimos": legit,
+        "sinais_suspeitos": susp,
+        "resumo":           resumo,
+        "aviso":            "Avaliação de contexto — NÃO altera o score de confiança.",
+    }
 
 
 def calculate_score_breakdown(ioc: dict, source_count: int = 1, sources=None) -> dict:

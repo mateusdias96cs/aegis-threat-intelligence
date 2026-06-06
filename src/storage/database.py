@@ -90,6 +90,23 @@ class IOC(Base):
     # RDAP — ciclo de vida do registro do domínio {registered, expiration, registrar,
     # status, age_days}. Para domains e URLs. age_days < 30 = sinal de risco.
     rdap_data           = Column(Text)
+    # CIRCL Passive DNS — histórico de resoluções (domain/ip/url).
+    pdns_record_count       = Column(Integer)
+    pdns_first_seen         = Column(DateTime)
+    pdns_last_seen          = Column(DateTime)
+    pdns_resolutions        = Column(Text)   # JSON: últimas resoluções relevantes
+    pdns_associated_ips     = Column(Text)   # JSON: IPs associados (query por domínio)
+    pdns_associated_domains = Column(Text)   # JSON: domínios associados (query por IP)
+    pdns_suspicious         = Column(Integer, default=0)
+    pdns_enriched_at        = Column(DateTime)
+    # CIRCL Passive SSL — histórico de certificados X.509 por IP.
+    pssl_cert_count   = Column(Integer)
+    pssl_certificates = Column(Text)   # JSON: primeiros certs (cn/issuer/validade/san)
+    pssl_subjects     = Column(Text)   # JSON: CommonNames únicos vistos
+    pssl_self_signed  = Column(Integer, default=0)
+    pssl_expired      = Column(Integer, default=0)
+    pssl_suspicious   = Column(Integer, default=0)
+    pssl_enriched_at  = Column(DateTime)
 
 
 class Report(Base):
@@ -205,6 +222,23 @@ _DECAY_COLUMNS = [
     # RDAP — ciclo de vida do registro do domínio (JSON): registered, expiration,
     # registrar, status, age_days. Para domains e URLs.
     ("rdap_data",           "TEXT"),
+    # CIRCL Passive DNS — histórico de resoluções (domain/ip/url).
+    ("pdns_record_count",       "INTEGER"),
+    ("pdns_first_seen",         "TIMESTAMP"),
+    ("pdns_last_seen",          "TIMESTAMP"),
+    ("pdns_resolutions",        "TEXT"),
+    ("pdns_associated_ips",     "TEXT"),
+    ("pdns_associated_domains", "TEXT"),
+    ("pdns_suspicious",         "INTEGER DEFAULT 0"),
+    ("pdns_enriched_at",        "TIMESTAMP"),
+    # CIRCL Passive SSL — histórico de certificados X.509 por IP.
+    ("pssl_cert_count",   "INTEGER"),
+    ("pssl_certificates", "TEXT"),
+    ("pssl_subjects",     "TEXT"),
+    ("pssl_self_signed",  "INTEGER DEFAULT 0"),
+    ("pssl_expired",      "INTEGER DEFAULT 0"),
+    ("pssl_suspicious",   "INTEGER DEFAULT 0"),
+    ("pssl_enriched_at",  "TIMESTAMP"),
 ]
 _dialect = engine.dialect.name
 
@@ -317,6 +351,23 @@ class DatabaseManager:
                 "context_breakdown":  json.dumps(ioc["context_breakdown"]) if ioc.get("context_breakdown") else None,
                 "fp_warning":         ioc.get("fp_warning"),
                 "rdap_data":          json.dumps(ioc["rdap_data"]) if ioc.get("rdap_data") else None,
+                # CIRCL Passive DNS
+                "pdns_record_count":       ioc.get("pdns_record_count"),
+                "pdns_first_seen":         ioc.get("pdns_first_seen"),
+                "pdns_last_seen":          ioc.get("pdns_last_seen"),
+                "pdns_resolutions":        json.dumps(ioc["pdns_resolutions"]) if ioc.get("pdns_resolutions") else None,
+                "pdns_associated_ips":     json.dumps(ioc["pdns_associated_ips"]) if ioc.get("pdns_associated_ips") else None,
+                "pdns_associated_domains": json.dumps(ioc["pdns_associated_domains"]) if ioc.get("pdns_associated_domains") else None,
+                "pdns_suspicious":         1 if ioc.get("pdns_suspicious") else 0,
+                "pdns_enriched_at":        ioc.get("pdns_enriched_at"),
+                # CIRCL Passive SSL
+                "pssl_cert_count":   ioc.get("pssl_cert_count"),
+                "pssl_certificates": json.dumps(ioc["pssl_certificates"]) if ioc.get("pssl_certificates") else None,
+                "pssl_subjects":     json.dumps(ioc["pssl_subjects"]) if ioc.get("pssl_subjects") else None,
+                "pssl_self_signed":  1 if ioc.get("pssl_self_signed") else 0,
+                "pssl_expired":      1 if ioc.get("pssl_expired") else 0,
+                "pssl_suspicious":   1 if ioc.get("pssl_suspicious") else 0,
+                "pssl_enriched_at":  ioc.get("pssl_enriched_at"),
             })
 
             if len(batch) >= BATCH_SIZE:
@@ -350,7 +401,9 @@ class DatabaseManager:
             except (json.JSONDecodeError, TypeError, ValueError):
                 pass
         # shodan_data e mitre_techniques: JSON → estrutura, para o drawer/API.
-        for _json_field in ("shodan_data", "mitre_techniques", "malware_context", "context_breakdown", "rdap_data"):
+        for _json_field in ("shodan_data", "mitre_techniques", "malware_context", "context_breakdown", "rdap_data",
+                            "pdns_resolutions", "pdns_associated_ips", "pdns_associated_domains",
+                            "pssl_certificates", "pssl_subjects"):
             _raw = row.get(_json_field)
             if _raw and isinstance(_raw, str):
                 try:

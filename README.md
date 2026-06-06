@@ -85,7 +85,15 @@ Camada dedicada a elevar a confiança dos indicadores:
 | Emerging Threats | IPs maliciosos | variável |
 | GreyNoise | Scanners de internet | variável |
 
-**Enriquecimento:** os IOCs são enriquecidos com GeoIP2/ASN (MaxMind), Shodan InternetDB (portas, serviços e vulnerabilidades por IP), EPSS/FIRST.org (probabilidade de exploração de CVE) e MalwareBazaar (família de malware por hash).
+**Enriquecimento:** os IOCs são enriquecidos com GeoIP2/ASN (MaxMind), Shodan InternetDB (portas, serviços e vulnerabilidades por IP), EPSS/FIRST.org (probabilidade de exploração de CVE), MalwareBazaar (família de malware por hash), RDAP (idade do registro do domínio) e **CIRCL Passive DNS + Passive SSL**.
+
+**CIRCL Passive DNS** mantém o histórico real de resoluções DNS: para um domínio, quais IPs ele já apontou; para um IP, quais domínios já hospedou — com primeira/última observação e contagem. Permite pivotar por infraestrutura e expõe sinais de bullet-proof hosting / fast-flux.
+
+**CIRCL Passive SSL** mantém o histórico de certificados X.509 vistos por IP, permitindo rastrear a infraestrutura do atacante por fingerprint de certificado mesmo quando ele troca de domínio.
+
+Os sinais de pDNS/pSSL (idade do histórico de DNS, fast-flux, certificado auto-assinado, validade anômala, CA emissora) alimentam uma **avaliação de legitimidade da infraestrutura** — um veredito de contexto (*legítimo / suspeito / misto*) que ajuda o analista a separar infraestrutura legítima de descartável. É uma dimensão de **contexto**, exposta no drawer e contabilizada na completude de contexto — **não altera o score de confiança**.
+
+> _Access requires registration with CIRCL (circl.lu) — trusted partner network._ Configure as variáveis de ambiente `CIRCL_USERNAME` e `CIRCL_PASSWORD` (HTTP Basic Auth) no Render para ativar; sem elas o pipeline segue sem os dados de pDNS/pSSL. O teto de consultas por execução é controlado por `CIRCL_MAX_LOOKUPS` (fair use: chamadas sequenciais, 1 req/s).
 
 **Total atual no banco: ~29.000 IOCs ativos**
 
@@ -183,7 +191,7 @@ O AEGIS exporta IOCs em dois formatos:
 aegis-threat-intelligence/
 ├── src/
 │   ├── collectors/          # CISA, OTX, ThreatFox, URLhaus, Feodo, AbuseIPDB, DShield, EmergingThreats, GreyNoise, MITRE
-│   ├── enrichers/           # GeoIP2/ASN, Shodan InternetDB, EPSS, MalwareBazaar
+│   ├── enrichers/           # GeoIP2/ASN, Shodan InternetDB, EPSS, MalwareBazaar, RDAP, CIRCL pDNS/pSSL
 │   ├── processors/          # Normalizer, Classifier, Deduplicator, Warninglist
 │   ├── storage/             # DatabaseManager, MITRE cache, Shared Workbench
 │   └── reporters/           # Gerador de relatório HTML
