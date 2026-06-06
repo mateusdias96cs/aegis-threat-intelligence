@@ -427,10 +427,14 @@ async def force_report(background_tasks: BackgroundTasks):
     async def _regen():
         db = DatabaseManager()
         try:
-            all_iocs = db.get_all_iocs()
+            # Mesmo padrão do pipeline (main.py fase 2): relatório a partir de partes
+            # paginadas, sem get_all_iocs() (SELECT * FROM iocs estourava a RAM ao
+            # carregar a tabela inteira, agora mais pesada com as colunas de pDNS/pSSL).
             stats = db.get_stats()
+            trends = db.get_trends(days=30)
             techniques = mitre.load_techniques()
-            html_report.generate(all_iocs, stats, techniques)
+            top_iocs = db.get_iocs_paginated(page=1, limit=1000)["iocs"]
+            html_report.generate_from_parts(top_iocs, stats, techniques, trends, db.get_total_count())
             print("[force-report] done")
         finally:
             db.close()
@@ -932,7 +936,11 @@ async def taxii_collection_objects(collection_id: str, limit: int = 100):
 
     db = DatabaseManager()
     try:
-        raw = db.get_all_iocs() if collection_id == "all" else db.get_iocs_by_severity(collection_id.upper())
+        # Consulta com LIMIT no banco — NUNCA carrega a tabela inteira (SELECT *
+        # FROM iocs sem limite estourava a RAM no Render 512MB, agravado pelas
+        # colunas grandes de pDNS/pSSL). `raw` já vem com no máximo `limit` linhas.
+        severity = None if collection_id == "all" else collection_id.upper()
+        raw = db.get_iocs_paginated(page=1, limit=limit, severity=severity)["iocs"]
     finally:
         db.close()
 
