@@ -20,11 +20,20 @@ Fair use: chamadas SEQUENCIAIS, 1 req/s, sem threading (a CIRCL suspende contas
 por abuso). Há um teto de consultas por execução (CIRCL_MAX_LOOKUPS) — os alvos de
 maior valor (maior abuse_score / severidade) são priorizados; a cobertura cresce
 ao longo de várias execuções.
+
+MEMÓRIA (Render free = 512 MB): IPs/domínios populares têm passive DNS de centenas
+de milhares a milhões de registros — carregar a resposta inteira (`resp.text`) e
+materializar uma lista de dicts estoura a RAM. A resposta é processada em STREAMING
+(linha a linha) com agregação de memória LIMITADA: contagem, min/max de tempo, um
+heap de tamanho fixo para as resoluções de maior volume e sets de contrapartes com
+teto. TODOS os registros são lidos e contabilizados — nenhum é descartado da
+agregação —, mas nunca ficam todos na memória ao mesmo tempo.
 """
 
 import os
 import json
 import time
+import heapq
 import requests
 from datetime import datetime, timezone, timedelta
 from urllib.parse import urlparse
@@ -35,6 +44,10 @@ _SLEEP = 1.0                       # 1 req/s — respeita o fair use da CIRCL
 _DEFAULT_MAX = 100                 # teto de consultas por execução (configurável)
 _RECENT_DAYS = 30                  # "ainda ativo recentemente"
 _MANY_PEERS = 50                   # > 50 contrapartes = possível bullet-proof/fast-flux
+_TOP_N = 10                        # nº de resoluções de maior volume guardadas
+_PEER_CAP = 2000                   # teto do set de contrapartes (memória) — > 50 já basta p/ suspeita
+_NAME_CAP = 2000                   # teto p/ detecção de rrtypes conflitantes (memória)
+_LINE_CAP = 5_000_000              # válvula de segurança absoluta (registros lidos por consulta)
 
 _A_TYPES = ("A", "AAAA")
 _SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
@@ -81,22 +94,6 @@ def _query_target(ioc: dict) -> tuple[str, bool] | None:
     return (dom, False) if dom else None
 
 
-def _parse_ndjson(text_body: str) -> list[dict]:
-    """Parse robusto de NDJSON — uma linha malformada não derruba o resto."""
-    records = []
-    for line in text_body.splitlines():
-        line = line.strip()
-        if not line:
-            continue
-        try:
-            obj = json.loads(line)
-            if isinstance(obj, dict):
-                records.append(obj)
-        except (json.JSONDecodeError, TypeError):
-            continue
-    return records
-
-
 def _ts_to_date(ts) -> str | None:
     try:
         return datetime.fromtimestamp(int(ts), tz=timezone.utc).strftime("%Y-%m-%d")
@@ -113,89 +110,139 @@ def _ts_to_dt(ts) -> datetime | None:
         return None
 
 
-def _query(value: str, auth: tuple[str, str]) -> list[dict] | None:
-    """Consulta o pDNS da CIRCL. Retorna lista de registros ou None (404/vazio)."""
+def _to_int(v):
     try:
-        resp = requests.get(_PDNS_QUERY.format(value=value), auth=auth, timeout=_TIMEOUT)
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _query_aggregate(value: str, is_ip: bool, auth: tuple[str, str]) -> dict | None:
+    """Consulta o pDNS da CIRCL em STREAMING e agrega com memória LIMITADA.
+
+    Lê a resposta NDJSON linha a linha (sem materializar `resp.text` nem a lista de
+    registros) e mantém apenas agregados de tamanho fixo: contagem, min/max de tempo,
+    heap das _TOP_N resoluções por volume, e sets de contrapartes/nomes com teto.
+    Retorna o dict de campos pdns_* ou None (404/vazio/erro). Todos os registros são
+    contabilizados; só não são retidos todos de uma vez."""
+    try:
+        resp = requests.get(_PDNS_QUERY.format(value=value), auth=auth,
+                            timeout=_TIMEOUT, stream=True)
+    except Exception:
+        return None
+
+    try:
         if resp.status_code in (401, 403):
             raise _AuthError(f"HTTP {resp.status_code}")
         if resp.status_code == 404:
             return None
         resp.raise_for_status()
-        records = _parse_ndjson(resp.text)
-        return records or None
+
+        count = 0
+        first_ts = None
+        last_ts = None
+        peers: list[str] = []          # contrapartes únicas (ordem de chegada), com teto
+        peers_set: set[str] = set()
+        peers_overflow = False
+        by_name: dict[str, set] = {}   # rrname -> {rrtypes} p/ conflito, com teto
+        name_overflow = False
+        top: list[tuple] = []          # min-heap [(count, seq, slim_record)]
+        seq = 0
+
+        try:
+            for raw in resp.iter_lines(decode_unicode=True):
+                if not raw:
+                    continue
+                raw = raw.strip()
+                if not raw:
+                    continue
+                try:
+                    r = json.loads(raw)
+                except (json.JSONDecodeError, TypeError):
+                    continue
+                if not isinstance(r, dict):
+                    continue
+
+                count += 1
+                if count > _LINE_CAP:      # válvula de segurança absoluta
+                    break
+
+                tf = _to_int(r.get("time_first"))
+                tl = _to_int(r.get("time_last"))
+                if tf is not None:
+                    first_ts = tf if first_ts is None else min(first_ts, tf)
+                if tl is not None:
+                    last_ts = tl if last_ts is None else max(last_ts, tl)
+
+                rrtype = (r.get("rrtype") or "").upper()
+                cnt = _to_int(r.get("count")) or 0
+
+                # Top-N por volume, sem guardar todos os registros (heap fixo).
+                seq += 1
+                slim = (r.get("rrtype"), r.get("rrname"), r.get("rdata"), cnt, tf, tl)
+                if len(top) < _TOP_N:
+                    heapq.heappush(top, (cnt, seq, slim))
+                elif cnt > top[0][0]:
+                    heapq.heapreplace(top, (cnt, seq, slim))
+
+                # Contrapartes A/AAAA (IP=rrname, domínio=rdata na convenção CIRCL).
+                if rrtype in _A_TYPES:
+                    peer = r.get("rdata") if is_ip else r.get("rrname")
+                    if peer and not peers_overflow and peer not in peers_set:
+                        peers_set.add(peer)
+                        peers.append(peer)
+                        if len(peers_set) >= _PEER_CAP:
+                            peers_overflow = True
+
+                # Conflito de rrtype por rrname (bounded).
+                name = r.get("rrname")
+                if name and rrtype:
+                    existing = by_name.get(name)
+                    if existing is not None:
+                        existing.add(rrtype)
+                    elif not name_overflow:
+                        by_name[name] = {rrtype}
+                        if len(by_name) >= _NAME_CAP:
+                            name_overflow = True
+        except Exception:
+            # Stream interrompido — segue com o que já foi agregado.
+            pass
     except _AuthError:
         raise
     except Exception:
         return None
+    finally:
+        resp.close()
 
-
-def _analyze(records: list[dict], is_ip: bool) -> dict | None:
-    """Condensa os registros de pDNS nos campos persistidos no IOC."""
-    # Dedup por (rrname, rrtype, rdata) — "registros históricos únicos".
-    uniq: dict[tuple, dict] = {}
-    for r in records:
-        key = (r.get("rrname"), r.get("rrtype"), r.get("rdata"))
-        prev = uniq.get(key)
-        if prev is None:
-            uniq[key] = r
-        else:
-            # Mantém o de maior count / janela temporal mais ampla.
-            prev["count"] = max(prev.get("count") or 0, r.get("count") or 0)
-            prev["time_first"] = min(prev.get("time_first") or r.get("time_first") or 0,
-                                     r.get("time_first") or prev.get("time_first") or 0)
-            prev["time_last"] = max(prev.get("time_last") or 0, r.get("time_last") or 0)
-    recs = list(uniq.values())
-    if not recs:
+    if count == 0:
         return None
 
-    times_first = [r.get("time_first") for r in recs if r.get("time_first")]
-    times_last  = [r.get("time_last") for r in recs if r.get("time_last")]
-    first_ts = min(times_first) if times_first else None
-    last_ts  = max(times_last) if times_last else None
-
-    # A/AAAA: na convenção CIRCL, IP = rrname, domínio = rdata.
-    a_records = [r for r in recs if (r.get("rrtype") or "").upper() in _A_TYPES]
-    assoc_ips     = list(dict.fromkeys(r.get("rrname") for r in a_records if r.get("rrname")))
-    assoc_domains = list(dict.fromkeys(r.get("rdata") for r in a_records if r.get("rdata")))
-
-    # Top 10 resoluções por volume observado (auditável: mantém os dois lados).
-    top = sorted(recs, key=lambda r: (r.get("count") or 0), reverse=True)[:10]
+    top_sorted = sorted(top, key=lambda e: e[0], reverse=True)
     resolutions = [{
-        "rrtype":     r.get("rrtype"),
-        "rrname":     r.get("rrname"),
-        "rdata":      r.get("rdata"),
-        "count":      r.get("count"),
-        "time_first": _ts_to_date(r.get("time_first")),
-        "time_last":  _ts_to_date(r.get("time_last")),
-    } for r in top]
+        "rrtype":     s[0],
+        "rrname":     s[1],
+        "rdata":      s[2],
+        "count":      s[3],
+        "time_first": _ts_to_date(s[4]),
+        "time_last":  _ts_to_date(s[5]),
+    } for (_c, _seq, s) in top_sorted]
 
-    # --- Heurísticas de suspeita ---
-    # (a) muitas contrapartes: p/ IP = nº de domínios hospedados; p/ domínio = nº de IPs.
-    peer_count = len(assoc_domains) if is_ip else len(assoc_ips)
-    many_peers = peer_count > _MANY_PEERS
-    # (b) atividade recente (visto nos últimos 30 dias).
+    # --- Heurísticas de suspeita (a partir dos agregados) ---
+    many_peers = peers_overflow or len(peers) > _MANY_PEERS
     recent = False
-    if last_ts:
-        recent = (datetime.now(timezone.utc) - datetime.fromtimestamp(int(last_ts), tz=timezone.utc)) \
+    if last_ts is not None:
+        recent = (datetime.now(timezone.utc) - datetime.fromtimestamp(last_ts, tz=timezone.utc)) \
                  <= timedelta(days=_RECENT_DAYS)
-    # (c) rrtypes conflitantes para o mesmo rrname (mesma entidade com tipos divergentes).
-    by_name: dict[str, set] = {}
-    for r in recs:
-        name = r.get("rrname")
-        if name:
-            by_name.setdefault(name, set()).add((r.get("rrtype") or "").upper())
     conflicting = any(len(types) > 1 for types in by_name.values())
-
     suspicious = bool(many_peers or recent or conflicting)
 
     return {
-        "pdns_record_count":       len(recs),
+        "pdns_record_count":       count,
         "pdns_first_seen":         _ts_to_dt(first_ts),
         "pdns_last_seen":          _ts_to_dt(last_ts),
         "pdns_resolutions":        resolutions,
-        "pdns_associated_ips":     assoc_ips[:20] if not is_ip else None,
-        "pdns_associated_domains": assoc_domains[:20] if is_ip else None,
+        "pdns_associated_ips":     peers[:20] if not is_ip else None,
+        "pdns_associated_domains": peers[:20] if is_ip else None,
         "pdns_suspicious":         suspicious,
     }
 
@@ -236,21 +283,19 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
     hit = suspicious = 0
     for i, qval in enumerate(targets):
         try:
-            records = _query(qval, auth)
+            data = _query_aggregate(qval, target_map[qval]["is_ip"], auth)
         except _AuthError as e:
             print(f"[circl-pdns] ERRO de autenticação ({e}) — verifique CIRCL_USERNAME/"
                   f"CIRCL_PASSWORD; enricher interrompido (pipeline continua)")
             break
-        if records:
-            data = _analyze(records, target_map[qval]["is_ip"])
-            if data:
-                enriched_at = datetime.now(timezone.utc)
-                for ioc in target_map[qval]["iocs"]:
-                    ioc.update(data)
-                    ioc["pdns_enriched_at"] = enriched_at
-                hit += 1
-                if data.get("pdns_suspicious"):
-                    suspicious += 1
+        if data:
+            enriched_at = datetime.now(timezone.utc)
+            for ioc in target_map[qval]["iocs"]:
+                ioc.update(data)
+                ioc["pdns_enriched_at"] = enriched_at
+            hit += 1
+            if data.get("pdns_suspicious"):
+                suspicious += 1
         # Pausa entre chamadas (não dorme após a última).
         if i < len(targets) - 1:
             time.sleep(_SLEEP)

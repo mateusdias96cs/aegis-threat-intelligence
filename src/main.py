@@ -162,6 +162,21 @@ def run():
                     print("[pipeline] normalizing ...")
                     new_iocs = normalizer.normalize(new_iocs)
 
+                    # Re-filtra duplicados pós-normalização. O split novo/existente
+                    # roda ANTES da normalização (compara o valor bruto); ao normalizar
+                    # (ex.: URL/domínio em minúsculas, defang, strip), o valor pode
+                    # passar a coincidir com um IOC já no banco. Sem isto, esses IOCs
+                    # são enriquecidos à toa e depois descartados pelo insert_many —
+                    # desperdiçando, em especial, o orçamento limitado e rate-limited
+                    # do CIRCL (1 req/s, teto por execução). Re-filtrar aqui garante que
+                    # o enriquecimento caia só em IOCs que de fato serão persistidos.
+                    _pre = len(new_iocs)
+                    new_iocs = [i for i in new_iocs if i.get("value") not in existing_values]
+                    if len(new_iocs) != _pre:
+                        print(f"[pipeline] pós-normalização: {_pre} -> {len(new_iocs)} "
+                              f"({_pre - len(new_iocs)} duplicados normalizados removidos)")
+
+                if new_iocs:
                     # Warninglist (P2): marca IOCs que casam infra legítima conhecida
                     # (cloud/CDN/DNS/Tranco) ANTES do score — o classifier aplica a
                     # penalidade de provável-FP. No-op se data/warninglists vazio.
