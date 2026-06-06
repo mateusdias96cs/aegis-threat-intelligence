@@ -40,6 +40,11 @@ _LONG_VALIDITY_DAYS = 365 * 5      # validade > 5 anos = geração automatizada 
 
 _CN_RE  = re.compile(r"CN=([^,/]+)")
 _SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+_NOT_FOUND = object()   # sentinel: API devolveu 404
+
+
+class _RateLimit(Exception):
+    """HTTP 429 ou timeout — aguarda 2 s antes da próxima chamada."""
 
 
 def _auth() -> tuple[str, str] | None:
@@ -98,23 +103,29 @@ def _parse_san(ext: dict | None) -> list[str]:
     return list(dict.fromkeys(out))
 
 
-def _query(ip: str, auth: tuple[str, str]) -> dict | None:
-    """Lista os certificados vistos num IP. Retorna o sub-dict do IP ou None."""
+def _query(ip: str, auth: tuple[str, str]):
+    """Lista os certificados vistos num IP. Retorna o sub-dict do IP, _NOT_FOUND ou None."""
     try:
         resp = requests.get(_PSSL_QUERY.format(ip=ip), auth=auth, timeout=_TIMEOUT)
+    except requests.exceptions.Timeout:
+        raise _RateLimit("timeout")
+    except Exception:
+        return None
+    try:
         if resp.status_code in (401, 403):
             raise _AuthError(f"HTTP {resp.status_code}")
         if resp.status_code == 404:
-            return None
+            return _NOT_FOUND
+        if resp.status_code == 429:
+            raise _RateLimit("429")
         resp.raise_for_status()
         data = resp.json()
-    except _AuthError:
+    except (_AuthError, _RateLimit):
         raise
     except Exception:
         return None
     if not isinstance(data, dict):
         return None
-    # A chave de topo é o próprio IP; aceita variações sendo tolerante.
     node = data.get(ip) or (next(iter(data.values()), None) if data else None)
     return node if isinstance(node, dict) and node.get("certificates") else None
 
@@ -227,24 +238,33 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
 
     hit = suspicious = 0
     for i, ip in enumerate(ips):
+        sleep_s = 0.5   # padrão: 200 OK
         try:
             node = _query(ip, auth)
-            if node:
-                data = _analyze(ip, node, auth)
-                if data:
-                    enriched_at = datetime.now(timezone.utc)
-                    for ioc in ip_map[ip]:
-                        ioc.update(data)
-                        ioc["pssl_enriched_at"] = enriched_at
-                    hit += 1
-                    if data.get("pssl_suspicious"):
-                        suspicious += 1
         except _AuthError as e:
             print(f"[circl-pssl] ERRO de autenticação ({e}) — verifique CIRCL_USERNAME/"
                   f"CIRCL_PASSWORD; enricher interrompido (pipeline continua)")
             break
-        if i < len(ips) - 1:
-            time.sleep(_SLEEP_QUERY)
+        except _RateLimit:
+            sleep_s = 2.0
+            node = None
+        else:
+            if node is _NOT_FOUND:
+                sleep_s = 0.0
+                node = None
+
+        if node:
+            data = _analyze(ip, node, auth)
+            if data:
+                enriched_at = datetime.now(timezone.utc)
+                for ioc in ip_map[ip]:
+                    ioc.update(data)
+                    ioc["pssl_enriched_at"] = enriched_at
+                hit += 1
+                if data.get("pssl_suspicious"):
+                    suspicious += 1
+        if i < len(ips) - 1 and sleep_s > 0:
+            time.sleep(sleep_s)
 
     print(f"[circl-pssl] {hit}/{len(ips)} IPs com certificados ({suspicious} marcados suspicious)")
     return iocs

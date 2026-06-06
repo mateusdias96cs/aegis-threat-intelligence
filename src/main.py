@@ -206,22 +206,6 @@ def run():
                         print(f"[pipeline] enriquecendo {len(domain_new)} domínios/URLs com RDAP ...")
                         new_iocs = rdap_enricher.enrich_batch(new_iocs)
 
-                    # CIRCL Passive DNS + Passive SSL (parceiro confiável; HTTP Basic Auth).
-                    # Só roda se CIRCL_USERNAME/CIRCL_PASSWORD estiverem no ambiente —
-                    # caso contrário, WARNING e pula (degradação graciosa). Sequencial,
-                    # 1 req/s, sem threading; teto por execução (CIRCL_MAX_LOOKUPS).
-                    if os.getenv("CIRCL_USERNAME") and os.getenv("CIRCL_PASSWORD"):
-                        circl_targets = [i for i in new_iocs if i.get("type") in ("domain", "ip", "url")]
-                        if circl_targets:
-                            print(f"[pipeline] enriquecendo {len(circl_targets)} IOCs com CIRCL Passive DNS ...")
-                            new_iocs = circl_pdns_enricher.enrich_batch(new_iocs)
-                        ip_circl = [i for i in new_iocs if i.get("type") == "ip"]
-                        if ip_circl:
-                            print(f"[pipeline] enriquecendo {len(ip_circl)} IPs com CIRCL Passive SSL ...")
-                            new_iocs = circl_pssl_enricher.enrich_batch(new_iocs)
-                    else:
-                        print("[pipeline] CIRCL_USERNAME/CIRCL_PASSWORD ausentes — pDNS/pSSL pulados")
-
                     print("[pipeline] classifying ...")
                     new_iocs = classifier.classify(new_iocs)
                     new_iocs = classifier.apply_confidence(new_iocs, value_sources)
@@ -279,6 +263,20 @@ def run():
                 # podem ter mudado as dimensões preenchidas desde o último run).
                 print("[pipeline] backfilling context completeness ...")
                 db.backfill_context_completeness()
+
+                # CIRCL pDNS/pSSL: enriquece até 200 IOCs por execução (teto diário).
+                # Prioridade: nunca enriquecidos primeiro, depois mais antigos.
+                # Roda sobre IOCs já persistidos (domain/ip, score >= 50).
+                print("[pipeline] CIRCL enrichment: querying up to 200 IOCs ...")
+                circl_iocs = db.get_iocs_for_circl_enrichment(limit=200)
+                if circl_iocs:
+                    print(f"[pipeline] CIRCL: {len(circl_iocs)} IOCs selecionados para enriquecimento")
+                    circl_iocs = circl_pdns_enricher.enrich_batch(circl_iocs)
+                    circl_iocs = circl_pssl_enricher.enrich_batch(circl_iocs)
+                    saved = db.update_circl_enrichment(circl_iocs)
+                    print(f"[pipeline] CIRCL: {saved} IOCs atualizados no banco")
+                else:
+                    print("[pipeline] CIRCL: nenhum IOC elegível para enriquecimento")
 
             except Exception as e:
                 print(f"[pipeline] collection/processing error (continuing to report): {e}")

@@ -35,7 +35,7 @@ default_args = {
     "retries": 1,
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,
-    "execution_timeout": timedelta(minutes=25),
+    "execution_timeout": timedelta(hours=2),
 }
 
 
@@ -99,7 +99,7 @@ def wait_for_aegis_pipeline(**context):
     time.sleep(30)  # espera inicial — pipeline leva ~3 min
 
     today = str(date.today())
-    for i in range(20):  # até ~15 min no total (30s + 20×45s)
+    for i in range(120):  # até ~90 min no total (30s + 120×45s)
         time.sleep(45)
         try:
             health = requests.get(f"{base}/health", timeout=15).json()
@@ -119,7 +119,7 @@ def wait_for_aegis_pipeline(**context):
             print(f"Pipeline concluído por tempo (last_updated={last}, iocs={total_now})")
             return health
 
-    raise Exception("Pipeline não concluiu em 15 minutos")
+    raise Exception("Pipeline não concluiu em 90 minutos")
 
 
 with DAG(

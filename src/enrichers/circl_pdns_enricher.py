@@ -51,6 +51,11 @@ _LINE_CAP = 5_000_000              # válvula de segurança absoluta (registros 
 
 _A_TYPES = ("A", "AAAA")
 _SEV_RANK = {"CRITICAL": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+_NOT_FOUND = object()   # sentinel: API devolveu 404 (sem dados, não é erro de chamada)
+
+
+class _RateLimit(Exception):
+    """HTTP 429 ou timeout — aguarda 2 s antes da próxima chamada."""
 
 
 def _auth() -> tuple[str, str] | None:
@@ -128,6 +133,8 @@ def _query_aggregate(value: str, is_ip: bool, auth: tuple[str, str]) -> dict | N
     try:
         resp = requests.get(_PDNS_QUERY.format(value=value), auth=auth,
                             timeout=_TIMEOUT, stream=True)
+    except requests.exceptions.Timeout:
+        raise _RateLimit("timeout")
     except Exception:
         return None
 
@@ -135,7 +142,9 @@ def _query_aggregate(value: str, is_ip: bool, auth: tuple[str, str]) -> dict | N
         if resp.status_code in (401, 403):
             raise _AuthError(f"HTTP {resp.status_code}")
         if resp.status_code == 404:
-            return None
+            return _NOT_FOUND
+        if resp.status_code == 429:
+            raise _RateLimit("429")
         resp.raise_for_status()
 
         count = 0
@@ -207,7 +216,7 @@ def _query_aggregate(value: str, is_ip: bool, auth: tuple[str, str]) -> dict | N
         except Exception:
             # Stream interrompido — segue com o que já foi agregado.
             pass
-    except _AuthError:
+    except (_AuthError, _RateLimit):
         raise
     except Exception:
         return None
@@ -282,12 +291,21 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
 
     hit = suspicious = 0
     for i, qval in enumerate(targets):
+        sleep_s = 0.5   # padrão: 200 OK
         try:
             data = _query_aggregate(qval, target_map[qval]["is_ip"], auth)
         except _AuthError as e:
             print(f"[circl-pdns] ERRO de autenticação ({e}) — verifique CIRCL_USERNAME/"
                   f"CIRCL_PASSWORD; enricher interrompido (pipeline continua)")
             break
+        except _RateLimit:
+            sleep_s = 2.0
+            data = None
+        else:
+            if data is _NOT_FOUND:
+                sleep_s = 0.0   # 404 não consome orçamento — não precisa dormir
+                data = None
+
         if data:
             enriched_at = datetime.now(timezone.utc)
             for ioc in target_map[qval]["iocs"]:
@@ -296,9 +314,8 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
             hit += 1
             if data.get("pdns_suspicious"):
                 suspicious += 1
-        # Pausa entre chamadas (não dorme após a última).
-        if i < len(targets) - 1:
-            time.sleep(_SLEEP)
+        if i < len(targets) - 1 and sleep_s > 0:
+            time.sleep(sleep_s)
 
     print(f"[circl-pdns] {hit}/{len(targets)} alvos com dados ({suspicious} marcados suspicious)")
     return iocs

@@ -1539,6 +1539,77 @@ class DatabaseManager:
             print(f"[recalculate] WARNING: {still_null} IOCs ativos ainda têm score_breakdown NULL após atualização")
         return total_updated
 
+    def get_iocs_for_circl_enrichment(self, limit: int = 200) -> list[dict]:
+        """Returns up to `limit` active domain/ip IOCs (score >= 50) for CIRCL enrichment.
+
+        Ordered by: never enriched (pdns_enriched_at IS NULL) first, then oldest enriched.
+        Query runs on the DB so nothing is loaded into memory beyond `limit` rows.
+        """
+        try:
+            rows = self._session.execute(text("""
+                SELECT id, value, type, score_atual, severity, abuse_score
+                FROM iocs
+                WHERE type IN ('domain', 'ip')
+                  AND score_atual >= 50
+                  AND ioc_status = 'ACTIVE'
+                ORDER BY CASE WHEN pdns_enriched_at IS NULL THEN 0 ELSE 1 END ASC,
+                         pdns_enriched_at ASC
+                LIMIT :limit
+            """), {"limit": limit}).mappings().all()
+            return [dict(r) for r in rows]
+        except Exception as e:
+            print(f"[db] get_iocs_for_circl_enrichment error: {e}")
+            return []
+
+    def update_circl_enrichment(self, iocs: list[dict]) -> int:
+        """Persists CIRCL pDNS/pSSL enrichment fields for existing IOCs.
+
+        Only updates IOCs where the enricher set pdns_enriched_at or pssl_enriched_at,
+        meaning the API returned data (not 404/error). Unrecognized IOCs are skipped.
+        """
+        updated = 0
+        for ioc in iocs:
+            val = ioc.get("value")
+            if not val:
+                continue
+            fields: dict = {}
+            if ioc.get("pdns_enriched_at") is not None:
+                fields.update({
+                    "pdns_record_count":       ioc.get("pdns_record_count"),
+                    "pdns_first_seen":         ioc.get("pdns_first_seen"),
+                    "pdns_last_seen":          ioc.get("pdns_last_seen"),
+                    "pdns_resolutions":        json.dumps(ioc["pdns_resolutions"]) if ioc.get("pdns_resolutions") else None,
+                    "pdns_associated_ips":     json.dumps(ioc["pdns_associated_ips"]) if ioc.get("pdns_associated_ips") else None,
+                    "pdns_associated_domains": json.dumps(ioc["pdns_associated_domains"]) if ioc.get("pdns_associated_domains") else None,
+                    "pdns_suspicious":         1 if ioc.get("pdns_suspicious") else 0,
+                    "pdns_enriched_at":        ioc["pdns_enriched_at"],
+                })
+            if ioc.get("pssl_enriched_at") is not None:
+                fields.update({
+                    "pssl_cert_count":   ioc.get("pssl_cert_count"),
+                    "pssl_certificates": json.dumps(ioc["pssl_certificates"]) if ioc.get("pssl_certificates") else None,
+                    "pssl_subjects":     json.dumps(ioc["pssl_subjects"]) if ioc.get("pssl_subjects") else None,
+                    "pssl_self_signed":  1 if ioc.get("pssl_self_signed") else 0,
+                    "pssl_expired":      1 if ioc.get("pssl_expired") else 0,
+                    "pssl_suspicious":   1 if ioc.get("pssl_suspicious") else 0,
+                    "pssl_enriched_at":  ioc["pssl_enriched_at"],
+                })
+            if not fields:
+                continue
+            set_clause = ", ".join(f"{k} = :{k}" for k in fields)
+            fields["_value"] = val
+            try:
+                self._session.execute(
+                    text(f"UPDATE iocs SET {set_clause} WHERE value = :_value"),
+                    fields,
+                )
+                updated += 1
+            except Exception as e:
+                print(f"[db] update_circl_enrichment error for {val}: {e}")
+        if updated:
+            self._session.commit()
+        return updated
+
     def cleanup_old_iocs(self) -> int:
         try:
             today = datetime.utcnow().date()
