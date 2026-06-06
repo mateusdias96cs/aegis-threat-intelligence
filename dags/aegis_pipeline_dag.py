@@ -61,10 +61,30 @@ def _api_key() -> str:
         return key
 
 
+def _get_json(url: str, timeout: int = 10, attempts: int = 3):
+    """GET + parse JSON tolerante a corpo vazio/instável (API reiniciando no Render).
+
+    Durante um restart do Render o /health pode devolver corpo vazio ou 5xx, e
+    `resp.json()` direto estoura JSONDecodeError, derrubando a task. Aqui re-tenta
+    `attempts` vezes com 15s de espera e só então lança um erro CLARO. Não devolve
+    baseline inválido (defaultar total_before=0 faria o wait declarar conclusão na
+    primeira leitura)."""
+    last = None
+    for i in range(1, attempts + 1):
+        try:
+            resp = requests.get(url, timeout=timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except Exception as e:
+            last = e
+            if i < attempts:
+                print(f"GET {url} falhou ({e}) — aguardando 15s e re-tentando ({i}/{attempts}) ...")
+                time.sleep(15)
+    raise Exception(f"Não foi possível obter JSON de {url} após {attempts} tentativa(s): {last}")
+
+
 def check_aegis_health():
-    response = requests.get(f"{_base_url()}/health", timeout=10)
-    response.raise_for_status()
-    data = response.json()
+    data = _get_json(f"{_base_url()}/health", timeout=10, attempts=3)
     print(f"Total IOCs: {data['database']['total_iocs']}")
     print(f"Status: {data['status']}")
     return data
@@ -78,16 +98,39 @@ def trigger_aegis_pipeline(**context):
     re-disparado. Isso elimina o run duplicado (10:13 e 10:32) causado pelo retry
     da tarefa monolítica antiga re-POSTando /api/pipeline/run."""
     base = _base_url()
-    health_before = requests.get(f"{base}/health", timeout=10).json()
+    health_before = _get_json(f"{base}/health", timeout=10, attempts=3)
     total_before = health_before.get("database", {}).get("total_iocs", 0)
     timestamp_before = health_before.get("database", {}).get("last_updated", "")
     print(f"Antes: total_iocs={total_before}, last_updated={timestamp_before}")
 
-    response = requests.post(
-        f"{base}/api/pipeline/run", timeout=30, headers={"X-API-Key": _api_key()}
-    )
-    response.raise_for_status()
-    print(f"Pipeline iniciado: {response.json()}")
+    # POST com retry/backoff: durante restart do Render a API pode devolver corpo
+    # vazio ou 5xx — nesses casos o pipeline provavelmente NEM iniciou, então re-tentar
+    # é seguro (o guard de idempotência server-side barra disparo duplicado). 4xx é
+    # erro definitivo (chave/rota) — falha na hora, sem re-tentar.
+    last_err = None
+    for attempt in range(1, 4):  # até 3 tentativas
+        response = requests.post(
+            f"{base}/api/pipeline/run", timeout=30, headers={"X-API-Key": _api_key()}
+        )
+        try:
+            body = response.json()
+        except Exception:
+            body = response.text or "(resposta vazia)"
+        print(f"Pipeline iniciado (tentativa {attempt}/3): {body}")
+
+        if 400 <= response.status_code < 500:
+            raise Exception(f"API retornou erro {response.status_code}: {body}")
+
+        empty = not (response.text or "").strip()
+        if response.status_code >= 500 or empty:
+            last_err = f"status {response.status_code}, corpo: {body}"
+            if attempt < 3:
+                print(f"API instável ({last_err}) — aguardando 15s e re-tentando ...")
+                time.sleep(15)
+                continue
+            raise Exception(f"API falhou após 3 tentativas: {last_err}")
+        break  # 2xx/3xx com corpo — sucesso
+
     return total_before
 
 
