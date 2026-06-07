@@ -1,3 +1,8 @@
+"""Real-time single-IP reputation lookup (GreyNoise Community API + GeoIP2).
+
+Used on demand by the Kill Chain / campaign views, not by the bulk pipeline.
+"""
+
 import os
 import time
 import requests

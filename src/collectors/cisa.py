@@ -1,3 +1,5 @@
+"""CISA KEV collector — actively exploited CVEs (Known Exploited Vulnerabilities)."""
+
 import time
 
 import requests
@@ -31,6 +33,15 @@ def _fetch_cvss(cve_id: str) -> float | None:
 
 
 def collect() -> list[dict]:
+    """Collect actively exploited CVEs from the CISA KEV feed.
+
+    Fetches the Known Exploited Vulnerabilities JSON feed, keeps recently
+    added entries and enriches each one with its CVSS base score from the
+    NVD API.
+
+    Returns:
+        list[dict]: IOCs of type ``cve``. Empty on fetch failure.
+    """
     try:
         response = requests.get(FEED_URL, timeout=30)
         response.raise_for_status()

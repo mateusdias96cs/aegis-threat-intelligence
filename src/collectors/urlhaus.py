@@ -1,3 +1,5 @@
+"""URLhaus (abuse.ch) collector — recently submitted malicious URLs."""
+
 import csv
 import io
 import requests
@@ -7,6 +9,11 @@ ENDPOINT = "https://urlhaus.abuse.ch/downloads/csv_recent/"
 
 
 def collect() -> list[dict]:
+    """Collect recent malicious URLs from the URLhaus CSV feed.
+
+    Returns:
+        list[dict]: IOCs of type ``url``. Empty on fetch failure.
+    """
     today = date.today().isoformat()
 
     try:

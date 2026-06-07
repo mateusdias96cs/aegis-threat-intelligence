@@ -1,3 +1,5 @@
+"""GreyNoise collector — internet scanners classified as malicious."""
+
 import os
 import requests
 from datetime import date
@@ -8,6 +10,15 @@ MAX_IPS = 5000
 
 
 def collect() -> list[dict]:
+    """Collect malicious-scanner IPs from the GreyNoise GNQL bulk feed.
+
+    Requires ``GREYNOISE_API_KEY``; skips the feed and returns an empty list
+    when the key is absent.
+
+    Returns:
+        list[dict]: IOCs of type ``ip`` (up to ``MAX_IPS``). Empty on missing
+        key or fetch failure.
+    """
     api_key = os.getenv("GREYNOISE_API_KEY")
     if not api_key:
         print("[greynoise] GREYNOISE_API_KEY not set — skipping bulk feed")

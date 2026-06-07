@@ -1,3 +1,5 @@
+"""IPsum collector — IPs aggregated across 30+ public blocklists."""
+
 import requests
 from datetime import date
 
@@ -26,6 +28,14 @@ def _hits_to_score(hits: int) -> int:
 
 
 def collect() -> list[dict]:
+    """Collect malicious IPs from the IPsum aggregated feed.
+
+    Keeps IPs listed in at least ``MIN_LISTS`` independent blocklists (a
+    low-false-positive cut) and maps the hit-count to an abuse score.
+
+    Returns:
+        list[dict]: IOCs of type ``ip`` (up to ``MAX_IPS``). Empty on failure.
+    """
     today = date.today().isoformat()
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, timeout=30)

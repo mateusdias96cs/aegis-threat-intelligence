@@ -1,3 +1,5 @@
+"""MITRE ATT&CK loader — fetches enterprise techniques and maps IOCs to them."""
+
 import json
 import re
 import requests
@@ -56,6 +58,14 @@ SOURCE_TO_TECHNIQUE = {
 
 
 def load_techniques() -> dict:
+    """Load the MITRE ATT&CK enterprise techniques, keyed by technique ID.
+
+    Tries the database cache first (30-day TTL) and falls back to fetching
+    and parsing the upstream ATT&CK STIX bundle.
+
+    Returns:
+        dict: Mapping of technique ID (e.g. ``T1110``) to technique metadata.
+    """
     # Tenta cache do banco primeiro (TTL 30 dias)
     cached = mitre_cache.load()
     if cached:
@@ -134,6 +144,18 @@ def _resolve(tech_id: str, techniques: dict) -> dict | None:
 
 
 def map_ioc_to_technique(ioc: dict, techniques: dict) -> dict | None:
+    """Map an IOC to a MITRE ATT&CK technique.
+
+    Prefers techniques explicitly attributed by the source (e.g. OTX
+    ``attack_ids``) over keyword inference on the IOC description.
+
+    Args:
+        ioc: A normalized IOC dict.
+        techniques: Technique catalog from :func:`load_techniques`.
+
+    Returns:
+        dict | None: The matched technique metadata, or ``None`` if no match.
+    """
     # 1) Técnicas ATT&CK REAIS atribuídas pela fonte (OTX attack_ids) — prioridade
     #    máxima. É atribuição feita por um analista, não inferência por substring.
     attack_ids = ioc.get("attack_ids") or []

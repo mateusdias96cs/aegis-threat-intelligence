@@ -1,3 +1,5 @@
+"""IOC deduplicator — collapses duplicates by value, keeping highest severity."""
+
 SEVERITY_ORDER = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
 
 
@@ -10,6 +12,18 @@ def _severity_rank(ioc: dict) -> int:
 
 
 def deduplicate(iocs: list) -> list:
+    """Remove duplicate IOCs by ``value``, keeping the highest severity.
+
+    For each repeated ``value``, keeps the occurrence with the highest
+    severity (order LOW < MEDIUM < HIGH < CRITICAL). Entries without a
+    ``value`` are dropped.
+
+    Args:
+        iocs: List of normalized IOCs.
+
+    Returns:
+        list: Unique IOCs.
+    """
     seen: dict[str, dict] = {}
 
     for ioc in iocs:

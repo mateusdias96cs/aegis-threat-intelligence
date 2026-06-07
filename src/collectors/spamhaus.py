@@ -1,3 +1,5 @@
+"""Spamhaus DROP collector — hijacked/malicious network blocks (CIDR)."""
+
 import os
 import json
 import ipaddress
@@ -35,6 +37,15 @@ def _open_asn_reader():
 
 
 def collect() -> list[dict]:
+    """Collect hijacked/malicious network blocks from the Spamhaus DROP list.
+
+    Parses the JSON-lines DROP feed and resolves each netblock's ASN via
+    GeoLite2 to link the ranges into the correlation graph's ASN hub.
+
+    Returns:
+        list[dict]: IOCs of type ``netblock`` (up to ``MAX_NETBLOCKS``). Empty
+        on fetch failure.
+    """
     today = date.today().isoformat()
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, timeout=30)

@@ -1,3 +1,5 @@
+"""SANS ISC / DShield collector — top attacking IPs from firewall telemetry."""
+
 import math
 import requests
 from datetime import date
@@ -26,6 +28,14 @@ def _attacks_to_score(attacks: int) -> int:
 
 
 def collect() -> list[dict]:
+    """Collect top attacking IPs from the SANS Internet Storm Center API.
+
+    Each IP carries its real attack volume and first/last event dates; the
+    volume is mapped to a discriminative abuse score on a log scale.
+
+    Returns:
+        list[dict]: IOCs of type ``ip`` (up to ``MAX_IPS``). Empty on failure.
+    """
     today = date.today().isoformat()
     try:
         response = requests.get(

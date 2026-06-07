@@ -1,3 +1,5 @@
+"""AEGIS pipeline entrypoint — orchestrates collection through reporting."""
+
 import os
 import sys
 import sentry_sdk
@@ -24,6 +26,15 @@ _MIN_RUN_INTERVAL_MIN = int(os.getenv("PIPELINE_MIN_INTERVAL_MIN", "15"))
 
 
 def run():
+    """Run the full CTI pipeline end to end.
+
+    Phases: idempotency guard (``PIPELINE_MIN_INTERVAL_MIN``), GeoIP2 database
+    bootstrap, multi-source collection, normalization, classification,
+    deduplication, enrichment (GeoIP/EPSS/Shodan/MalwareBazaar/RDAP/CIRCL),
+    persistence and HTML report generation. Instrumented with Sentry. The
+    collection phase is non-fatal: failures from individual sources do not
+    abort the run.
+    """
     sentry_dsn = os.getenv("SENTRY_DSN")
     if sentry_dsn:
         try:

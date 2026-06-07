@@ -1,3 +1,5 @@
+"""Feodo Tracker (abuse.ch) collector — botnet C2 server IPs."""
+
 import csv
 import io
 import requests
@@ -7,6 +9,14 @@ ENDPOINT = "https://feodotracker.abuse.ch/downloads/ipblocklist.csv"
 
 
 def collect() -> list[dict]:
+    """Collect botnet C2 server IPs from the Feodo Tracker blocklist.
+
+    Downloads the abuse.ch CSV blocklist and converts each row into a
+    normalized IOC. IPs with an online C2 are flagged CRITICAL; the rest HIGH.
+
+    Returns:
+        list[dict]: IOCs of type ``ip``. Empty on fetch failure.
+    """
     today = date.today().isoformat()
 
     try:

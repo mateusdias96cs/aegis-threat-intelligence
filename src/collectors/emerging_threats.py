@@ -1,3 +1,5 @@
+"""Emerging Threats collector — individual compromised host IPs."""
+
 import requests
 from datetime import date
 
@@ -9,6 +11,14 @@ MAX_IPS = 10000
 
 
 def collect() -> list[dict]:
+    """Collect individual compromised host IPs from the Emerging Threats feed.
+
+    Reads the ``compromised-ips.txt`` list and keeps plain IPs only, skipping
+    CIDR ranges (which this per-IP collector does not expand).
+
+    Returns:
+        list[dict]: IOCs of type ``ip`` (up to ``MAX_IPS``). Empty on failure.
+    """
     today = date.today().isoformat()
     try:
         response = requests.get(ENDPOINT, timeout=30)

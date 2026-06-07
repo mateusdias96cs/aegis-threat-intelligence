@@ -1,3 +1,5 @@
+"""ThreatFox (abuse.ch) collector — malware and command-and-control indicators."""
+
 from dotenv import load_dotenv
 from datetime import date
 import os
@@ -10,6 +12,15 @@ ENDPOINT = "https://threatfox.abuse.ch/export/json/recent/"
 
 
 def collect() -> list[dict]:
+    """Collect recent malware/C2 indicators from the ThreatFox export.
+
+    Fetches the recent-IOCs JSON export and normalizes both the current
+    (list-valued) and legacy (dict-valued) response shapes.
+
+    Returns:
+        list[dict]: IOCs of types ``ip``, ``domain``, ``url`` and ``hash``.
+        Empty on fetch failure or unexpected payload.
+    """
     headers = {"Auth-Key": API_KEY} if API_KEY else {}
     today = str(date.today())
 

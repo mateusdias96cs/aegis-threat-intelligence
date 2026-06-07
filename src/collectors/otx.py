@@ -1,3 +1,5 @@
+"""AlienVault OTX collector — IOCs from subscribed threat-intelligence pulses."""
+
 import os
 import time
 import requests
@@ -82,6 +84,17 @@ def _pulse_meta(pulse: dict) -> dict:
 
 
 def collect() -> list[dict]:
+    """Collect IOCs from subscribed AlienVault OTX pulses.
+
+    Pages through the subscribed-pulses API (60s timeout, retries with
+    backoff) and maps each indicator to a normalized IOC. Requires
+    ``OTX_API_KEY``; returns whatever was gathered so far if OTX becomes
+    unavailable mid-run.
+
+    Returns:
+        list[dict]: IOCs of types ``ip``, ``domain``, ``url`` and ``hash``.
+        Empty on missing key or total failure.
+    """
     api_key = os.getenv("OTX_API_KEY")
     if not api_key:
         print("[otx] OTX_API_KEY is not set")
