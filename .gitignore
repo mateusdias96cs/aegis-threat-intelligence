@@ -1,17 +1,44 @@
+# === Segredos / configuração local ===
 .env
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*.pyd
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# === Virtualenvs ===
+.venv/
+venv/
+env/
+
+# === Caches de ferramentas ===
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# === IDE / SO ===
+.vscode/
+.idea/
+.DS_Store
+
+# === Dados de runtime ===
 data/iocs.db
 data/*.bak*
-__pycache__/
-*.pyc
-.vscode/
-.venv/
+data/*.tar.gz
 
-# Artefatos do Airflow — runtime/infra, nunca versionar nem subir no deploy.
+# === Artefatos do Airflow — runtime/infra, nunca versionar nem subir no deploy ===
 airflow.cfg
 airflow.db
 airflow-webserver.pid
 webserver_config.py
 logs/
 
-# doc local — não versionar
+# === Docs locais — não versionar ===
 atualizacoes.md
