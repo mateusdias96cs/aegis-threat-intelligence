@@ -1,9 +1,14 @@
-<img width="692" height="388" alt="gif" src="https://github.com/user-attachments/assets/d2e7c3e3-88b8-4c1f-8152-25947e6a8f33" />
-
-
-
+<p align="center">
+  <img src="screenshots/gif.gif" alt="AEGIS Threat Intelligence" width="692">
+</p>
 
 # AEGIS Threat Intelligence
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/python-3.11-blue.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-336791?logo=postgresql&logoColor=white)](https://www.postgresql.org/)
+[![Live](https://img.shields.io/badge/demo-aegiscti.me-success)](https://aegiscti.me)
 
 > Plataforma open source de Cyber Threat Intelligence (CTI) com pipeline automatizado, scoring auditável e Kill Chain reconstruída por atacante — acessível via browser, sem instalação.
 
@@ -16,6 +21,61 @@
 O AEGIS é uma plataforma de inteligência de ameaças cibernéticas construída do zero por um único desenvolvedor. Ele coleta, normaliza, enriquece e correlaciona IOCs (Indicators of Compromise) de múltiplas fontes públicas em tempo real, entregando contexto acionável para analistas SOC — sem depender de ferramentas pagas.
 
 O diferencial não é apenas agregar feeds: é transformar dados brutos em **inteligência interpretável**, com scoring auditável, decay automático por tipo de IOC, Kill Chain reconstruída por atacante e handoff de turno entre analistas.
+
+---
+
+## Instalação / Rodar Localmente
+
+Requer **Python 3.11+** e **PostgreSQL**.
+
+> ⚠️ **Projeto de portfólio em produção.** A instância oficial roda no Render com PostgreSQL e chaves de API privadas. Para subir uma instância própria você precisa configurar `DATABASE_URL` (PostgreSQL) e suas próprias chaves de API no `.env` (use o `.env.example` como referência). Sem essas credenciais a aplicação não sobe.
+
+```bash
+# 1. Clonar
+git clone https://github.com/mateusdias96cs/aegis-threat-intelligence.git
+cd aegis-threat-intelligence
+
+# 2. Ambiente virtual
+python3.11 -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+
+# 3. Dependências
+pip install -r requirements.txt
+
+# 4. Configurar variáveis de ambiente
+cp .env.example .env             # edite com DATABASE_URL e suas chaves (ver tabela abaixo)
+
+# 5. Rodar a API / dashboard
+uvicorn src.api:app --reload     # http://localhost:8000
+
+# 6. (Opcional) Rodar o pipeline de coleta uma vez
+python -m src.main
+```
+
+---
+
+## Variáveis de Ambiente
+
+Copie `.env.example` para `.env` e preencha. As chaves de API públicas têm tier gratuito.
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `DATABASE_URL` | **Sim** | Conexão PostgreSQL. |
+| `AEGIS_API_KEY` | **Sim** | Chave admin para endpoints protegidos (ex.: marcar falso-positivo). |
+| `AEGIS_PUBLIC_KEY` | **Sim** | Chave read-only injetada no dashboard. |
+| `AEGIS_BASE_URL` | Não | URL base da API publicada. |
+| `OTX_API_KEY` | Não | AlienVault OTX (coletor). |
+| `THREATFOX_API_KEY` | Não | abuse.ch ThreatFox (coletor). |
+| `ABUSE_CH_API_KEY` | Não | Auth-Key abuse.ch (enricher MalwareBazaar). |
+| `MALWAREBAZAAR_API_KEY` | Não | MalwareBazaar (família de malware por hash). |
+| `GREYNOISE_API_KEY` | Não | GreyNoise (scanners de internet). |
+| `CIRCL_USERNAME` / `CIRCL_PASSWORD` | Não | CIRCL Passive DNS + SSL (HTTP Basic Auth). |
+| `CIRCL_MAX_LOOKUPS` | Não | Teto de consultas CIRCL por execução (default 100). |
+| `MAXMIND_LICENSE_KEY` | Não | Baixa GeoLite2 (.mmdb) automaticamente em runtime. |
+| `MAXMIND_DB_PATH` / `MAXMIND_ASN_DB_PATH` / `GEOIP_DATA_DIR` | Não | Paths GeoLite2 (auto-resolvidos por glob). |
+| `SENTRY_DSN` | Não | Monitoramento de erros (Sentry). |
+| `DOPPLER_ENVIRONMENT` / `ENVIRONMENT` | Não | Tag de ambiente (default `production`). |
+| `PIPELINE_MIN_INTERVAL_MIN` | Não | Intervalo mínimo entre runs do pipeline (default 15 min). |
 
 ---
 
@@ -80,10 +140,11 @@ Camada dedicada a elevar a confiança dos indicadores:
 | ThreatFox | Malware e C2 | variável |
 | URLhaus | URLs maliciosas | até 2.000 |
 | Feodo Tracker | IPs de botnet C2 | ~5 |
-| AbuseIPDB Blacklist | IPs com histórico de abuso | até 10.000 |
 | DShield / SANS ISC | IPs atacantes (telemetria de firewall) | ~500 por run |
 | Emerging Threats | IPs maliciosos | variável |
 | GreyNoise | Scanners de internet | variável |
+| IPsum | IPs maliciosos agregados (multi-blocklist) | variável |
+| Spamhaus DROP | Faixas/IPs hijacked e maliciosos | variável |
 
 **Enriquecimento:** os IOCs são enriquecidos com GeoIP2/ASN (MaxMind), Shodan InternetDB (portas, serviços e vulnerabilidades por IP), EPSS/FIRST.org (probabilidade de exploração de CVE), MalwareBazaar (família de malware por hash), RDAP (idade do registro do domínio) e **CIRCL Passive DNS + Passive SSL**.
 
@@ -95,7 +156,7 @@ Os sinais de pDNS/pSSL (idade do histórico de DNS, fast-flux, certificado auto-
 
 > _Access requires registration with CIRCL (circl.lu) — trusted partner network._ Configure as variáveis de ambiente `CIRCL_USERNAME` e `CIRCL_PASSWORD` (HTTP Basic Auth) no Render para ativar; sem elas o pipeline segue sem os dados de pDNS/pSSL. O teto de consultas por execução é controlado por `CIRCL_MAX_LOOKUPS` (fair use: chamadas sequenciais, 1 req/s).
 
-**Total atual no banco: ~29.000 IOCs ativos**
+**Total atual no banco: mais de 39.000 IOCs ativos**
 
 ---
 
@@ -190,30 +251,41 @@ O AEGIS exporta IOCs em dois formatos:
 ```
 aegis-threat-intelligence/
 ├── src/
-│   ├── collectors/          # CISA, OTX, ThreatFox, URLhaus, Feodo, AbuseIPDB, DShield, EmergingThreats, GreyNoise, MITRE
-│   ├── enrichers/           # GeoIP2/ASN, Shodan InternetDB, EPSS, MalwareBazaar, RDAP, CIRCL pDNS/pSSL
-│   ├── processors/          # Normalizer, Classifier, Deduplicator, Warninglist
-│   ├── storage/             # DatabaseManager, MITRE cache, Shared Workbench
-│   └── reporters/           # Gerador de relatório HTML
-├── templates/
-│   └── report.html          # Dashboard completo (SPA com 6 abas)
-├── assets/                  # Logo e arquivos estáticos
-├── src/api.py               # FastAPI — 15+ endpoints
-├── src/main.py              # Orquestração do pipeline
-└── docker-compose.yml       # Airflow local
+│   ├── collectors/      # CISA, OTX, MITRE, ThreatFox, URLhaus, Feodo, DShield, EmergingThreats, GreyNoise, IPsum, Spamhaus
+│   ├── enrichers/       # GeoIP2/ASN, Shodan, EPSS, MalwareBazaar, RDAP, CIRCL pDNS/pSSL
+│   ├── processors/      # Normalizer, Classifier, Deduplicator, Warninglist
+│   ├── storage/         # DatabaseManager, MITRE cache
+│   ├── reporters/       # Gerador de relatório HTML
+│   ├── scripts/         # Backfills e enriquecimentos pontuais
+│   ├── api.py           # FastAPI — 15+ endpoints
+│   └── main.py          # Orquestração do pipeline
+├── dags/                # DAG do Airflow (pipeline diário 08:00 UTC)
+├── tests/               # Smoke tests + testes do normalizer
+├── data/warninglists/   # Faixas cloud/CDN, DNS público, Tranco (redução de FP)
+├── templates/report.html # Dashboard SPA (6 abas)
+├── assets/              # Logo, favicons
+├── screenshots/         # Imagens do README
+├── migrate_circl.py     # Migração standalone das colunas CIRCL
+├── Dockerfile
+├── render.yaml          # Blueprint Render (web + cron pipeline)
+└── requirements.txt
 ```
 
 ---
 
 ## Sobre o Projeto
 
-Desenvolvido como projeto de portfólio durante transição de carreira para Cibersegurança, com foco em SOC N1 / Blue Team e DevSecOps.
+Desenvolvido de forma independente com foco em resolver lacunas documentadas em ferramentas CTI gratuitas disponíveis no mercado, voltado a SOC N1 / Blue Team e DevSecOps.
 
 O AEGIS resolve problemas reais documentados no **SANS 2025 CTI Survey**:
 - 62% da inteligência coletada não se torna acionável
 - Ausência de decay automático em feeds CTI
 - Falta de contexto tático para analistas N1
 - Sem mecanismo de handoff entre turnos de SOC
+
+## Licença
+
+Distribuído sob a licença **MIT**. Veja [`LICENSE`](LICENSE) para detalhes.
 
 **GitHub:** [github.com/mateusdias96cs/aegis-threat-intelligence](https://github.com/mateusdias96cs/aegis-threat-intelligence)
 **Demo:** [aegiscti.me](https://aegiscti.me)
