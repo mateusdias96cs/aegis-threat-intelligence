@@ -17,42 +17,4 @@
 #  - Entrypoint: `python -m src.main` (já existe; persiste no Postgres). Sem mudança
 #    de código.
 
-services:
-  - type: cron
-    name: aegis-pipeline-cron
-    runtime: docker
-    dockerfilePath: ./Dockerfile
-    dockerCommand: python -m src.main
-    schedule: "0 8 * * *"          # diário, 08:00 UTC (igual ao gatilho atual)
-    plan: starter                  # 512MB; o pipeline roda SOZINHO aqui. Se ainda
-                                   # der OOM, suba para um plano com mais RAM.
-    autoDeploy: true
-    envVars:
-      - key: DATABASE_URL          # MESMO Postgres do web service (Internal URL)
-        sync: false
-      # ── Coletores ──
-      - key: OTX_API_KEY
-        sync: false
-      - key: GREYNOISE_API_KEY
-        sync: false
-      - key: THREATFOX_API_KEY
-        sync: false
-      - key: ABUSE_CH_API_KEY
-        sync: false
-      - key: MALWAREBAZAAR_API_KEY
-        sync: false
-      # ── Enricher CIRCL Passive DNS/SSL ──
-      - key: CIRCL_USERNAME
-        sync: false
-      - key: CIRCL_PASSWORD
-        sync: false
-      - key: CIRCL_MAX_LOOKUPS     # opcional; default 100
-        sync: false
-      # ── GeoIP (MaxMind) ──
-      - key: MAXMIND_LICENSE_KEY
-        sync: false
-      # ── Operacional ──
-      - key: SENTRY_DSN
-        sync: false
-      - key: PIPELINE_MIN_INTERVAL_MIN   # idempotência (default 15)
-        sync: false
+services: []

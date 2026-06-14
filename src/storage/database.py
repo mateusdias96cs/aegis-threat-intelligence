@@ -154,12 +154,10 @@ class Sighting(Base):
 class PipelineRun(Base):
     """Marca de início de cada execução do pipeline — base do guard de idempotência.
 
-    O pipeline pode ser disparado por múltiplas fontes (DAG do Airflow, GitHub
-    Actions, POST manual em /api/pipeline/run) e, pior, a tarefa do Airflow tinha
-    `retries: 1`: quando a espera pós-trigger estourava, o Airflow re-disparava o
-    POST ~5 min depois — daí o run duplicado observado (10:13 e 10:32). Persistir o
-    instante do último início (autoritativo no servidor) permite pular re-disparos
-    dentro de uma janela mínima, independentemente de QUEM disparou."""
+    O pipeline pode ser disparado por múltiplas fontes (GitHub Actions workflow,
+    POST manual em /api/pipeline/run). Persistir o instante do último início
+    (autoritativo no servidor) permite pular re-disparos dentro de uma janela
+    mínima, independentemente de QUEM disparou."""
     __tablename__ = "pipeline_runs"
 
     id         = Column(Integer, primary_key=True, autoincrement=True)

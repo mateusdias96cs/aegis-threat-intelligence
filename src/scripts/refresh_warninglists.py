@@ -6,7 +6,7 @@ serviço hospedado), resolvers DNS públicos, redes reservadas/bogon e domínios
 populares (Tranco top — improvável serem maliciosos).
 
 Fonte: https://github.com/MISP/misp-warninglists (CC0). Rode periodicamente
-(pode entrar no DAG). Uso:  .venv/bin/python -m src.scripts.refresh_warninglists
+Uso: .venv/bin/python -m src.scripts.refresh_warninglists
 """
 
 import sys
