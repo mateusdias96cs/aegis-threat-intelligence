@@ -28,7 +28,7 @@ O diferencial não é apenas agregar feeds: é transformar dados brutos em **int
 
 Requer **Python 3.11+** e **PostgreSQL**.
 
-> ⚠️ **Projeto de portfólio em produção.** A instância oficial roda no Render com PostgreSQL e chaves de API privadas. Para subir uma instância própria você precisa configurar `DATABASE_URL` (PostgreSQL) e suas próprias chaves de API no `.env` (use o `.env.example` como referência). Sem essas credenciais a aplicação não sobe.
+> ⚠️ **Projeto de portfólio em produção.** A instância oficial roda com banco PostgreSQL no Neon e o pipeline de coleta executa via GitHub Actions (cron diário), com chaves de API privadas. Para subir uma instância própria você precisa configurar `DATABASE_URL` (PostgreSQL) e suas próprias chaves de API no `.env` (use o `.env.example` como referência). Sem essas credenciais a aplicação não sobe.
 
 ```bash
 # 1. Clonar
@@ -154,7 +154,7 @@ Camada dedicada a elevar a confiança dos indicadores:
 
 Os sinais de pDNS/pSSL (idade do histórico de DNS, fast-flux, certificado auto-assinado, validade anômala, CA emissora) alimentam uma **avaliação de legitimidade da infraestrutura** — um veredito de contexto (*legítimo / suspeito / misto*) que ajuda o analista a separar infraestrutura legítima de descartável. É uma dimensão de **contexto**, exposta no drawer e contabilizada na completude de contexto — **não altera o score de confiança**.
 
-> _Access requires registration with CIRCL (circl.lu) — trusted partner network._ Configure as variáveis de ambiente `CIRCL_USERNAME` e `CIRCL_PASSWORD` (HTTP Basic Auth) no Render para ativar; sem elas o pipeline segue sem os dados de pDNS/pSSL. O teto de consultas por execução é controlado por `CIRCL_MAX_LOOKUPS` (fair use: chamadas sequenciais, 1 req/s).
+> _Access requires registration with CIRCL (circl.lu) — trusted partner network._ Configure as variáveis de ambiente `CIRCL_USERNAME` e `CIRCL_PASSWORD` (HTTP Basic Auth) para ativar; sem elas o pipeline segue sem os dados de pDNS/pSSL. O teto de consultas por execução é controlado por `CIRCL_MAX_LOOKUPS` (fair use: chamadas sequenciais, 1 req/s).
 
 **Total atual no banco: mais de 39.000 IOCs ativos**
 
@@ -198,8 +198,8 @@ Equação: `score_atual = score_original × e^(−0.693 × dias / meia_vida)`
 | Backend | Python 3.11 + FastAPI |
 | Banco de dados | PostgreSQL (Render) |
 | ORM | SQLAlchemy 2.0 |
-| Orquestração | Apache Airflow (pipeline diário 08:00 UTC) |
-| Deploy | Render (web service + PostgreSQL) |
+| Orquestração | GitHub Actions (pipeline diário 08:00 UTC) |
+| Deploy | Render (web service) + Neon (PostgreSQL) |
 | Monitoramento | Sentry |
 | Template engine | Jinja2 |
 | Integração SIEM | TAXII 2.1 / STIX 2.1 |
@@ -259,7 +259,7 @@ aegis-threat-intelligence/
 │   ├── scripts/         # Backfills e enriquecimentos pontuais
 │   ├── api.py           # FastAPI — 15+ endpoints
 │   └── main.py          # Orquestração do pipeline
-├── dags/                # DAG do Airflow (pipeline diário 08:00 UTC)
+├── .github/workflows/   # Pipeline diário via GitHub Actions
 ├── tests/               # Smoke tests + testes do normalizer
 ├── data/warninglists/   # Faixas cloud/CDN, DNS público, Tranco (redução de FP)
 ├── templates/report.html # Dashboard SPA (6 abas)
@@ -267,7 +267,7 @@ aegis-threat-intelligence/
 ├── screenshots/         # Imagens do README
 ├── migrate_circl.py     # Migração standalone das colunas CIRCL
 ├── Dockerfile
-├── render.yaml          # Blueprint Render (web + cron pipeline)
+├── render.yaml          # Blueprint Render (web service)
 └── requirements.txt
 ```
 
