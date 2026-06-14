@@ -12,11 +12,6 @@ jobs:
   run-pipeline:
     runs-on: ubuntu-latest
 
-    env:
-      ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
-      OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
-      THREATFOX_API_KEY: ${{ secrets.THREATFOX_API_KEY }}
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -26,12 +21,16 @@ jobs:
         with:
           python-version: "3.11"
 
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
       - name: Install dependencies
         run: pip install -r requirements.txt
 
       - name: Run pipeline
-        run: python -m src.main
+        run: doppler run -- python -m src.main
         env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
           PYTHONPATH: .
 
       - name: Deploy to GitHub Pages
