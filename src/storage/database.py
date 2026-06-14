@@ -22,6 +22,7 @@ if _raw_url:
         pool_size=5,
         max_overflow=10,
         pool_pre_ping=True,
+        connect_args={"connect_timeout": 10, "sslmode": "require"},
     )
 else:
     _db_path = "data/iocs.db"
