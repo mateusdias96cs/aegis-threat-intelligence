@@ -42,6 +42,7 @@ _PDNS_QUERY = "https://www.circl.lu/pdns/query/{value}"
 _TIMEOUT = 15
 _SLEEP = 1.0                       # 1 req/s — respeita o fair use da CIRCL
 _DEFAULT_MAX = 100                 # teto de consultas por execução (configurável)
+_DEFAULT_BUDGET_S = 900            # teto de WALL-CLOCK por execução (s) — ver _time_budget()
 _RECENT_DAYS = 30                  # "ainda ativo recentemente"
 _MANY_PEERS = 50                   # > 50 contrapartes = possível bullet-proof/fast-flux
 _TOP_N = 10                        # nº de resoluções de maior volume guardadas
@@ -68,6 +69,21 @@ def _max_lookups() -> int:
         return max(0, int(os.getenv("CIRCL_MAX_LOOKUPS", str(_DEFAULT_MAX))))
     except ValueError:
         return _DEFAULT_MAX
+
+
+def _time_budget() -> float:
+    """Teto de wall-clock (s) para o enricher inteiro, via CIRCL_TIME_BUDGET_S.
+
+    A cadência de 1 req/s (fair use da CIRCL) é imutável; este orçamento NÃO a
+    altera — apenas garante que, num dia em que a CIRCL responde lenta/perto do
+    timeout, o enricher pare de forma graciosa em vez de consumir o teto de 60 min
+    do job do GitHub Actions (matando o processo e levando junto o deploy do
+    relatório). Os alvos não consultados ficam para o próximo run (a seleção já
+    prioriza nunca-enriquecidos/mais-antigos). 0 = sem teto."""
+    try:
+        return max(0.0, float(os.getenv("CIRCL_TIME_BUDGET_S", str(_DEFAULT_BUDGET_S))))
+    except ValueError:
+        return float(_DEFAULT_BUDGET_S)
 
 
 class _AuthError(Exception):
@@ -286,11 +302,17 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
         return (-abuse, sev)
 
     targets = sorted(target_map, key=_priority)[:_max_lookups()]
+    budget = _time_budget()
+    deadline = (time.monotonic() + budget) if budget > 0 else None
     print(f"[circl-pdns] consultando Passive DNS para {len(targets)} alvos "
-          f"(de {len(target_map)}; teto={_max_lookups()})")
+          f"(de {len(target_map)}; teto={_max_lookups()}, budget={budget:.0f}s)")
 
     hit = suspicious = 0
     for i, qval in enumerate(targets):
+        if deadline is not None and time.monotonic() >= deadline:
+            print(f"[circl-pdns] orçamento de tempo ({budget:.0f}s) esgotado em "
+                  f"{i}/{len(targets)} alvos — restantes ficam para o próximo run")
+            break
         sleep_s = 0.5   # padrão: 200 OK
         try:
             data = _query_aggregate(qval, target_map[qval]["is_ip"], auth)

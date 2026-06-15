@@ -34,6 +34,7 @@ _TIMEOUT = 15
 _SLEEP_QUERY  = 1.0
 _SLEEP_CFETCH = 0.5
 _DEFAULT_MAX = 100
+_DEFAULT_BUDGET_S = 900            # teto de WALL-CLOCK por execução (s) — ver _time_budget()
 _FETCH_CERTS = 3                   # detalha os 3 primeiros fingerprints
 _MANY_CERTS = 10                   # > 10 certs = infraestrutura rotativa
 _LONG_VALIDITY_DAYS = 365 * 5      # validade > 5 anos = geração automatizada suspeita
@@ -57,6 +58,21 @@ def _max_lookups() -> int:
         return max(0, int(os.getenv("CIRCL_MAX_LOOKUPS", str(_DEFAULT_MAX))))
     except ValueError:
         return _DEFAULT_MAX
+
+
+def _time_budget() -> float:
+    """Teto de wall-clock (s) para o enricher inteiro, via CIRCL_TIME_BUDGET_S.
+
+    A cadência de 1 req/s (fair use da CIRCL) é imutável; este orçamento NÃO a
+    altera — apenas garante que, num dia em que a CIRCL responde lenta/perto do
+    timeout, o enricher pare de forma graciosa em vez de consumir o teto de 60 min
+    do job do GitHub Actions. Crítico no pSSL: cada IP faz 1 /query + até 3 /cfetch,
+    então o pior caso por IP (~61s) × teto pode ultrapassar 60 min sozinho. Os IPs
+    não consultados ficam para o próximo run. 0 = sem teto."""
+    try:
+        return max(0.0, float(os.getenv("CIRCL_TIME_BUDGET_S", str(_DEFAULT_BUDGET_S))))
+    except ValueError:
+        return float(_DEFAULT_BUDGET_S)
 
 
 class _AuthError(Exception):
@@ -233,11 +249,17 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
         return (-abuse, sev)
 
     ips = sorted(ip_map, key=_priority)[:_max_lookups()]
+    budget = _time_budget()
+    deadline = (time.monotonic() + budget) if budget > 0 else None
     print(f"[circl-pssl] consultando Passive SSL para {len(ips)} IPs "
-          f"(de {len(ip_map)}; teto={_max_lookups()})")
+          f"(de {len(ip_map)}; teto={_max_lookups()}, budget={budget:.0f}s)")
 
     hit = suspicious = 0
     for i, ip in enumerate(ips):
+        if deadline is not None and time.monotonic() >= deadline:
+            print(f"[circl-pssl] orçamento de tempo ({budget:.0f}s) esgotado em "
+                  f"{i}/{len(ips)} IPs — restantes ficam para o próximo run")
+            break
         sleep_s = 0.5   # padrão: 200 OK
         try:
             node = _query(ip, auth)
