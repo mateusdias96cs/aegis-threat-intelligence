@@ -11,6 +11,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
+from src.storage.bulk_ops import bulk_update_iocs
+
 _raw_url = os.getenv("DATABASE_URL")
 
 if _raw_url:
@@ -870,6 +872,8 @@ class DatabaseManager:
         # ~70% do tamanho de cada registro). O CASE preserva o breakdown dos IOCs que
         # continuam ACTIVE/REACTIVATED sem precisar lê-lo de volta para a memória.
         # Para ACTIVE/REACTIVATED, score_breakdown = score_breakdown (no-op).
+        # No PostgreSQL cada batch vira um único UPDATE via UNNEST (ver bulk_update_iocs);
+        # este statement por-linha é o fallback usado só no SQLite local.
         update_stmt = text("""
             UPDATE iocs SET
                 score_atual = :score_atual,
@@ -880,6 +884,12 @@ class DatabaseManager:
                 END
             WHERE id = :id
         """)
+        decay_set_raw = {
+            "score_breakdown": (
+                "CASE WHEN u.ioc_status IN ('DECAYED', 'HISTORICAL') "
+                "THEN NULL ELSE iocs.score_breakdown END"
+            )
+        }
 
         # Keyset pagination por id: o pico de memória fica limitado a um lote
         # (não O(total do banco)), evitando OOM no Render conforme o banco cresce.
@@ -928,7 +938,12 @@ class DatabaseManager:
                 updates.append({"id": row["id"], "score_atual": score_atual, "ioc_status": ioc_status})
 
             if updates:
-                self._session.execute(update_stmt, updates)
+                bulk_update_iocs(
+                    self._session, updates,
+                    columns={"score_atual": "double precision", "ioc_status": "text"},
+                    set_raw=decay_set_raw,
+                    fallback_stmt=update_stmt,
+                )
                 self._session.commit()
                 total += len(updates)
             del rows, updates
