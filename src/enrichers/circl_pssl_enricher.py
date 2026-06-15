@@ -261,6 +261,7 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
                   f"{i}/{len(ips)} IPs — restantes ficam para o próximo run")
             break
         sleep_s = 0.5   # padrão: 200 OK
+        attempted = False   # resposta definitiva (certs ou 404) — registra a tentativa
         try:
             node = _query(ip, auth)
         except _AuthError as e:
@@ -268,23 +269,30 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
                   f"CIRCL_PASSWORD; enricher interrompido (pipeline continua)")
             break
         except _RateLimit:
+            # Falha transitória (429/timeout) — NÃO marca tentativa: re-tenta no próximo run.
             sleep_s = 2.0
             node = None
         else:
             if node is _NOT_FOUND:
                 sleep_s = 0.0
                 node = None
+                attempted = True
+            elif node:
+                attempted = True
 
+        now = datetime.now(timezone.utc)
         if node:
             data = _analyze(ip, node, auth)
             if data:
-                enriched_at = datetime.now(timezone.utc)
                 for ioc in ip_map[ip]:
                     ioc.update(data)
-                    ioc["pssl_enriched_at"] = enriched_at
+                    ioc["pssl_enriched_at"] = now
                 hit += 1
                 if data.get("pssl_suspicious"):
                     suspicious += 1
+        if attempted:
+            for ioc in ip_map[ip]:
+                ioc["circl_attempted_at"] = now
         if i < len(ips) - 1 and sleep_s > 0:
             time.sleep(sleep_s)
 

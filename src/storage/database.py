@@ -111,6 +111,10 @@ class IOC(Base):
     pssl_expired      = Column(Integer, default=0)
     pssl_suspicious   = Column(Integer, default=0)
     pssl_enriched_at  = Column(DateTime)
+    # CIRCL — timestamp da última TENTATIVA (hit OU 404), independente de ter havido
+    # dados. A fila de seleção ordena por ele: IOCs sem passive DNS/SSL deixam de ser
+    # re-consultados todo run (gastando o orçamento) e passam a rotacionar por idade.
+    circl_attempted_at = Column(DateTime)
 
 
 class Report(Base):
@@ -241,6 +245,8 @@ _DECAY_COLUMNS = [
     ("pssl_expired",      "INTEGER DEFAULT 0"),
     ("pssl_suspicious",   "INTEGER DEFAULT 0"),
     ("pssl_enriched_at",  "TIMESTAMP"),
+    # CIRCL — timestamp da última tentativa (hit ou 404); ordena a fila de seleção.
+    ("circl_attempted_at", "TIMESTAMP"),
 ]
 _dialect = engine.dialect.name
 
@@ -1590,7 +1596,10 @@ class DatabaseManager:
     def get_iocs_for_circl_enrichment(self, limit: int = 200) -> list[dict]:
         """Returns up to `limit` active domain/ip IOCs (score >= 50) for CIRCL enrichment.
 
-        Ordered by: never enriched (pdns_enriched_at IS NULL) first, then oldest enriched.
+        Ordered by circl_attempted_at: never attempted (NULL) first, then oldest
+        attempt. Como a TENTATIVA é registrada mesmo no 404, IOCs sem passive DNS/SSL
+        deixam de monopolizar a frente da fila (antes ficavam NULL para sempre e eram
+        re-consultados todo run, drenando o orçamento) e passam a rotacionar por idade.
         Query runs on the DB so nothing is loaded into memory beyond `limit` rows.
         """
         try:
@@ -1600,8 +1609,8 @@ class DatabaseManager:
                 WHERE type IN ('domain', 'ip')
                   AND score_atual >= 50
                   AND ioc_status = 'ACTIVE'
-                ORDER BY CASE WHEN pdns_enriched_at IS NULL THEN 0 ELSE 1 END ASC,
-                         pdns_enriched_at ASC
+                ORDER BY CASE WHEN circl_attempted_at IS NULL THEN 0 ELSE 1 END ASC,
+                         circl_attempted_at ASC
                 LIMIT :limit
             """), {"limit": limit}).mappings().all()
             return [dict(r) for r in rows]
@@ -1642,6 +1651,10 @@ class DatabaseManager:
                     "pssl_suspicious":   1 if ioc.get("pssl_suspicious") else 0,
                     "pssl_enriched_at":  ioc["pssl_enriched_at"],
                 })
+            # Tentativa (hit OU 404) — persiste mesmo sem dados pDNS/pSSL para que a
+            # fila de seleção rotacione por idade em vez de re-consultar "sem dados".
+            if ioc.get("circl_attempted_at") is not None:
+                fields["circl_attempted_at"] = ioc["circl_attempted_at"]
             if not fields:
                 continue
             set_clause = ", ".join(f"{k} = :{k}" for k in fields)

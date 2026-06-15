@@ -314,6 +314,7 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
                   f"{i}/{len(targets)} alvos — restantes ficam para o próximo run")
             break
         sleep_s = 0.5   # padrão: 200 OK
+        attempted = False   # resposta definitiva (hit ou 404) — registra a tentativa
         try:
             data = _query_aggregate(qval, target_map[qval]["is_ip"], auth)
         except _AuthError as e:
@@ -321,21 +322,28 @@ def enrich_batch(iocs: list[dict]) -> list[dict]:
                   f"CIRCL_PASSWORD; enricher interrompido (pipeline continua)")
             break
         except _RateLimit:
+            # Falha transitória (429/timeout) — NÃO marca tentativa: re-tenta no próximo run.
             sleep_s = 2.0
             data = None
         else:
             if data is _NOT_FOUND:
                 sleep_s = 0.0   # 404 não consome orçamento — não precisa dormir
                 data = None
+                attempted = True
+            elif data:
+                attempted = True
 
+        now = datetime.now(timezone.utc)
         if data:
-            enriched_at = datetime.now(timezone.utc)
             for ioc in target_map[qval]["iocs"]:
                 ioc.update(data)
-                ioc["pdns_enriched_at"] = enriched_at
+                ioc["pdns_enriched_at"] = now
             hit += 1
             if data.get("pdns_suspicious"):
                 suspicious += 1
+        if attempted:
+            for ioc in target_map[qval]["iocs"]:
+                ioc["circl_attempted_at"] = now
         if i < len(targets) - 1 and sleep_s > 0:
             time.sleep(sleep_s)
 
