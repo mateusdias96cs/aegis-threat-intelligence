@@ -82,3 +82,48 @@ def bulk_update_iocs(
         fallback_stmt = text(f"UPDATE {table} SET {assigns} WHERE {key} = :{key}")
     session.execute(fallback_stmt, updates)
     return len(updates)
+
+
+def bulk_upsert_sightings(session, pairs: list[dict], day: str) -> int:
+    """Upsert em massa dos pares (value, source) de proveniência.
+
+    Mesma motivação do bulk_update_iocs, mas para INSERT ... ON CONFLICT: o
+    executemany emitia 1 round-trip por par (~27k/execução → ~54min no Neon).
+    No PostgreSQL um único INSERT ... SELECT FROM UNNEST(...) ON CONFLICT cobre
+    o batch inteiro. SQLite (dev local) mantém o executemany por-linha.
+
+    `pairs`: lista de dicts {"value": str, "source": str}. `day`: 'YYYY-MM-DD'.
+    Retorna o número de pares submetidos.
+    """
+    if not pairs:
+        return 0
+
+    dialect = session.bind.dialect.name
+
+    if dialect == "postgresql":
+        stmt = text("""
+            INSERT INTO sightings (value, source, first_seen, last_seen, seen_count)
+            SELECT u.value, u.source, :day, :day, 1
+            FROM UNNEST(CAST(:values AS text[]), CAST(:sources AS text[]))
+                 AS u(value, source)
+            ON CONFLICT (value, source) DO UPDATE SET
+                last_seen  = excluded.last_seen,
+                seen_count = sightings.seen_count + 1
+        """)
+        session.execute(stmt, {
+            "values":  [p["value"] for p in pairs],
+            "sources": [p["source"] for p in pairs],
+            "day": day,
+        })
+        return len(pairs)
+
+    # Fallback (SQLite/dev local): executemany por-linha — sem latência de rede.
+    stmt = text("""
+        INSERT INTO sightings (value, source, first_seen, last_seen, seen_count)
+        VALUES (:value, :source, :day, :day, 1)
+        ON CONFLICT (value, source) DO UPDATE SET
+            last_seen  = excluded.last_seen,
+            seen_count = sightings.seen_count + 1
+    """)
+    session.execute(stmt, [{**p, "day": day} for p in pairs])
+    return len(pairs)
