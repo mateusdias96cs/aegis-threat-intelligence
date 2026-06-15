@@ -1653,6 +1653,11 @@ class DatabaseManager:
                 )
                 updated += 1
             except Exception as e:
+                # Sem rollback, uma queda de conexão num IP individual deixa a sessão
+                # em transação inválida e TODAS as queries seguintes falham com
+                # "Can't reconnect until invalid transaction is rolled back" — inclusive
+                # o get_stats() final, que matava o processo com exit code 1.
+                self._session.rollback()
                 print(f"[db] update_circl_enrichment error for {val}: {e}")
         if updated:
             self._session.commit()
