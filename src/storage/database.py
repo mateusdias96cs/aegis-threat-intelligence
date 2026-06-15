@@ -1186,7 +1186,15 @@ class DatabaseManager:
             })
 
         if updates:
-            self._session.execute(update_stmt, updates)
+            bulk_update_iocs(
+                self._session, updates,
+                columns={
+                    "confidence_score": "integer",
+                    "score_original":   "double precision",
+                    "score_breakdown":  "text",
+                },
+                fallback_stmt=update_stmt,
+            )
             self._session.commit()
             print(f"[backfill] {len(updates)} IOCs multi-fonte recalculados por família independente")
         return len(updates)
