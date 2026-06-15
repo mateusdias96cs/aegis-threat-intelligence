@@ -11,6 +11,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
+from src.storage.bulk_ops import bulk_update_iocs
+
 _raw_url = os.getenv("DATABASE_URL")
 
 if _raw_url:
@@ -870,6 +872,8 @@ class DatabaseManager:
         # ~70% do tamanho de cada registro). O CASE preserva o breakdown dos IOCs que
         # continuam ACTIVE/REACTIVATED sem precisar lê-lo de volta para a memória.
         # Para ACTIVE/REACTIVATED, score_breakdown = score_breakdown (no-op).
+        # No PostgreSQL cada batch vira um único UPDATE via UNNEST (ver bulk_update_iocs);
+        # este statement por-linha é o fallback usado só no SQLite local.
         update_stmt = text("""
             UPDATE iocs SET
                 score_atual = :score_atual,
@@ -880,6 +884,12 @@ class DatabaseManager:
                 END
             WHERE id = :id
         """)
+        decay_set_raw = {
+            "score_breakdown": (
+                "CASE WHEN u.ioc_status IN ('DECAYED', 'HISTORICAL') "
+                "THEN NULL ELSE iocs.score_breakdown END"
+            )
+        }
 
         # Keyset pagination por id: o pico de memória fica limitado a um lote
         # (não O(total do banco)), evitando OOM no Render conforme o banco cresce.
@@ -928,7 +938,12 @@ class DatabaseManager:
                 updates.append({"id": row["id"], "score_atual": score_atual, "ioc_status": ioc_status})
 
             if updates:
-                self._session.execute(update_stmt, updates)
+                bulk_update_iocs(
+                    self._session, updates,
+                    columns={"score_atual": "double precision", "ioc_status": "text"},
+                    set_raw=decay_set_raw,
+                    fallback_stmt=update_stmt,
+                )
                 self._session.commit()
                 total += len(updates)
             del rows, updates
@@ -1171,7 +1186,15 @@ class DatabaseManager:
             })
 
         if updates:
-            self._session.execute(update_stmt, updates)
+            bulk_update_iocs(
+                self._session, updates,
+                columns={
+                    "confidence_score": "integer",
+                    "score_original":   "double precision",
+                    "score_breakdown":  "text",
+                },
+                fallback_stmt=update_stmt,
+            )
             self._session.commit()
             print(f"[backfill] {len(updates)} IOCs multi-fonte recalculados por família independente")
         return len(updates)
@@ -1184,7 +1207,10 @@ class DatabaseManager:
         BATCH = 1000
         last_id = 0
         total = 0
-        upd = text("UPDATE iocs SET context_score = :cs, context_breakdown = :cb WHERE id = :id")
+        upd = text(
+            "UPDATE iocs SET context_score = :context_score, "
+            "context_breakdown = :context_breakdown WHERE id = :id"
+        )
         while True:
             rows = self._session.execute(text("""
                 SELECT id, type, country, asn, abuse_score, shodan_data, malware_context,
@@ -1199,12 +1225,16 @@ class DatabaseManager:
             for row in rows:
                 cc = compute_context_completeness(dict(row))
                 updates.append({
-                    "cs": cc["score"],
-                    "cb": json.dumps(cc, ensure_ascii=False),
+                    "context_score": cc["score"],
+                    "context_breakdown": json.dumps(cc, ensure_ascii=False),
                     "id": row["id"],
                 })
             if updates:
-                self._session.execute(upd, updates)
+                bulk_update_iocs(
+                    self._session, updates,
+                    columns={"context_score": "integer", "context_breakdown": "text"},
+                    fallback_stmt=upd,
+                )
                 self._session.commit()
                 total += len(updates)
             del rows, updates
@@ -1506,13 +1536,22 @@ class DatabaseManager:
                 last_id = rows[-1]["id"]
                 updates = _build_updates(rows)
                 if updates:
-                    res = self._session.execute(update_stmt, updates)
+                    rowcount = bulk_update_iocs(
+                        self._session, updates,
+                        columns={
+                            "confidence_score": "integer",
+                            "score_original":   "double precision",
+                            "score_atual":      "double precision",
+                            "score_breakdown":  "text",
+                        },
+                        fallback_stmt=update_stmt,
+                    )
                     self._session.commit()
                     batch_no += 1
                     processed += len(updates)
                     print(
                         f"[recalculate:{label}] batch {batch_no}: "
-                        f"{len(updates)} submetidos, rowcount={res.rowcount}"
+                        f"{len(updates)} submetidos, rowcount={rowcount}"
                     )
                 del rows, updates
             return processed

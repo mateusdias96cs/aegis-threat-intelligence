@@ -8,9 +8,18 @@ on:
 permissions:
   contents: write
 
+# Evita que dois runs simultâneos (cron + workflow_dispatch manual) disputem o lock
+# de linha do Neon indefinidamente (lock_timeout = 0). Não cancela o run em andamento.
+concurrency:
+  group: pipeline
+  cancel-in-progress: false
+
 jobs:
   run-pipeline:
     runs-on: ubuntu-latest
+    # Teto explícito: se o pipeline travar, o job falha com log claro em vez de
+    # consumir o default de 360 min mascarando o problema.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
