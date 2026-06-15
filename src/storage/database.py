@@ -11,7 +11,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
 
-from src.storage.bulk_ops import bulk_update_iocs
+from src.storage.bulk_ops import bulk_update_iocs, bulk_upsert_sightings
 
 _raw_url = os.getenv("DATABASE_URL")
 
@@ -1389,23 +1389,21 @@ class DatabaseManager:
                     if s:
                         yield {"value": v, "source": s, "day": day}
 
-        stmt = text("""
-            INSERT INTO sightings (value, source, first_seen, last_seen, seen_count)
-            VALUES (:value, :source, :day, :day, 1)
-            ON CONFLICT (value, source) DO UPDATE SET
-                last_seen  = excluded.last_seen,
-                seen_count = sightings.seen_count + 1
-        """)
+        # No PostgreSQL cada batch vira um único INSERT ... SELECT FROM UNNEST(...)
+        # ON CONFLICT (ver bulk_upsert_sightings); no SQLite cai no executemany.
         BATCH = 500
         total = 0
+        batch_no = 0
         pairs = _pairs()
         while True:
             chunk = list(islice(pairs, BATCH))
             if not chunk:
                 break
-            self._session.execute(stmt, chunk)
+            bulk_upsert_sightings(self._session, chunk, day)
             self._session.commit()
+            batch_no += 1
             total += len(chunk)
+            print(f"[sightings] batch {batch_no}: {len(chunk)} pares registrados")
         return total
 
     def get_sightings(self, value: str) -> list[dict]:
