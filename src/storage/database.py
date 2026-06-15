@@ -1199,7 +1199,10 @@ class DatabaseManager:
         BATCH = 1000
         last_id = 0
         total = 0
-        upd = text("UPDATE iocs SET context_score = :cs, context_breakdown = :cb WHERE id = :id")
+        upd = text(
+            "UPDATE iocs SET context_score = :context_score, "
+            "context_breakdown = :context_breakdown WHERE id = :id"
+        )
         while True:
             rows = self._session.execute(text("""
                 SELECT id, type, country, asn, abuse_score, shodan_data, malware_context,
@@ -1214,12 +1217,16 @@ class DatabaseManager:
             for row in rows:
                 cc = compute_context_completeness(dict(row))
                 updates.append({
-                    "cs": cc["score"],
-                    "cb": json.dumps(cc, ensure_ascii=False),
+                    "context_score": cc["score"],
+                    "context_breakdown": json.dumps(cc, ensure_ascii=False),
                     "id": row["id"],
                 })
             if updates:
-                self._session.execute(upd, updates)
+                bulk_update_iocs(
+                    self._session, updates,
+                    columns={"context_score": "integer", "context_breakdown": "text"},
+                    fallback_stmt=upd,
+                )
                 self._session.commit()
                 total += len(updates)
             del rows, updates
@@ -1521,13 +1528,22 @@ class DatabaseManager:
                 last_id = rows[-1]["id"]
                 updates = _build_updates(rows)
                 if updates:
-                    res = self._session.execute(update_stmt, updates)
+                    rowcount = bulk_update_iocs(
+                        self._session, updates,
+                        columns={
+                            "confidence_score": "integer",
+                            "score_original":   "double precision",
+                            "score_atual":      "double precision",
+                            "score_breakdown":  "text",
+                        },
+                        fallback_stmt=update_stmt,
+                    )
                     self._session.commit()
                     batch_no += 1
                     processed += len(updates)
                     print(
                         f"[recalculate:{label}] batch {batch_no}: "
-                        f"{len(updates)} submetidos, rowcount={res.rowcount}"
+                        f"{len(updates)} submetidos, rowcount={rowcount}"
                     )
                 del rows, updates
             return processed
