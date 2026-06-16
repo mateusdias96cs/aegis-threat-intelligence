@@ -19,7 +19,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request as StarletteRequest
 
 from src.collectors import cisa, otx, mitre
-from src.collectors import abuseipdb
+from src.collectors import ip_reputation
 from src.processors import normalizer, classifier, deduplicator
 from src.processors.classifier import assess_circl_legitimacy
 from src.storage.database import DatabaseManager
@@ -526,10 +526,10 @@ async def lookup_ioc(value: str, request: Request):
     """
     Look up a single IOC by exact value (IP, domain, hash, or CVE).
 
-    - If found in the database and the type is **ip**, live AbuseIPDB enrichment
-      data is merged into the response (cached per IP for 1 hour).
+    - If found in the database and the type is **ip**, live GreyNoise Community
+      reputation data is merged into the response (cached per IP for 1 hour).
     - If **not** found but the value is a valid IPv4 address, returns live
-      AbuseIPDB data with `found_in_db: false`.
+      GreyNoise data with `found_in_db: false`.
     - Returns 404 when not found and the value is not a valid IP.
 
     Rate limited to **30 requests per minute** per client IP (HTTP 429 on excess).
@@ -557,7 +557,7 @@ async def lookup_ioc(value: str, request: Request):
         result["found_in_db"] = True
 
         if record.get("type") == "ip":
-            live = abuseipdb.lookup_ip(record["value"])
+            live = ip_reputation.lookup_ip(record["value"])
             from_cache = live.pop("_from_cache", False)
             result["live_abuse_score"] = live.get("abuse_score")
             result["live_country"]     = live.get("country")
@@ -570,13 +570,13 @@ async def lookup_ioc(value: str, request: Request):
 
         return result
 
-    # Not in database — fall back to live AbuseIPDB for valid IPs
+    # Not in database — fall back to live GreyNoise reputation for valid IPs
     if _is_ip(value):
-        live = abuseipdb.lookup_ip(value)
+        live = ip_reputation.lookup_ip(value)
         from_cache = live.pop("_from_cache", False)
         live["found_in_db"]      = False
         live["live_data_cached"] = from_cache
-        live["message"]          = "Not in local database — showing live AbuseIPDB data only"
+        live["message"]          = "Not in local database — showing live GreyNoise reputation data only"
         return live
 
     raise HTTPException(status_code=404, detail=f"IOC '{value}' not found in database.")
@@ -612,7 +612,7 @@ async def lookup_batch(body: BatchLookupRequest):
     Look up up to **10 IOC values** at once against the local database.
 
     - Accepts a JSON body: `{"values": ["value1", "value2", ...]}`
-    - AbuseIPDB is **not** called for batch requests (rate limit protection).
+    - Live GreyNoise reputation is **not** called for batch requests (rate limit protection).
     - Returns HTTP 400 if more than 10 values are submitted.
     - Always returns HTTP 200; each result includes a `found_in_db` flag.
     """
@@ -875,11 +875,24 @@ _TAXII_COLLECTIONS = {
     },
 }
 
+def _hash_stix_pattern(v: str) -> str:
+    """STIX 2.1 hash pattern com o algoritmo CORRETO inferido pelo comprimento hex.
+
+    Antes todo hash virava `file:hashes.MD5`, marcando SHA-1/SHA-256/SHA-512 como
+    MD5 — padrão inválido para o consumidor TAXII. Chaves com hífen exigem aspas
+    no padrão STIX (`file:hashes.'SHA-256'`); MD5 não. Fallback para MD5 em
+    comprimentos não reconhecidos (preserva o comportamento antigo)."""
+    h = (v or "").strip()
+    algo = {32: "MD5", 40: "SHA-1", 64: "SHA-256", 128: "SHA-512"}.get(len(h), "MD5")
+    key = "MD5" if algo == "MD5" else f"'{algo}'"
+    return f"[file:hashes.{key} = '{h}']"
+
+
 _STIX_PATTERNS: dict = {
     "ip":     lambda v: f"[ipv4-addr:value = '{v}']",
     "domain": lambda v: f"[domain-name:value = '{v}']",
     "url":    lambda v: f"[url:value = '{v}']",
-    "hash":   lambda v: f"[file:hashes.MD5 = '{v}']",
+    "hash":   _hash_stix_pattern,
     "cve":    lambda v: f"[vulnerability:name = '{v}']",
 }
 
