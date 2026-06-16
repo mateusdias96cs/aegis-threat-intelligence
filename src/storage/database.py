@@ -929,9 +929,21 @@ class DatabaseManager:
 
                 dias = max(0, (today - last_seen).days)
                 score_orig = float(row["score_original"])
-                score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
-
                 reactivation_count = row["reactivation_count"] or 0
+                # Decaimento exponencial a partir do score original.
+                score_decayed = score_orig * math.exp(-0.693 * dias / half_life)
+                # Boost de reativação: cada reaparecimento do IOC numa coleta reforça a
+                # confiança (corroboração temporal). Mesma fórmula do reactivate_ioc —
+                # antes era PERDIDO no caminho em lote, pois reactivate_many só
+                # incrementava reactivation_count e este apply_decay sobrescrevia
+                # score_atual com o valor puramente decaído. Aplicado sobre o score
+                # decaído e capado em 100; os limiares de status passam a refletir o
+                # score reforçado (IOC que reaparece persiste como relevante).
+                if reactivation_count > 0:
+                    score_atual = min(100.0, score_decayed * (1.0 + 0.2 * reactivation_count))
+                else:
+                    score_atual = min(100.0, score_decayed)
+
                 if last_seen == today and reactivation_count > 0:
                     ioc_status = "REACTIVATED"
                 elif score_atual >= 0.20 * score_orig:
@@ -1109,7 +1121,19 @@ class DatabaseManager:
                 })
 
             if updates:
-                self._session.execute(update_stmt, updates)
+                # Bulk update (UNNEST no PostgreSQL): substitui N round-trips por 1,
+                # mesmo motivo do backfill/recalc/decay. O executemany por-linha era
+                # o caminho lento remanescente — contra o Neon custava minutos.
+                bulk_update_iocs(
+                    self._session, updates,
+                    columns={
+                        "correlated_sources": "text",
+                        "confidence_score":   "integer",
+                        "score_original":     "double precision",
+                        "score_breakdown":    "text",
+                    },
+                    fallback_stmt=update_stmt,
+                )
                 self._session.commit()
                 updated += len(updates)
             del rows, updates
@@ -1303,8 +1327,14 @@ class DatabaseManager:
                 last_seen = today
             dias = max(0, (today - last_seen).days)
             score_orig = float(score_original)
-            score_atual = min(100.0, score_orig * math.exp(-0.693 * dias / half_life))
             rc = reactivation_count or 0
+            # Mesmo boost de reativação aplicado em apply_decay — mantém o score_atual
+            # coerente com o que o próximo decay calcularia para este IOC.
+            score_decayed = score_orig * math.exp(-0.693 * dias / half_life)
+            if rc > 0:
+                score_atual = min(100.0, score_decayed * (1.0 + 0.2 * rc))
+            else:
+                score_atual = min(100.0, score_decayed)
             if last_seen == today and rc > 0:
                 ioc_status = "REACTIVATED"
             elif score_atual >= 0.20 * score_orig:
