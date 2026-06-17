@@ -673,7 +673,7 @@
     <div class="sb-rule"></div>
     <div class="sb-foot">
       <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
-      <div class="sb-meta">Generated<br /><b>2026-06-16 09:59:21</b></div>
+      <div class="sb-meta">Generated<br /><b>2026-06-17 09:22:46</b></div>
     </div>
   </aside>
 
@@ -685,12 +685,12 @@
       <div class="ticker">
         <div class="ticker-tag"><span class="live-dot"></span>Live</div>
         <div class="ticker-track">
-          <span><b>CRITICAL</b>100.17.7.35</span><span><b>CRITICAL</b>47.89.193.98</span><span><b>CRITICAL</b>184.107.171.28</span><span><b>CRITICAL</b>135.136.23.167</span><span><b>CRITICAL</b>111.70.9.235</span><span><b>CRITICAL</b>20.51.234.233</span><span><b>CRITICAL</b>20.168.7.107</span><span><b>CRITICAL</b>65.49.20.95</span><span><b>CRITICAL</b>47.84.106.14</span><span><b>CRITICAL</b>64.62.197.56</span>
-          <span><b>CRITICAL</b>100.17.7.35</span><span><b>CRITICAL</b>47.89.193.98</span><span><b>CRITICAL</b>184.107.171.28</span><span><b>CRITICAL</b>135.136.23.167</span><span><b>CRITICAL</b>111.70.9.235</span><span><b>CRITICAL</b>20.51.234.233</span><span><b>CRITICAL</b>20.168.7.107</span><span><b>CRITICAL</b>65.49.20.95</span><span><b>CRITICAL</b>47.84.106.14</span><span><b>CRITICAL</b>64.62.197.56</span>
+          <span><b>CRITICAL</b>220.77.214.59</span><span><b>CRITICAL</b>66.111.114.196</span><span><b>CRITICAL</b>85.217.140.32</span><span><b>CRITICAL</b>115.190.149.148</span><span><b>CRITICAL</b>208.82.115.223</span><span><b>CRITICAL</b>103.64.129.98</span><span><b>CRITICAL</b>69.164.193.208</span><span><b>CRITICAL</b>116.193.128.26</span><span><b>CRITICAL</b>192.163.247.130</span><span><b>CRITICAL</b>47.84.201.235</span>
+          <span><b>CRITICAL</b>220.77.214.59</span><span><b>CRITICAL</b>66.111.114.196</span><span><b>CRITICAL</b>85.217.140.32</span><span><b>CRITICAL</b>115.190.149.148</span><span><b>CRITICAL</b>208.82.115.223</span><span><b>CRITICAL</b>103.64.129.98</span><span><b>CRITICAL</b>69.164.193.208</span><span><b>CRITICAL</b>116.193.128.26</span><span><b>CRITICAL</b>192.163.247.130</span><span><b>CRITICAL</b>47.84.201.235</span>
         </div>
       </div>
       <div class="topbar-right">
-        <div class="pipeline-meta">Total IOCs<b id="topbar-total">57377</b></div>
+        <div class="pipeline-meta">Total IOCs<b id="topbar-total">60384</b></div>
         <button class="btn-run">&#9654; Run Pipeline</button>
       </div>
     </div>
@@ -700,9 +700,9 @@
       <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
       <h1>AEGIS Threat Intelligence</h1>
       <div class="page-sub">
-        <span>Generated <b>2026-06-16 09:59:21</b></span>
+        <span>Generated <b>2026-06-17 09:22:46</b></span>
         <span style="color:var(--text-tertiary)">·</span>
-        <span>Total IOCs in database <b id="stat-db-total">57377</b></span>
+        <span>Total IOCs in database <b id="stat-db-total">60384</b></span>
       </div>
     </div>
 
@@ -725,19 +725,19 @@
     <div class="stats">
       <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="num" id="stat-total">57377</div>
+        <div class="num" id="stat-total">60384</div>
       </div>
       <div class="stat s-critical">
         <div class="label">Critical</div>
-        <div class="num" id="stat-critical">9651</div>
+        <div class="num" id="stat-critical">9668</div>
       </div>
       <div class="stat s-high">
         <div class="label">High</div>
-        <div class="num" id="stat-high">40299</div>
+        <div class="num" id="stat-high">42941</div>
       </div>
       <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="num" id="stat-medium">7425</div>
+        <div class="num" id="stat-medium">7773</div>
       </div>
       <div class="stat s-low">
         <div class="label">Low</div>
@@ -1283,7 +1283,7 @@
 
     </div><!-- /.scroller -->
 
-    <footer>AEGIS Threat Intelligence &mdash; 2026-06-16 09:59:21</footer>
+    <footer>AEGIS Threat Intelligence &mdash; 2026-06-17 09:22:46</footer>
 
   </main>
 
@@ -2429,7 +2429,7 @@
 
         if (score != null) {
           html += '<div style="margin-top:13px">' +
-            '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">ABUSEIPDB SCORE</div>' +
+            '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">GREYNOISE SCORE</div>' +
             '<div class="score-bar-row">' +
               '<div class="score-bar-track" style="flex:1"><div class="score-bar-fill" style="width:' + pct + '%;background:' + barClr + '"></div></div>' +
               '<div class="score-bar-value" style="color:' + barClr + ';width:auto;padding-left:8px">' + score + '/100</div>' +
@@ -2556,7 +2556,7 @@
 </div>
 
 <script>
-const TREND_DATA = [{"critical": 0, "date": "2026-05-17", "high": 120, "low": 0, "medium": 510, "total": 630}, {"critical": 1, "date": "2026-05-18", "high": 488, "low": 0, "medium": 433, "total": 922}, {"critical": 1, "date": "2026-05-19", "high": 287, "low": 0, "medium": 291, "total": 579}, {"critical": 1, "date": "2026-05-20", "high": 829, "low": 0, "medium": 140, "total": 970}, {"critical": 0, "date": "2026-05-21", "high": 494, "low": 1, "medium": 67, "total": 562}, {"critical": 3, "date": "2026-05-22", "high": 384, "low": 0, "medium": 145, "total": 532}, {"critical": 0, "date": "2026-05-23", "high": 209, "low": 0, "medium": 227, "total": 436}, {"critical": 1, "date": "2026-05-24", "high": 237, "low": 0, "medium": 190, "total": 428}, {"critical": 0, "date": "2026-05-25", "high": 391, "low": 0, "medium": 228, "total": 619}, {"critical": 3, "date": "2026-05-26", "high": 386, "low": 0, "medium": 351, "total": 740}, {"critical": 4, "date": "2026-05-27", "high": 597, "low": 0, "medium": 411, "total": 1012}, {"critical": 0, "date": "2026-05-28", "high": 355, "low": 0, "medium": 454, "total": 809}, {"critical": 2, "date": "2026-05-29", "high": 382, "low": 1, "medium": 339, "total": 724}, {"critical": 9088, "date": "2026-05-30", "high": 257, "low": 0, "medium": 384, "total": 9729}, {"critical": 0, "date": "2026-05-31", "high": 381, "low": 0, "medium": 287, "total": 668}, {"critical": 0, "date": "2026-06-01", "high": 404, "low": 0, "medium": 236, "total": 640}, {"critical": 0, "date": "2026-06-02", "high": 581, "low": 0, "medium": 334, "total": 915}, {"critical": 1, "date": "2026-06-03", "high": 609, "low": 0, "medium": 166, "total": 776}, {"critical": 106, "date": "2026-06-04", "high": 15816, "low": 0, "medium": 188, "total": 16110}, {"critical": 0, "date": "2026-06-05", "high": 15, "low": 0, "medium": 0, "total": 15}, {"critical": 3, "date": "2026-06-06", "high": 24, "low": 0, "medium": 0, "total": 27}, {"critical": 0, "date": "2026-06-07", "high": 21, "low": 0, "medium": 0, "total": 21}, {"critical": 3, "date": "2026-06-08", "high": 13, "low": 0, "medium": 0, "total": 16}, {"critical": 2, "date": "2026-06-09", "high": 31, "low": 0, "medium": 0, "total": 33}, {"critical": 2, "date": "2026-06-10", "high": 175, "low": 0, "medium": 223, "total": 400}, {"critical": 2, "date": "2026-06-11", "high": 529, "low": 0, "medium": 533, "total": 1064}, {"critical": 5, "date": "2026-06-12", "high": 449, "low": 0, "medium": 366, "total": 820}, {"critical": 10, "date": "2026-06-13", "high": 272, "low": 0, "medium": 306, "total": 588}, {"critical": 245, "date": "2026-06-14", "high": 7546, "low": 0, "medium": 211, "total": 8002}, {"critical": 16, "date": "2026-06-15", "high": 2852, "low": 0, "medium": 229, "total": 3097}, {"critical": 11, "date": "2026-06-16", "high": 1882, "low": 0, "medium": 176, "total": 2069}];
+const TREND_DATA = [{"critical": 1, "date": "2026-05-18", "high": 490, "low": 0, "medium": 433, "total": 924}, {"critical": 1, "date": "2026-05-19", "high": 287, "low": 0, "medium": 291, "total": 579}, {"critical": 1, "date": "2026-05-20", "high": 829, "low": 0, "medium": 140, "total": 970}, {"critical": 0, "date": "2026-05-21", "high": 494, "low": 1, "medium": 67, "total": 562}, {"critical": 3, "date": "2026-05-22", "high": 384, "low": 0, "medium": 145, "total": 532}, {"critical": 0, "date": "2026-05-23", "high": 209, "low": 0, "medium": 227, "total": 436}, {"critical": 1, "date": "2026-05-24", "high": 237, "low": 0, "medium": 190, "total": 428}, {"critical": 0, "date": "2026-05-25", "high": 391, "low": 0, "medium": 228, "total": 619}, {"critical": 3, "date": "2026-05-26", "high": 386, "low": 0, "medium": 351, "total": 740}, {"critical": 4, "date": "2026-05-27", "high": 597, "low": 0, "medium": 411, "total": 1012}, {"critical": 0, "date": "2026-05-28", "high": 355, "low": 0, "medium": 454, "total": 809}, {"critical": 2, "date": "2026-05-29", "high": 382, "low": 1, "medium": 339, "total": 724}, {"critical": 9088, "date": "2026-05-30", "high": 257, "low": 0, "medium": 384, "total": 9729}, {"critical": 0, "date": "2026-05-31", "high": 381, "low": 0, "medium": 287, "total": 668}, {"critical": 0, "date": "2026-06-01", "high": 404, "low": 0, "medium": 236, "total": 640}, {"critical": 0, "date": "2026-06-02", "high": 581, "low": 0, "medium": 334, "total": 915}, {"critical": 1, "date": "2026-06-03", "high": 609, "low": 0, "medium": 166, "total": 776}, {"critical": 106, "date": "2026-06-04", "high": 15816, "low": 0, "medium": 188, "total": 16110}, {"critical": 0, "date": "2026-06-05", "high": 15, "low": 0, "medium": 0, "total": 15}, {"critical": 3, "date": "2026-06-06", "high": 24, "low": 0, "medium": 0, "total": 27}, {"critical": 0, "date": "2026-06-07", "high": 21, "low": 0, "medium": 0, "total": 21}, {"critical": 3, "date": "2026-06-08", "high": 13, "low": 0, "medium": 0, "total": 16}, {"critical": 2, "date": "2026-06-09", "high": 31, "low": 0, "medium": 0, "total": 33}, {"critical": 2, "date": "2026-06-10", "high": 175, "low": 0, "medium": 223, "total": 400}, {"critical": 2, "date": "2026-06-11", "high": 529, "low": 0, "medium": 533, "total": 1064}, {"critical": 5, "date": "2026-06-12", "high": 453, "low": 0, "medium": 366, "total": 824}, {"critical": 10, "date": "2026-06-13", "high": 272, "low": 0, "medium": 306, "total": 588}, {"critical": 245, "date": "2026-06-14", "high": 7546, "low": 0, "medium": 211, "total": 8002}, {"critical": 16, "date": "2026-06-15", "high": 2852, "low": 0, "medium": 229, "total": 3097}, {"critical": 13, "date": "2026-06-16", "high": 2400, "low": 0, "medium": 334, "total": 2747}, {"critical": 15, "date": "2026-06-17", "high": 2096, "low": 0, "medium": 190, "total": 2301}];
 
 (function () {
   var container = document.getElementById('trendsChartContainer');
@@ -3324,7 +3324,7 @@ function loadDrawerEnrichment(value) {
 
       if (score != null) {
         html += '<div style="margin-top:13px">' +
-          '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">ABUSEIPDB SCORE</div>' +
+          '<div style="font-size:10px;color:var(--text-tertiary);margin-bottom:6px;letter-spacing:.5px">GREYNOISE SCORE</div>' +
           '<div class="score-bar-row">' +
             '<div class="score-bar-track" style="flex:1"><div class="score-bar-fill" style="width:' + pct + '%;background:' + barClr + '"></div></div>' +
             '<div class="score-bar-value" style="color:' + barClr + ';width:auto;padding-left:8px">' + score + '/100</div>' +
