@@ -669,6 +669,14 @@
         </span>
         <span>Correlation Graph</span>
       </button>
+      <button id="btn-search" class="sb-item" onclick="switchTab('search')">
+        <span class="sb-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <span>AI Search</span>
+      </button>
     </nav>
     <div class="sb-rule"></div>
     <div class="sb-foot">
@@ -1121,6 +1129,33 @@
 
     <div id="camp-panel" style="display:none"></div>
 
+  </section>
+
+  <!-- ═══ AI SEARCH ═══ -->
+  <section id="tab-search" style="display:none">
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex; gap:12px; align-items:center; padding:20px;">
+        <input
+          type="text"
+          id="aiSearchInput"
+          placeholder="Describe what you're looking for — e.g. 'phishing domains targeting banks'"
+          style="flex:1; background:var(--bg-base); border:1px solid #2a2a2a; border-radius:6px; padding:12px 16px; color:#e8e8e8; font-family:var(--font-sans); font-size:14px;"
+          onkeydown="if(event.key==='Enter') _runAiSearch()"
+        />
+        <button onclick="_runAiSearch()" style="background:var(--red-primary); color:#fff; border:none; border-radius:6px; padding:12px 24px; font-weight:600; cursor:pointer; font-family:var(--font-sans);">
+          Search
+        </button>
+      </div>
+      <div id="aiSearchMeta" style="padding:0 20px 16px; color:#888; font-size:12px; font-family:var(--font-mono); display:none;"></div>
+    </div>
+
+    <div id="aiSearchResults" style="display:flex; flex-direction:column; gap:10px;"></div>
+    <div id="aiSearchEmpty" style="display:none; text-align:center; padding:60px 20px; color:#666; font-family:var(--font-sans);">
+      No results yet. Try a natural-language description above.
+    </div>
+    <div id="aiSearchLoading" style="display:none; text-align:center; padding:60px 20px; color:#888; font-family:var(--font-mono);">
+      Searching semantically…
+    </div>
   </section>
 
   <!-- ═══ THREAT OVERVIEW ═══ -->
@@ -1591,7 +1626,7 @@
 
   /* ── Tab switching ── */
   function switchTab(tab) {
-    ['ioc','overview','lookup','profiling','mitre','workbench','campaigns','graph'].forEach(function(t) {
+    ['ioc','overview','lookup','profiling','mitre','workbench','campaigns','graph','search'].forEach(function(t) {
       var el = document.getElementById('tab-' + t);
       if (el) el.style.display = t === tab ? '' : 'none';
       var btn = document.getElementById('btn-' + t);
@@ -1600,6 +1635,7 @@
     if (tab === 'workbench') _wbRender();
     if (tab === 'overview') _overviewInit();
     if (tab === 'graph') _graphInit();
+    if (tab === 'search') _searchInit();
   }
 
   /* Country filter removed — rows are now loaded dynamically via API */
@@ -3955,6 +3991,80 @@ function _campInfoBlock(label, value) {
 var _ovLoaded = false;
 var SEV_COLOR = { CRITICAL:'#c0392b', HIGH:'#c06010', MEDIUM:'#8a7000', LOW:'#1e6b1e' };
 function _apiHeaders() { return { 'X-API-Key': window.AEGIS_PUBLIC_KEY || '' }; }
+
+/* ════════════════════════════════════════════════════════════════
+   AI SEARCH
+   ════════════════════════════════════════════════════════════════ */
+let _aiSearchInitDone = false;
+
+function _searchInit() {
+  if (_aiSearchInitDone) return;
+  _aiSearchInitDone = true;
+  document.getElementById('aiSearchInput').focus();
+}
+
+function _severityBadgeClass(sev) {
+  return 'badge badge-' + (sev || 'MEDIUM').toUpperCase();
+}
+
+async function _runAiSearch() {
+  const input = document.getElementById('aiSearchInput');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const resultsEl = document.getElementById('aiSearchResults');
+  const emptyEl   = document.getElementById('aiSearchEmpty');
+  const loadingEl = document.getElementById('aiSearchLoading');
+  const metaEl    = document.getElementById('aiSearchMeta');
+
+  resultsEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+  metaEl.style.display = 'none';
+  loadingEl.style.display = 'block';
+
+  try {
+    const resp = await fetch('/api/search?q=' + encodeURIComponent(query) + '&limit=15', {
+      headers: _apiHeaders()
+    });
+    if (!resp.ok) throw new Error('Search failed (' + resp.status + ')');
+    const data = await resp.json();
+
+    loadingEl.style.display = 'none';
+
+    if (!data.results || data.results.length === 0) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+
+    metaEl.textContent = data.count + ' results for "' + data.query + '"';
+    metaEl.style.display = 'block';
+
+    resultsEl.innerHTML = data.results.map(function(r) {
+      const pct   = Math.round((r.similarity_score || 0) * 100);
+      const score = Math.round(parseFloat(r.score_atual) || 0);
+      return (
+        '<div class="card" style="padding:16px 20px; display:flex; align-items:center; gap:16px;">' +
+          '<div style="flex:0 0 auto;">' +
+            '<span class="badge" style="background:rgba(200,169,110,.12); border:1px solid var(--accent-gold); color:var(--accent-gold);">' + (r.ioc_type || '').toUpperCase() + '</span>' +
+          '</div>' +
+          '<div style="flex:1; min-width:0;">' +
+            '<div style="font-family:var(--font-mono); font-size:14px; color:#e8e8e8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + (r.ioc_value || '') + '</div>' +
+            '<div style="font-size:12px; color:#888; margin-top:4px;">' + (r.text_repr || '') + '</div>' +
+          '</div>' +
+          '<div style="flex:0 0 auto; text-align:right;">' +
+            '<span class="' + _severityBadgeClass(r.severity) + '">' + (r.severity || '') + '</span>' +
+            '<div style="font-family:var(--font-mono); font-size:11px; color:#666; margin-top:6px;">match ' + pct + '% · score ' + score + '/100</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    emptyEl.textContent = 'Error: ' + err.message;
+    emptyEl.style.display = 'block';
+  }
+}
 
 function _overviewInit() {
   if (_ovLoaded) return;
