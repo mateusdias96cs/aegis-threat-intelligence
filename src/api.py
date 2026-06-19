@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import uuid
+import requests
 import sentry_sdk
 from fastapi import Depends, FastAPI, BackgroundTasks, HTTPException, Request, Query
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -995,3 +996,64 @@ async def taxii_collection_objects(collection_id: str, limit: int = 100):
         },
         media_type=_TAXII_MEDIA_TYPE,
     )
+
+
+# ── Semantic Search (RAG) ─────────────────────────────────────────────────────
+
+_JINA_EMBED_URL = "https://api.jina.ai/v1/embeddings"
+_JINA_MODEL = "jina-embeddings-v2-base-en"
+
+
+def _embed_query(query: str, jina_api_key: str) -> list[float]:
+    resp = requests.post(
+        _JINA_EMBED_URL,
+        json={"input": [query], "model": _JINA_MODEL},
+        headers={"Authorization": f"Bearer {jina_api_key}"},
+        timeout=10,
+    )
+    resp.raise_for_status()
+    return resp.json()["data"][0]["embedding"]
+
+
+@app.get("/api/search", dependencies=[Depends(_require_read_key)])
+async def semantic_search(q: str, limit: int = Query(default=10, ge=1, le=50)):
+    jina_key = os.getenv("JINA_API_KEY", "")
+    if not jina_key:
+        raise HTTPException(status_code=500, detail="JINA_API_KEY not configured on server.")
+
+    analytics_url = os.getenv("DATABASE_URL_ANALYTICS", "")
+    if not analytics_url:
+        raise HTTPException(status_code=500, detail="DATABASE_URL_ANALYTICS not configured on server.")
+
+    try:
+        query_embedding = _embed_query(q, jina_key)
+    except requests.RequestException as exc:
+        raise HTTPException(status_code=503, detail=f"Embedding service unavailable: {exc}")
+
+    import psycopg2
+    conn = psycopg2.connect(analytics_url)
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    i.value     AS ioc_value,
+                    i.type      AS ioc_type,
+                    i.severity,
+                    i.score_atual,
+                    ie.text_repr,
+                    1 - (ie.embedding <=> %s::vector(768)) AS similarity_score
+                FROM gold.ioc_embeddings ie
+                JOIN bronze.iocs i ON ie.ioc_id = i.id::integer
+                WHERE i.ioc_status = 'ACTIVE'
+                ORDER BY ie.embedding <=> %s::vector(768)
+                LIMIT %s
+                """,
+                (query_embedding, query_embedding, limit),
+            )
+            cols = [d[0] for d in cur.description]
+            rows = [dict(zip(cols, r)) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+    return {"query": q, "count": len(rows), "results": rows}
