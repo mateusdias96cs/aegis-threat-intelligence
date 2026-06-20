@@ -669,11 +669,19 @@
         </span>
         <span>Correlation Graph</span>
       </button>
+      <button id="btn-search" class="sb-item" onclick="switchTab('search')">
+        <span class="sb-ico">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+          </svg>
+        </span>
+        <span>AI Search</span>
+      </button>
     </nav>
     <div class="sb-rule"></div>
     <div class="sb-foot">
       <div class="sb-status"><span class="dot"></span><span>Pipeline · Live</span></div>
-      <div class="sb-meta">Generated<br /><b>2026-06-19 09:12:54</b></div>
+      <div class="sb-meta">Generated<br /><b>2026-06-20 07:40:47</b></div>
     </div>
   </aside>
 
@@ -685,12 +693,12 @@
       <div class="ticker">
         <div class="ticker-tag"><span class="live-dot"></span>Live</div>
         <div class="ticker-track">
-          <span><b>CRITICAL</b>141.98.11.26</span><span><b>CRITICAL</b>94.183.232.247</span><span><b>CRITICAL</b>54.164.180.36</span><span><b>CRITICAL</b>104.37.185.2</span><span><b>CRITICAL</b>39.97.238.88</span><span><b>CRITICAL</b>40.124.174.248</span><span><b>CRITICAL</b>152.32.133.103</span><span><b>CRITICAL</b>8.216.7.143</span><span><b>CRITICAL</b>91.230.168.34</span><span><b>CRITICAL</b>189.155.43.166</span>
-          <span><b>CRITICAL</b>141.98.11.26</span><span><b>CRITICAL</b>94.183.232.247</span><span><b>CRITICAL</b>54.164.180.36</span><span><b>CRITICAL</b>104.37.185.2</span><span><b>CRITICAL</b>39.97.238.88</span><span><b>CRITICAL</b>40.124.174.248</span><span><b>CRITICAL</b>152.32.133.103</span><span><b>CRITICAL</b>8.216.7.143</span><span><b>CRITICAL</b>91.230.168.34</span><span><b>CRITICAL</b>189.155.43.166</span>
+          <span><b>CRITICAL</b>52.6.59.95</span><span><b>CRITICAL</b>104.155.108.104</span><span><b>CRITICAL</b>137.184.226.250</span><span><b>CRITICAL</b>47.254.70.85</span><span><b>CRITICAL</b>103.179.216.113</span><span><b>CRITICAL</b>47.84.115.11</span><span><b>CRITICAL</b>91.196.152.88</span><span><b>CRITICAL</b>124.156.129.246</span><span><b>CRITICAL</b>48.214.144.31</span><span><b>CRITICAL</b>185.12.219.60</span>
+          <span><b>CRITICAL</b>52.6.59.95</span><span><b>CRITICAL</b>104.155.108.104</span><span><b>CRITICAL</b>137.184.226.250</span><span><b>CRITICAL</b>47.254.70.85</span><span><b>CRITICAL</b>103.179.216.113</span><span><b>CRITICAL</b>47.84.115.11</span><span><b>CRITICAL</b>91.196.152.88</span><span><b>CRITICAL</b>124.156.129.246</span><span><b>CRITICAL</b>48.214.144.31</span><span><b>CRITICAL</b>185.12.219.60</span>
         </div>
       </div>
       <div class="topbar-right">
-        <div class="pipeline-meta">Total IOCs<b id="topbar-total">65511</b></div>
+        <div class="pipeline-meta">Total IOCs<b id="topbar-total">66633</b></div>
         <button class="btn-run">&#9654; Run Pipeline</button>
       </div>
     </div>
@@ -700,9 +708,9 @@
       <div class="crumbs"><span>Operations</span><span>/</span><em>Intelligence Dashboard</em></div>
       <h1>AEGIS Threat Intelligence</h1>
       <div class="page-sub">
-        <span>Generated <b>2026-06-19 09:12:54</b></span>
+        <span>Generated <b>2026-06-20 07:40:47</b></span>
         <span style="color:var(--text-tertiary)">·</span>
-        <span>Total IOCs in database <b id="stat-db-total">65511</b></span>
+        <span>Total IOCs in database <b id="stat-db-total">66633</b></span>
       </div>
     </div>
 
@@ -725,19 +733,19 @@
     <div class="stats">
       <div class="stat s-total">
         <div class="label">Total</div>
-        <div class="num" id="stat-total">65511</div>
+        <div class="num" id="stat-total">66633</div>
       </div>
       <div class="stat s-critical">
         <div class="label">Critical</div>
-        <div class="num" id="stat-critical">9696</div>
+        <div class="num" id="stat-critical">9707</div>
       </div>
       <div class="stat s-high">
         <div class="label">High</div>
-        <div class="num" id="stat-high">47372</div>
+        <div class="num" id="stat-high">48648</div>
       </div>
       <div class="stat s-medium">
         <div class="label">Medium</div>
-        <div class="num" id="stat-medium">8441</div>
+        <div class="num" id="stat-medium">8276</div>
       </div>
       <div class="stat s-low">
         <div class="label">Low</div>
@@ -1123,6 +1131,33 @@
 
   </section>
 
+  <!-- ═══ AI SEARCH ═══ -->
+  <section id="tab-search" style="display:none">
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex; gap:12px; align-items:center; padding:20px;">
+        <input
+          type="text"
+          id="aiSearchInput"
+          placeholder="Describe what you're looking for — e.g. 'phishing domains targeting banks'"
+          style="flex:1; background:var(--bg-base); border:1px solid #2a2a2a; border-radius:6px; padding:12px 16px; color:#e8e8e8; font-family:var(--font-sans); font-size:14px;"
+          onkeydown="if(event.key==='Enter') _runAiSearch()"
+        />
+        <button onclick="_runAiSearch()" style="background:var(--red-primary); color:#fff; border:none; border-radius:6px; padding:12px 24px; font-weight:600; cursor:pointer; font-family:var(--font-sans);">
+          Search
+        </button>
+      </div>
+      <div id="aiSearchMeta" style="padding:0 20px 16px; color:#888; font-size:12px; font-family:var(--font-mono); display:none;"></div>
+    </div>
+
+    <div id="aiSearchResults" style="display:flex; flex-direction:column; gap:10px;"></div>
+    <div id="aiSearchEmpty" style="display:none; text-align:center; padding:60px 20px; color:#666; font-family:var(--font-sans);">
+      No results yet. Try a natural-language description above.
+    </div>
+    <div id="aiSearchLoading" style="display:none; text-align:center; padding:60px 20px; color:#888; font-family:var(--font-mono);">
+      Searching semantically…
+    </div>
+  </section>
+
   <!-- ═══ THREAT OVERVIEW ═══ -->
   <section id="tab-overview" style="display:none">
     <div style="margin-bottom:20px;display:flex;align-items:flex-end;justify-content:space-between;gap:12px;">
@@ -1283,7 +1318,7 @@
 
     </div><!-- /.scroller -->
 
-    <footer>AEGIS Threat Intelligence &mdash; 2026-06-19 09:12:54</footer>
+    <footer>AEGIS Threat Intelligence &mdash; 2026-06-20 07:40:47</footer>
 
   </main>
 
@@ -1591,7 +1626,7 @@
 
   /* ── Tab switching ── */
   function switchTab(tab) {
-    ['ioc','overview','lookup','profiling','mitre','workbench','campaigns','graph'].forEach(function(t) {
+    ['ioc','overview','lookup','profiling','mitre','workbench','campaigns','graph','search'].forEach(function(t) {
       var el = document.getElementById('tab-' + t);
       if (el) el.style.display = t === tab ? '' : 'none';
       var btn = document.getElementById('btn-' + t);
@@ -1600,6 +1635,7 @@
     if (tab === 'workbench') _wbRender();
     if (tab === 'overview') _overviewInit();
     if (tab === 'graph') _graphInit();
+    if (tab === 'search') _searchInit();
   }
 
   /* Country filter removed — rows are now loaded dynamically via API */
@@ -2556,7 +2592,7 @@
 </div>
 
 <script>
-const TREND_DATA = [{"critical": 1, "date": "2026-05-20", "high": 829, "low": 0, "medium": 140, "total": 970}, {"critical": 0, "date": "2026-05-21", "high": 494, "low": 1, "medium": 67, "total": 562}, {"critical": 3, "date": "2026-05-22", "high": 384, "low": 0, "medium": 145, "total": 532}, {"critical": 0, "date": "2026-05-23", "high": 209, "low": 0, "medium": 227, "total": 436}, {"critical": 1, "date": "2026-05-24", "high": 237, "low": 0, "medium": 190, "total": 428}, {"critical": 0, "date": "2026-05-25", "high": 391, "low": 0, "medium": 228, "total": 619}, {"critical": 3, "date": "2026-05-26", "high": 386, "low": 0, "medium": 351, "total": 740}, {"critical": 4, "date": "2026-05-27", "high": 597, "low": 0, "medium": 411, "total": 1012}, {"critical": 0, "date": "2026-05-28", "high": 355, "low": 0, "medium": 454, "total": 809}, {"critical": 2, "date": "2026-05-29", "high": 382, "low": 1, "medium": 339, "total": 724}, {"critical": 9088, "date": "2026-05-30", "high": 258, "low": 0, "medium": 384, "total": 9730}, {"critical": 0, "date": "2026-05-31", "high": 381, "low": 0, "medium": 287, "total": 668}, {"critical": 0, "date": "2026-06-01", "high": 404, "low": 0, "medium": 236, "total": 640}, {"critical": 0, "date": "2026-06-02", "high": 581, "low": 0, "medium": 334, "total": 915}, {"critical": 1, "date": "2026-06-03", "high": 609, "low": 0, "medium": 166, "total": 776}, {"critical": 106, "date": "2026-06-04", "high": 15816, "low": 0, "medium": 188, "total": 16110}, {"critical": 0, "date": "2026-06-05", "high": 15, "low": 0, "medium": 0, "total": 15}, {"critical": 3, "date": "2026-06-06", "high": 24, "low": 0, "medium": 0, "total": 27}, {"critical": 0, "date": "2026-06-07", "high": 22, "low": 0, "medium": 0, "total": 22}, {"critical": 3, "date": "2026-06-08", "high": 13, "low": 0, "medium": 0, "total": 16}, {"critical": 2, "date": "2026-06-09", "high": 32, "low": 0, "medium": 0, "total": 34}, {"critical": 2, "date": "2026-06-10", "high": 176, "low": 0, "medium": 223, "total": 401}, {"critical": 2, "date": "2026-06-11", "high": 530, "low": 0, "medium": 533, "total": 1065}, {"critical": 5, "date": "2026-06-12", "high": 455, "low": 0, "medium": 366, "total": 826}, {"critical": 10, "date": "2026-06-13", "high": 272, "low": 0, "medium": 306, "total": 588}, {"critical": 245, "date": "2026-06-14", "high": 7546, "low": 0, "medium": 211, "total": 8002}, {"critical": 16, "date": "2026-06-15", "high": 2852, "low": 0, "medium": 229, "total": 3097}, {"critical": 13, "date": "2026-06-16", "high": 2400, "low": 0, "medium": 334, "total": 2747}, {"critical": 16, "date": "2026-06-17", "high": 2425, "low": 0, "medium": 277, "total": 2718}, {"critical": 13, "date": "2026-06-18", "high": 2365, "low": 0, "medium": 437, "total": 2815}, {"critical": 14, "date": "2026-06-19", "high": 1714, "low": 0, "medium": 144, "total": 1872}];
+const TREND_DATA = [{"critical": 0, "date": "2026-05-21", "high": 494, "low": 1, "medium": 67, "total": 562}, {"critical": 3, "date": "2026-05-22", "high": 384, "low": 0, "medium": 145, "total": 532}, {"critical": 0, "date": "2026-05-23", "high": 209, "low": 0, "medium": 227, "total": 436}, {"critical": 1, "date": "2026-05-24", "high": 237, "low": 0, "medium": 190, "total": 428}, {"critical": 0, "date": "2026-05-25", "high": 391, "low": 0, "medium": 228, "total": 619}, {"critical": 3, "date": "2026-05-26", "high": 386, "low": 0, "medium": 351, "total": 740}, {"critical": 4, "date": "2026-05-27", "high": 597, "low": 0, "medium": 411, "total": 1012}, {"critical": 0, "date": "2026-05-28", "high": 355, "low": 0, "medium": 454, "total": 809}, {"critical": 2, "date": "2026-05-29", "high": 382, "low": 1, "medium": 339, "total": 724}, {"critical": 9088, "date": "2026-05-30", "high": 258, "low": 0, "medium": 384, "total": 9730}, {"critical": 0, "date": "2026-05-31", "high": 381, "low": 0, "medium": 287, "total": 668}, {"critical": 0, "date": "2026-06-01", "high": 404, "low": 0, "medium": 236, "total": 640}, {"critical": 0, "date": "2026-06-02", "high": 581, "low": 0, "medium": 334, "total": 915}, {"critical": 1, "date": "2026-06-03", "high": 609, "low": 0, "medium": 166, "total": 776}, {"critical": 106, "date": "2026-06-04", "high": 15816, "low": 0, "medium": 188, "total": 16110}, {"critical": 0, "date": "2026-06-05", "high": 15, "low": 0, "medium": 0, "total": 15}, {"critical": 3, "date": "2026-06-06", "high": 24, "low": 0, "medium": 0, "total": 27}, {"critical": 0, "date": "2026-06-07", "high": 22, "low": 0, "medium": 0, "total": 22}, {"critical": 3, "date": "2026-06-08", "high": 13, "low": 0, "medium": 0, "total": 16}, {"critical": 2, "date": "2026-06-09", "high": 32, "low": 0, "medium": 0, "total": 34}, {"critical": 2, "date": "2026-06-10", "high": 178, "low": 0, "medium": 223, "total": 403}, {"critical": 2, "date": "2026-06-11", "high": 530, "low": 0, "medium": 533, "total": 1065}, {"critical": 5, "date": "2026-06-12", "high": 458, "low": 0, "medium": 366, "total": 829}, {"critical": 10, "date": "2026-06-13", "high": 272, "low": 0, "medium": 306, "total": 588}, {"critical": 245, "date": "2026-06-14", "high": 7546, "low": 0, "medium": 211, "total": 8002}, {"critical": 16, "date": "2026-06-15", "high": 2852, "low": 0, "medium": 229, "total": 3097}, {"critical": 13, "date": "2026-06-16", "high": 2400, "low": 0, "medium": 334, "total": 2747}, {"critical": 16, "date": "2026-06-17", "high": 2425, "low": 0, "medium": 277, "total": 2718}, {"critical": 13, "date": "2026-06-18", "high": 2365, "low": 0, "medium": 437, "total": 2815}, {"critical": 14, "date": "2026-06-19", "high": 1898, "low": 0, "medium": 377, "total": 2289}, {"critical": 11, "date": "2026-06-20", "high": 1190, "low": 0, "medium": 119, "total": 1320}];
 
 (function () {
   var container = document.getElementById('trendsChartContainer');
@@ -3955,6 +3991,80 @@ function _campInfoBlock(label, value) {
 var _ovLoaded = false;
 var SEV_COLOR = { CRITICAL:'#c0392b', HIGH:'#c06010', MEDIUM:'#8a7000', LOW:'#1e6b1e' };
 function _apiHeaders() { return { 'X-API-Key': window.AEGIS_PUBLIC_KEY || '' }; }
+
+/* ════════════════════════════════════════════════════════════════
+   AI SEARCH
+   ════════════════════════════════════════════════════════════════ */
+let _aiSearchInitDone = false;
+
+function _searchInit() {
+  if (_aiSearchInitDone) return;
+  _aiSearchInitDone = true;
+  document.getElementById('aiSearchInput').focus();
+}
+
+function _severityBadgeClass(sev) {
+  return 'badge badge-' + (sev || 'MEDIUM').toUpperCase();
+}
+
+async function _runAiSearch() {
+  const input = document.getElementById('aiSearchInput');
+  const query = input.value.trim();
+  if (!query) return;
+
+  const resultsEl = document.getElementById('aiSearchResults');
+  const emptyEl   = document.getElementById('aiSearchEmpty');
+  const loadingEl = document.getElementById('aiSearchLoading');
+  const metaEl    = document.getElementById('aiSearchMeta');
+
+  resultsEl.innerHTML = '';
+  emptyEl.style.display = 'none';
+  metaEl.style.display = 'none';
+  loadingEl.style.display = 'block';
+
+  try {
+    const resp = await fetch('/api/search?q=' + encodeURIComponent(query) + '&limit=15', {
+      headers: _apiHeaders()
+    });
+    if (!resp.ok) throw new Error('Search failed (' + resp.status + ')');
+    const data = await resp.json();
+
+    loadingEl.style.display = 'none';
+
+    if (!data.results || data.results.length === 0) {
+      emptyEl.style.display = 'block';
+      return;
+    }
+
+    metaEl.textContent = data.count + ' results for "' + data.query + '"';
+    metaEl.style.display = 'block';
+
+    resultsEl.innerHTML = data.results.map(function(r) {
+      const pct   = Math.round((r.similarity_score || 0) * 100);
+      const score = Math.round(parseFloat(r.score_atual) || 0);
+      return (
+        '<div class="card" style="padding:16px 20px; display:flex; align-items:center; gap:16px;">' +
+          '<div style="flex:0 0 auto;">' +
+            '<span class="badge" style="background:rgba(200,169,110,.12); border:1px solid var(--accent-gold); color:var(--accent-gold);">' + (r.ioc_type || '').toUpperCase() + '</span>' +
+          '</div>' +
+          '<div style="flex:1; min-width:0;">' +
+            '<div style="font-family:var(--font-mono); font-size:14px; color:#e8e8e8; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + (r.ioc_value || '') + '</div>' +
+            '<div style="font-size:12px; color:#888; margin-top:4px;">' + (r.text_repr || '') + '</div>' +
+          '</div>' +
+          '<div style="flex:0 0 auto; text-align:right;">' +
+            '<span class="' + _severityBadgeClass(r.severity) + '">' + (r.severity || '') + '</span>' +
+            '<div style="font-family:var(--font-mono); font-size:11px; color:#666; margin-top:6px;">match ' + pct + '% · score ' + score + '/100</div>' +
+          '</div>' +
+        '</div>'
+      );
+    }).join('');
+
+  } catch (err) {
+    loadingEl.style.display = 'none';
+    emptyEl.textContent = 'Error: ' + err.message;
+    emptyEl.style.display = 'block';
+  }
+}
 
 function _overviewInit() {
   if (_ovLoaded) return;
